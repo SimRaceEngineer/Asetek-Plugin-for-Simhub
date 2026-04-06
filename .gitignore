@@ -1,0 +1,9 @@
+obj/
+.vs/
+*.user
+*.suo
+*.cs
+*.csproj
+CLAUDE.md
+bin/Debug/
+*.pdb
