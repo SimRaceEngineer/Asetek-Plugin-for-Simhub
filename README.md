@@ -232,4 +232,12 @@ This project is provided as-is with no warranty. See disclaimer above.
 
 ---
 
+## Support
+
+If you like this plugin and want to support its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/simrace)
+
+---
+
 *Made with passion by a sim racer, for sim racers.*
