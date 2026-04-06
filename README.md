@@ -56,16 +56,16 @@ These are features the Asetek community has been requesting for a long time, and
 ## Screenshots
 
 ### Overview — Device Status & Profiles
-![Overview Tab](docs/screenshots/overview.png)
+![Overview Tab](screenshots/main.png)
 
 ### FFB Settings — Full Parameter Control
-![FFB Settings Tab](docs/screenshots/ffb-settings.png)
+![FFB Settings Tab](screenshots/ffb%20settings.png)
 
 ### LED Control (Beta)
-![LED Control Tab](docs/screenshots/led-control.png)
+![LED Control Tab](screenshots/Led%20control.png)
 
 ### Controls — Button Mapping
-![Controls Tab](docs/screenshots/controls.png)
+![Controls Tab](screenshots/button%20Mapping.png)
 
 ---
 
