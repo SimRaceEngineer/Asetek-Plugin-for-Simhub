@@ -36,18 +36,18 @@ These are features the Asetek community has been requesting for a long time, and
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **FFB Settings** | Stable | Full control of all wheelbase parameters: Overall Force, Steering Range, Damping, Friction, Inertia, Anti-Oscillation, Torque Prediction, Slew Rate, HF Limit, Cornering Assist, Bumpstop |
-| **True Steering Lock** | Stable | Auto-syncs steering range from the game via LMU/rF2 REST API. The wheelbase range matches the car automatically |
-| **FFB Strength +/-** | Stable | Bindable SimHub actions — assign to wheel buttons for on-the-fly force adjustment without leaving the cockpit |
-| **Steering Range Presets** | Stable | Quick-switch between 360° / 540° / 900° / 1080° via bindable buttons |
-| **Force Presets** | Stable | Quick-switch between Low (10 Nm) / Medium (18 Nm) / High (24 Nm) / Max (27 Nm) |
-| **Software Profiles** | Stable | Unlimited profiles with save/load/rename/delete. Set a default profile loaded at startup |
-| **Apply & Save to Flash** | Stable | Send settings to the wheelbase and persist to flash memory |
+| **True Steering Lock** | Stable | Auto-syncs steering range from the game via LMU REST API. The wheelbase range matches the car automatically |
 
 ### 🧪 Beta
 
 | Feature | Status | Description |
 |---------|--------|-------------|
+| **FFB Settings** | Beta | Full control of all wheelbase parameters: Overall Force, Steering Range, Damping, Friction, Inertia, Anti-Oscillation, Torque Prediction, Slew Rate, HF Limit, Cornering Assist, Bumpstop. Only steering range fully tested so far |
+| **FFB Strength +/-** | Beta | Bindable SimHub actions — assign to wheel buttons for on-the-fly force adjustment without leaving the cockpit |
+| **Steering Range Presets** | Beta | Quick-switch between 360° / 540° / 900° / 1080° via bindable buttons |
+| **Force Presets** | Beta | Quick-switch between Low (10 Nm) / Medium (18 Nm) / High (24 Nm) / Max (27 Nm) |
+| **Software Profiles** | Beta | Unlimited profiles with save/load/rename/delete. Set a default profile loaded at startup |
+| **Apply & Save to Flash** | Beta | Send settings to the wheelbase and persist to flash memory |
 | **Wheelbase Center LED** | Beta | Set the center LED color, flag mode (auto-color based on race flags) |
 | **Forte Rev Lights** | Beta | External control of the rev light strip from game telemetry |
 
