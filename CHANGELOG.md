@@ -4,6 +4,19 @@
 
 ---
 
+## v1.0.2-beta — Universal Device Scanner (April 8, 2026)
+
+### Added
+- **Auto-scan PID ranges F2xx–F6xx**: the plugin now detects ANY Asetek base or wheel in these ranges, not just hardcoded PIDs
+- **New devices supported**: Forte base (PID_F301), Formula Forte wheel (PID_F402)
+- **Dynamic UI**: device cards now show the actual detected model name and PID instead of hardcoded "Invicta" / "Forte GT"
+- **Unknown PID detection**: devices with unrecognized PIDs in the Asetek range are auto-classified and flagged for reporting
+
+### Fixed
+- Users with Forte base (PID_F301) or Formula Forte wheel (PID_F402) were not detected at all
+
+---
+
 ## v1.0.1-beta — Multi-Base Support (April 7, 2026)
 
 ### Added
