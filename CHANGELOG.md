@@ -4,6 +4,39 @@
 
 ---
 
+## v1.0.4-beta — Overall Force fix, live torque monitor & 360 Hz toggle (April 27, 2026)
+
+This patch fixes a real-world FFB issue and adds two long-asked monitoring/utility features. The slider plumbing and per-game/car profile auto-match introduced in v1.0.3-beta are now confirmed working in iRacing and LMU.
+
+### Fixed (CRITICAL)
+
+- **Overall Force slider had little perceptible effect.** The plugin was writing the profile-side gain (`main_gain`) but skipping the SMP torque-limit registers that drive the actual motor power cap. Without those, raising the slider didn't raise the felt force because the motor still clipped at the previous limit. RaceHub pairs both writes — we now do the same. Confirmed in iRacing: the Overall Force slider now produces a clear, immediate change in felt torque, comparable to RaceHub.
+- The same dual-write now also fires when you load a profile from the list, so saved profiles restore their full intended force level too.
+
+### Added
+
+- **Live torque monitoring** for clipping detection. New SimHub properties refresh at ~15 Hz so you can wire them into a dashboard widget:
+  - `Asetek.FFB.CurrentTorqueNm` — instantaneous |Nm| reported by the running sim
+  - `Asetek.FFB.MaxTorqueNm` — your configured ceiling (`main_gain × 27`)
+  - `Asetek.FFB.UtilizationPct` — current / max × 100 (jumps over 100 = you're clipping)
+  - `Asetek.FFB.IsClipping` — boolean, true when ≥ 95 % of max (perfect for a flashing LED)
+  - `Asetek.FFB.PeakTorqueNm` — rolling peak with slow decay
+  - Reads from iRacing's irsdk telemetry first, falls back to LMU shared memory and ACC physics. Cross-sim compatible out of the box.
+- **"360 Hz Compatibility Mode" toggle** (FFB Settings → Game Integration). Engages the wheelbase's high-rate FFB pipeline so it stays in sync with iRacing's 360 Hz native steering torque telemetry and LMU's shared-memory feed. State is persisted by the device in flash and re-applied on reconnect. Also exposed as the `Asetek.Toggle360Hz` SimHub action (Controls → TOGGLES) — bindable to a wheel/box button for on-the-fly toggling.
+
+### Confirmed working (from v1.0.3-beta tests in LMU + iRacing)
+
+- All four FFB sliders that were silently broken before the v1.0.3 mapping fix (Damping / Friction / Inertia / Anti-Oscillation) now produce a perceptible change on the wheelbase.
+- Auto-match by game / car class / car id is working across sims. Detection lights up correctly in iRacing too — `Game = IRacing`, `CarClass`, `CarId` and `CarModel` come straight from the SimHub telemetry pipeline. Track is also picked up via `GameData.TrackId`.
+- Quick-Save buttons (by Class / by Car) auto-name and auto-tag profiles correctly across both LMU and iRacing.
+- Re-center wheel button + Standstill Damping toggle behaving as intended.
+
+- **FFB Strength +/- bindings confirmed working** — bind two wheel buttons to `Asetek.FFB.Strength.Up` / `.Down` and adjust force on the fly without digging into a tab.
+
+> **Note:** other Controls-tab bindings (steering range presets, force presets, toggles, LED modes) haven't been hands-on tested across all configurations yet. They should work but are still experimental — please open a GitHub issue if any of them misbehaves on your setup.
+
+---
+
 ## v1.0.3-beta — FFB rewiring, profile auto-match & quality of life (April 25, 2026)
 
 This release is a major iteration. It fixes a long-standing FFB mapping bug, rewires the slider plumbing, and adds a full profile system tied to the running game and car. All work was done after decompiling RaceHub 4.4.3's `Assembly-CSharp.dll` and cross-checking against 11 RaceHub XML preset exports.
