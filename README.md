@@ -1,8 +1,8 @@
 # Asetek Control — SimHub Plugin for Invicta & Forte
 
-> **Beta Release — v1.0.0-beta**
+> **v1.0.4-beta** — Direct FFB control, profile auto-match per game / car / track, live torque & clipping monitoring, all from inside SimHub.
 
-A SimHub plugin that brings **direct FFB settings control**, **True Steering Lock**, **per-game profiles**, and **LED control** to Asetek SimSports wheelbases and Forte GT steering wheels — all from within SimHub.
+A SimHub plugin that brings **direct FFB settings control**, **per-game / per-car / per-track profile auto-matching**, **live torque monitoring**, **True Steering Lock**, and **LED control** to Asetek SimSports wheelbases (Invicta, Forte / La Prima) and the Forte GT steering wheel — without ever opening RaceHub during a session.
 
 ---
 
@@ -20,36 +20,42 @@ A SimHub plugin that brings **direct FFB settings control**, **True Steering Loc
 
 ### Why this plugin exists
 
-The goal of this plugin is to fill gaps that the official Asetek software (RaceHub) does not currently address yet:
+The plugin fills practical gaps left by RaceHub for sim racers who live inside SimHub:
 
-1. **True Steering Lock** — Automatically match the wheelbase steering range to the car you're driving (e.g., 380° for a Hypercar, 540° for a GT3). No more manual adjustment between sessions. Works on LMU now.
-2. **In-game FFB adjustment** — Change FFB strength directly from your wheel buttons while driving, without alt-tabbing to RaceHub.
-3. **Per-game / per-car profiles** — Create unlimited FFB profiles and switch between them instantly. Save your perfect setup for each sim and each car.
-
-These are features the Asetek community has been requesting for a long time, and this plugin aims to deliver them through SimHub's ecosystem.
+1. **No more alt-tabbing to RaceHub during a session.** Adjust FFB strength on the fly with a wheel button. Switch between cars and the right preset loads automatically. Re-center the wheel after a rim swap with a single click.
+2. **Profiles tied to the actual content you're driving** — game, car class, specific car, even a specific track. The plugin reads SimHub's own telemetry so it works the same in iRacing, LMU, ACC, AMS2, etc.
+3. **Per-track FFB tuning** — surfaces vary wildly between Spa and Daytona Roval. The plugin reads iRacing's 360 Hz steering torque telemetry to give you a live "surface roughness" score and store dedicated presets for bumpy / smooth / street circuits.
+4. **Live torque & clipping monitoring** — see in real time how much of your configured force ceiling you're using, with a clipping flag you can wire into a Dash widget.
+5. **One-click Asetek-style High Torque (360 Hz Compatibility Mode)**, RaceHub preset import, standstill anti-oscillation, and other quality-of-life utilities that previously required digging into RaceHub between sessions.
 
 ---
 
-## Features
+## ✨ What works today (confirmed)
 
-### ✅ Confirmed Working
+| Feature | Description |
+|---------|-------------|
+| **Full FFB sliders** | Steering Range, Overall Force (3-27 Nm), Damping, Friction, Inertia, Anti-Oscillation, Torque Behavior Prediction, Torque Acceleration Limit, High Frequency Limit, Cornering Force Assist, Bumpstop Hardness/Range. All confirmed firing and produce a felt change on the wheel. Overall Force pairs main_gain with the SMP torque-limit registers so the motor actually delivers what the slider asks. |
+| **Apply & Save to flash** | One button persists every slider to the wheelbase flash, including all 12 FFB parameters. |
+| **Per-game / per-car / per-track auto-match** | Profile gains optional Game / CarClass / CarId / Track tags. The plugin watches what you're loading in any sim and switches to the matching profile automatically. Match priority: most specific (game + car + track) wins; falls back gradually to game-only. |
+| **Quick-save buttons** | Capture current sliders into a new profile in one click, auto-tagged with the running sim/car/track: "by Class", "by Car", "by Car + Track". |
+| **FFB Strength +/- via wheel button** | Bind two buttons, change force during a stint without leaving the cockpit. |
+| **Re-center Wheel** | Dedicated UI button + bindable action. Useful after swapping rims so the wheel stops trying to rotate to the previous zero. Saved to flash. |
+| **Standstill Damping** | Auto-boosts internal damping under 13 km/h (with hysteresis to 15 km/h) to kill the parasitic wheel oscillations on grid / in pit lane / pause. Restored automatically once you're rolling. |
+| **360 Hz Compatibility Mode toggle** | Engages the wheelbase's high-rate FFB pipeline. Persisted on the device, re-applied on reconnect. |
+| **Live torque & clipping monitor** | Five SimHub properties refreshing at ~15 Hz: instantaneous Nm, configured ceiling, utilisation %, clipping flag, rolling peak. Wire any of them into a Dash widget. |
+| **360 Hz native sampling on iRacing** | Reads `SteeringWheelTorque_ST[6]` (6 sub-samples per 60 Hz tick = 360 Hz effective) and feeds a 1-second rolling buffer. Sharper clipping detection (no missed spikes between frames) plus the `RoughnessNm` property below. |
+| **Surface roughness score** | `Asetek.FFB.RoughnessNm` — standard deviation of the 360 Hz signal in Nm units. Smooth tracks sit around 0.5-1.0 Nm, bumpy circuits past 3-4 Nm. Practical anchor for per-track tuning. |
+| **Import RaceHub Presets** | Scans `Documents\RaceHub Profiles\Wheelbase\Backup\` and imports every XML preset RaceHub has auto-exported as a plugin profile. Auto-tags the Game heuristically from the preset name. |
+| **RaceHub-format XML mirror** | Every saved profile is also written to the Documents folder as a redundant XML backup. |
+| **Universal Asetek device scan** | Auto-detects any base in the F2xx-F6xx PID range (Invicta F300, Forte F301, Forte/LaPrima F200) plus wheels (Forte GT F207, Formula Forte F402). |
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **True Steering Lock** | Stable | Auto-syncs steering range from the game via LMU REST API. The wheelbase range matches the car automatically |
+## 🧪 Still beta / under test
 
-### 🧪 Beta
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **FFB Settings** | Beta | Full control of all wheelbase parameters: Overall Force, Steering Range, Damping, Friction, Inertia, Anti-Oscillation, Torque Prediction, Slew Rate, HF Limit, Cornering Assist, Bumpstop. Only steering range fully tested so far |
-| **FFB Strength +/-** | Beta | Bindable SimHub actions — assign to wheel buttons for on-the-fly force adjustment without leaving the cockpit |
-| **Steering Range Presets** | Beta | Quick-switch between 360° / 540° / 900° / 1080° via bindable buttons |
-| **Force Presets** | Beta | Quick-switch between Low (10 Nm) / Medium (18 Nm) / High (24 Nm) / Max (27 Nm) |
-| **Software Profiles** | Beta | Unlimited profiles with save/load/rename/delete. Set a default profile loaded at startup |
-| **Apply & Save to Flash** | Beta | Send settings to the wheelbase and persist to flash memory |
-| **Wheelbase Center LED** | Beta | Set the center LED color, flag mode (auto-color based on race flags) |
-| **Forte Rev Lights** | Beta | External control of the rev light strip from game telemetry |
+| Feature | Status |
+|---------|--------|
+| **True Steering Lock** | Works in LMU (uses the LMU REST API on port 6397). Multi-sim support planned. |
+| **LED Control** | Wheelbase center LED + Forte rev lights — functional but not exhaustively tested across firmware versions. |
+| **Controls-tab button bindings** (range presets, force presets, LED modes, toggles) | Should work but only FFB Strength +/- has been hands-on validated so far. Please open a GitHub issue if any binding misbehaves on your setup. |
 
 ---
 
@@ -71,96 +77,79 @@ These are features the Asetek community has been requesting for a long time, and
 
 ## Supported Hardware
 
-- **Asetek Invicta Wheelbase** (VID_2433 : PID_F300)
+- **Asetek Invicta Wheelbase** (VID_2433 : PID_F300) — primary test platform
+- **Asetek Forte Wheelbase** (VID_2433 : PID_F301)
+- **Asetek Forte / La Prima Wheelbase** (VID_2433 : PID_F200)
 - **Asetek Forte GT Steering Wheel** (VID_2433 : PID_F207)
+- **Asetek Formula Forte Steering Wheel** (VID_2433 : PID_F402)
 
-Other Asetek wheelbases or wheels may work but have not been tested.
+Other Asetek wheelbases or wheels in the F2xx-F6xx PID range are auto-detected and will appear in the UI; specific feature compatibility may vary.
 
 ---
 
 ## Installation
 
-1. **Close RaceHub** if it is running
-2. Download `AsetekPlugin.dll` from the [Releases](../../releases) page
-3. Copy `AsetekPlugin.dll` into your SimHub installation folder (e.g., `C:\Program Files (x86)\SimHub\`)
-4. Launch SimHub — the plugin appears as **"Asetek Control"** in the left menu
+1. **Close RaceHub** if it's running.
+2. Download `AsetekPlugin.dll` from the [Releases](../../releases) page.
+3. Copy `AsetekPlugin.dll` into your SimHub installation folder (e.g. `C:\Program Files (x86)\SimHub\`).
+4. Launch SimHub — the plugin appears as **"Asetek Control"** in the left menu.
 
 ---
 
 ## Tabs Overview
 
 ### Overview
-Device connection status (Invicta + Forte), diagnostics, and profile management.
+Device connection status, diagnostics, and the full profile manager.
 
-- **Device cards** — Shows connection status for the Invicta wheelbase and Forte GT wheel with hardware IDs
-- **Profiles** — Create, load, rename, delete, and set default profiles. Each profile stores all FFB settings, True Steering Lock state, and FFB step size
-- **Diagnostics** — Raw HID communication log for troubleshooting
-- **Reconnect** — Re-scan for Asetek devices without restarting SimHub
+- **Device cards** — connection status for the wheelbase and the wheel, with the actual detected model name and PID
+- **Profile list** — Load / Rename / Save / Tag / Edit / Delete on every profile, plus the inline tag editor (Game / CarClass / CarId / Track)
+- **Auto-match toggle** — when enabled, switches to the best-matching profile when the game or car changes (smart-creates one with current sliders if none matches)
+- **Import RaceHub Presets** — bulk import RaceHub's XML auto-exports
+- **Reconnect** — re-scan for Asetek devices without restarting SimHub
 
 ### FFB Settings
 All wheelbase FFB parameters with sliders matching the values available in RaceHub.
 
-- **Core** — Steering Range (180°–1890°) and Overall Force (3–27 Nm)
-- **Mechanical Feel** — Damping, Friction, Inertia, Anti-Oscillation (0–100%)
-- **Torque Shaping** — Torque Prediction (0–10), Torque Accel Limit (0.1–9.4 Nm/ms), High Frequency Limit (0–4700 Hz)
-- **Bumpstop & Cornering** — Cornering Force Assist (0–100%), Bumpstop Hardness (Soft/Medium/Hard), Bumpstop Range (-90°–+90°)
-- **Game Integration** — True Steering Lock checkbox (auto-sync from game), link to Controls tab
-- **Apply & Save** — Sends all slider values to the wheelbase and persists to flash memory. On first use, set all sliders to match your current RaceHub values
+- **Core** — Steering Range (180°-1890°) and Overall Force (3-27 Nm)
+- **Mechanical Feel** — Damping, Friction, Inertia, Anti-Oscillation (0-100%)
+- **Torque Shaping** — Torque Prediction (0-10), Torque Acceleration Limit (0.1-9.4 Nm/ms), High Frequency Limit
+- **Bumpstop & Cornering** — Cornering Force Assist (0-100%), Bumpstop Hardness (Soft/Medium/Hard), Bumpstop Range (-90°/+90°)
+- **Game Integration** — True Steering Lock, Standstill Damping, 360 Hz Compatibility Mode
+- **APPLY & SAVE** — sends every slider to the wheelbase, persists to flash, also fires the SMP torque-limit registers paired with main_gain
+- **Save current sliders to…** dropdown — write current values to any profile without applying to the wheelbase
+- **Quick save → by Car Class / by Car / by Car + Track** — one-click capture with auto-tagging from the running sim
+- **↻ RELOAD PRESET** — discard slider edits and restore the active profile values
+- **RE-CENTER WHEEL** — set current wheel position as zero, saved to flash
+- **Live "Detected:" status line** — shows what the plugin will tag (Game / Class / CarModel / Track) before you save
 
 ### LED Control (Beta)
-Wheelbase center LED color control and Forte rev light customization. This feature is not fully tested yet.
+Wheelbase center LED color control and Forte rev light customization.
 
-- **Wheelbase Center LED** — Flag Mode (auto-color based on race flags), test colors (Red, Green, Blue, Yellow, White, Orange, Purple, Off)
-- **Forte Rev Lights** — RPM Telemetry toggle for external control, pattern presets (Segmented, Blue→Red, Red→Yellow, Green→Red)
+- **Wheelbase Center LED** — flag mode (auto-color from race flags), test colors
+- **Forte Rev Lights** — RPM telemetry toggle, pattern presets (Segmented, Blue→Red, Red→Yellow, Green→Red)
 
 ### Controls
-Assign wheel buttons, joystick buttons, or keyboard keys to any plugin action using SimHub's native ControlsEditor.
-
-- **FFB Strength** — FFB Strength + / FFB Strength −
-- **Steering Range Presets** — 360° / 540° / 900° / 1080°
-- **Force Presets** — Low (10 Nm) / Medium (18 Nm) / High (24 Nm) / Max (27 Nm)
-- **Toggles** — True Steering Lock
-- **LED Modes** — LED Off / Flag Mode / Telemetry Mode
-- **Device** — Apply & Save / Reconnect
-
----
-
-## How It Works
-
-### Communication
-The plugin communicates with the Invicta wheelbase and Forte GT wheel via **HID (Human Interface Device)** — the standard USB protocol for input devices. It opens the device handle, sends configuration packets, and the wheelbase applies them immediately.
-
-### FFB Settings
-Each FFB parameter corresponds to a specific address in the wheelbase profile memory. When you click **Apply & Save**, the plugin sends 3 batches of settings to the active profile, followed by a save-to-flash command. Settings are applied immediately — no restart required.
-
-### True Steering Lock
-When enabled, the plugin queries the **LMU REST API** (port 6397) for the current car's steering lock value (e.g., `VM_STEER_LOCK = "450deg"`). It then automatically sets the wheelbase steering range to match. This happens on car change and retries every ~2 seconds until resolved.
-
-### Profiles
-Profiles are stored locally as JSON in `%APPDATA%\AsetekPlugin\profiles.json`. Each profile captures:
-- All FFB parameter values (steering range, force, damping, friction, etc.)
-- True Steering Lock on/off state
-- FFB step size for +/- buttons
-
-You can set a **default profile** that loads automatically when SimHub starts.
-
-### Settings Persistence
-The wheelbase does not expose a "read settings" command. The plugin maintains a local cache of all settings and persists them in `%APPDATA%\AsetekPlugin\ffb_settings.json`. On first use, make sure to configure all sliders to match your current RaceHub values before applying.
+SimHub-native button mapping for all plugin actions (see Actions list below).
 
 ---
 
 ## SimHub Properties (for dashboard developers)
 
-The plugin exposes the following SimHub properties that can be used in custom dashboards:
-
 | Property | Type | Description |
 |----------|------|-------------|
-| `Asetek.WheelbaseConnected` | bool | Invicta wheelbase detected |
-| `Asetek.ForteConnected` | bool | Forte GT wheel detected |
-| `Asetek.Led.Mode` | string | Current LED mode (off/flag/telemetry) |
+| `Asetek.WheelbaseConnected` | bool | Wheelbase detected |
+| `Asetek.ForteConnected` | bool | Forte wheel detected |
+| `Asetek.Led.Mode` | string | Current LED mode |
 | `Asetek.FFB.TrueSteeringLock` | bool | True Steering Lock enabled |
-| `Asetek.FFB.CurrentStrength` | int | Current FFB strength (main_gain 0–100) |
+| `Asetek.FFB.CurrentStrength` | int | Current main_gain (0-100) |
 | `Asetek.FFB.SteeringRange` | int | Current steering range in degrees |
+| `Asetek.FFB.CurrentTorqueNm` | double | Live torque from the running sim, in Nm |
+| `Asetek.FFB.MaxTorqueNm` | double | Configured ceiling (main_gain × 27) |
+| `Asetek.FFB.UtilizationPct` | double | Current / max × 100 |
+| `Asetek.FFB.IsClipping` | bool | True when ≥ 95 % of max — perfect for a flashing LED |
+| `Asetek.FFB.PeakTorqueNm` | double | Rolling peak with slow decay |
+| `Asetek.FFB.RoughnessNm` | double | Surface roughness score (stddev of the 360 Hz buffer in Nm) |
+| `Asetek.FFB.SampleRateHz` | int | 360 on iRacing's `_ST` array, 60 on the scalar fallback |
 | `Asetek.TSL.Debug` | string | True Steering Lock debug info |
 
 ---
@@ -169,32 +158,47 @@ The plugin exposes the following SimHub properties that can be used in custom da
 
 | Action | Description |
 |--------|-------------|
-| `Asetek.FFB.Strength.Up` | Increase FFB strength |
-| `Asetek.FFB.Strength.Down` | Decrease FFB strength |
-| `Asetek.FFB.SteeringRange.360` | Set steering range to 360° |
-| `Asetek.FFB.SteeringRange.540` | Set steering range to 540° |
-| `Asetek.FFB.SteeringRange.900` | Set steering range to 900° |
-| `Asetek.FFB.SteeringRange.1080` | Set steering range to 1080° |
-| `Asetek.FFB.Force.Low` | Set force to 10 Nm |
-| `Asetek.FFB.Force.Medium` | Set force to 18 Nm |
-| `Asetek.FFB.Force.High` | Set force to 24 Nm |
-| `Asetek.FFB.Force.Max` | Set force to 27 Nm |
-| `Asetek.FFB.TrueSteeringLock.Toggle` | Toggle True Steering Lock |
-| `Asetek.ApplyAndSave` | Apply current settings & save to flash |
-| `Asetek.Reconnect` | Reconnect to devices |
-| `Asetek.Led.Off` | Turn off LEDs |
-| `Asetek.Led.FlagMode` | Enable flag-based LED mode |
-| `Asetek.Led.TelemetryMode` | Enable telemetry-based LED mode |
+| `Asetek.FFB.Strength.Up` / `.Down` | Live FFB strength adjustment from a wheel button |
+| `Asetek.FFB.SteeringRange.360` / `540` / `900` / `1080` | Steering range presets |
+| `Asetek.FFB.Force.Low` / `Medium` / `High` / `Max` | 10 / 18 / 24 / 27 Nm presets |
+| `Asetek.FFB.TrueSteeringLock.Toggle` | Toggle TSL |
+| `Asetek.Toggle360Hz` | Toggle 360 Hz Compatibility Mode |
+| `Asetek.RecenterWheel` | Re-center the wheel + save to flash |
+| `Asetek.ApplyAndSave` | Apply current cache + save to flash |
+| `Asetek.Reconnect` | Re-scan for Asetek devices |
+| `Asetek.Led.Off` / `Asetek.Led.FlagMode` / `Asetek.Led.TelemetryMode` | LED modes |
+
+---
+
+## How It Works
+
+### Communication
+The plugin communicates with the wheelbase and the Forte GT wheel via **HID (Human Interface Device)** — the standard USB protocol for input devices. It opens the device handle, sends configuration packets via WriteFile (interrupt OUT, EP 0x01), and the wheelbase applies them immediately.
+
+### FFB Settings
+Each FFB parameter corresponds to a specific address in the wheelbase profile memory. APPLY & SAVE sends three consecutive 9-address batches to the active profile, then a save-to-flash command. The Overall Force slider also fires the SMP torque-limit registers so the motor actually clips at the configured ceiling, not the previous one.
+
+### Profile auto-match
+The plugin watches `data.GameName`, `data.NewData.CarClass`, `data.NewData.CarId` and `data.NewData.TrackId` from SimHub on every tick. When the (game, class, carId, track) combination changes and Auto-match is enabled, the best-matching profile is loaded automatically — most-specific match wins.
+
+### Live torque monitor
+On iRacing, the plugin reads the 6-sample `SteeringWheelTorque_ST` array (360 Hz effective) on every tick into a rolling 1-second buffer. On other sims it falls back to the 60 Hz scalar `SteeringWheelTorque`. Properties (`CurrentTorqueNm`, `IsClipping`, `RoughnessNm`, etc.) are republished at 15 Hz to spare overhead.
+
+### Profile storage
+Profiles are stored locally as JSON in `%APPDATA%\AsetekPlugin\profiles.json`. Each save also writes a RaceHub-format XML mirror to `Documents\RaceHub Profiles\Wheelbase\Backup\Plugin - <Name> - Asetek Plugin Backup.xml` as a redundant backup.
+
+### Settings persistence
+The wheelbase does not expose a "read settings" command. The plugin maintains a local cache and persists it in `%APPDATA%\AsetekPlugin\ffb_settings.json`. On a fresh install, configure all sliders to match your current RaceHub values before the first APPLY.
 
 ---
 
 ## Known Limitations
 
 - **RaceHub conflict** — RaceHub and this plugin cannot run simultaneously. Close RaceHub before launching SimHub.
-- **True Steering Lock** currently only works with **Le Mans Ultimate / rFactor 2** (requires the LMU REST API on port 6397). Support for other sims is planned.
-- **LED features are in beta** — behavior may vary depending on firmware version.
-- **Settings are not readable from the wheelbase** — the plugin persists your last settings locally. On first use, make sure to set all sliders to match your current RaceHub values before applying.
-- **Forte GT HID conflict** — If Leoxz SimBridge is managing the Forte wheel, the plugin skips Forte enumeration to avoid conflicts.
+- **True Steering Lock** is currently LMU-only (uses the LMU REST API on port 6397). Multi-sim support planned.
+- **LED features are still beta** — behavior may vary depending on firmware version.
+- **Settings are not readable from the wheelbase** — the plugin persists the last-known cache locally.
+- **Forte GT HID conflict** — if Leoxz SimBridge is managing the Forte wheel, the plugin skips Forte enumeration to avoid conflicts.
 
 ---
 
@@ -204,21 +208,20 @@ The plugin exposes the following SimHub properties that can be used in custom da
 |---------|----------|
 | Both devices show "DISCONNECTED" | Close RaceHub, click Reconnect |
 | Wheelbase shows "0 Found" | RaceHub is still running, or another app has the HID handle |
-| Settings don't apply | Click "Apply & Save" — sliders only update the display until you apply |
-| True Steering Lock shows "err" | Make sure LMU is running and in a session (not at the main menu) |
-| Plugin doesn't appear in SimHub | Make sure `AsetekPlugin.dll` is in the SimHub root folder, not a subfolder |
+| Settings don't apply | Click APPLY & SAVE — sliders only update the display until you apply |
+| True Steering Lock shows "err" | Make sure LMU is running and you're in a session (not at the main menu) |
+| Plugin doesn't appear in SimHub | `AsetekPlugin.dll` must be in the SimHub root folder, not a subfolder |
+| Torque monitor shows 0 Nm | The running sim doesn't expose its steering torque on a known SimHub property path — open a GitHub issue with the sim name |
 
 ---
 
 ## Roadmap
 
-This plugin is under active development. Planned features include:
-
-- [ ] Multi-sim True Steering Lock (ACC, iRacing, AMS2...)
-- [ ] Auto-profile switching based on game/car
-- [ ] LED patterns and animations
+- [ ] Multi-sim True Steering Lock (ACC, iRacing, AMS2…)
+- [ ] Auto-tune presets by track surface (use the live `RoughnessNm` to suggest HF Limit, Slew Rate and Anti-Oscillation values)
+- [ ] LED patterns and animations driven by telemetry
 - [ ] Forte pedal telemetry integration
-- [ ] Community-contributed profiles library
+- [ ] Community-contributed profile library
 
 Feature requests and bug reports are welcome via [GitHub Issues](../../issues).
 
