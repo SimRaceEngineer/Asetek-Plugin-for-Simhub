@@ -4,9 +4,9 @@
 
 ---
 
-## v1.0.4-beta — Overall Force fix, live torque monitor & 360 Hz toggle (April 27, 2026)
+## v1.0.4-beta — Overall Force fix, live torque monitor, per-track profiles & 360 Hz reading (April 27, 2026)
 
-This patch fixes a real-world FFB issue and adds two long-asked monitoring/utility features. The slider plumbing and per-game/car profile auto-match introduced in v1.0.3-beta are now confirmed working in iRacing and LMU.
+This patch fixes a real-world FFB issue and adds three long-asked features: live torque/clipping monitoring, per-track profile matching and 360 Hz native sampling on iRacing. The slider plumbing and per-game/car profile auto-match introduced in v1.0.3-beta are now confirmed working in iRacing and LMU.
 
 ### Fixed (CRITICAL)
 
@@ -32,6 +32,27 @@ This patch fixes a real-world FFB issue and adds two long-asked monitoring/utili
 - Re-center wheel button + Standstill Damping toggle behaving as intended.
 
 - **FFB Strength +/- bindings confirmed working** — bind two wheel buttons to `Asetek.FFB.Strength.Up` / `.Down` and adjust force on the fly without digging into a tab.
+
+### Added — Per-track profiles
+
+- **`Track` field on profiles**, alongside Game / CarClass / CarId. Persisted in `profiles.json`. Auto-match priority extended:
+  `(game, carId, track)` > `(game, carClass, track)` > `(game, carId)` > `(game, carClass)` > `(game, track)` > carId-only > carClass-only > track-only > game-only.
+  This means you can now have one base profile per car AND a more specific one for that car at a given track — the more specific one wins automatically.
+- **"Quick save → by Car + Track"** button (3rd button on the FFB Settings tab, alongside by Class and by Car). One-click captures a profile pinned to the current `(game, carId, track)`, e.g. `iRacing Porsche 911 Cup (992.2) @ ledenon`.
+- **Edit dialog** now has a 4th field for `Track`. Empty = matches anything (so you can keep a generic per-car profile and only override per-track when you actually need to).
+- **Tag display** updated: `[iRacing/car: porsche9922cup @ ledenon]` shown next to the profile name.
+
+### Added — 360 Hz native FFB signal reading (iRacing)
+
+Up to v1.0.3-beta we were reading the game's `SteeringWheelTorque` scalar at 60 Hz then republishing at 15 Hz. That misses fast spikes that happen between two 60 Hz frames. iRacing actually exposes a higher-rate array — `SteeringWheelTorque_ST` — that contains **6 sub-samples per 60 Hz tick (= 360 Hz effective rate)**. The plugin now ingests all 6 samples every tick into a rolling 1-second buffer (360 entries) instead of the single scalar. LMU and ACC fall back cleanly to the 60 Hz scalar source.
+
+What this gives you:
+
+- **Sharper clipping detection.** Clipping spikes that happen in the gap between 60 Hz ticks are no longer missed — `Asetek.FFB.IsClipping` is now driven by the max of all 6 samples per tick.
+- **`Asetek.FFB.RoughnessNm` — surface roughness score.** Standard deviation of the 360 Hz signal over a rolling 1-second window. Smooth modern tarmac sits around 0.5-1.0 Nm, fast bumpy tracks (Daytona Roval, Nordschleife 24h) easily climb past 3-4 Nm, street circuits with kerbs even higher. Wire it into a Dash widget and you get a live readout of how rough the surface is, in the same Nm units as your torque.
+- **`Asetek.FFB.SampleRateHz`** advertises 360 (iRacing array) or 60 (scalar fallback) so you know which mode you're in.
+
+**Why it matters for tuning** — same idea as community guides like Karsten Hvidberg's: smooth surfaces let you run no high-frequency filtering and full slew rate, but on bumpy or street circuits the road noise saturates the wheel and buries the genuine "limit signal". Lowering the High Frequency Limit + Slew Rate + raising Anti-Oscillation cleans the signal so you can still feel grip transitions through the noise. The Roughness number gives you a quantitative anchor instead of guessing — pair it with the per-track profile system above and you can store a tuned set per surface type per car, loaded automatically when you arrive on track.
 
 > **Note:** other Controls-tab bindings (steering range presets, force presets, toggles, LED modes) haven't been hands-on tested across all configurations yet. They should work but are still experimental — please open a GitHub issue if any of them misbehaves on your setup.
 
