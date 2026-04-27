@@ -67,6 +67,16 @@ The plugin fills practical gaps left by RaceHub for sim racers who live inside S
 ### FFB Settings — Full Parameter Control
 ![FFB Settings Tab](screenshots/ffb%20settings.png)
 
+### Per-car / per-track Quick Save (iRacing example)
+The "Detected:" status line shows the running game / car / track in real time. Three one-click buttons capture the current sliders into a profile auto-tagged for that combination — broad (by Class), specific (by Car), or pinned (by Car + Track) for per-track FFB tuning.
+
+![Quick Save by Car / Track](screenshots/quicksave%20car%20track.png)
+
+### Live torque & clipping monitor in SimHub properties
+Five Asetek FFB properties exposed to SimHub at ~15 Hz, sourced from iRacing's 360 Hz `_ST` array (or 60 Hz scalar fallback on LMU/ACC). Drop them into a Dash Studio widget for a clipping LED, a utilisation bar or a surface roughness readout.
+
+![SimHub Properties — Live Torque](screenshots/simhub%20properties%20torque.png)
+
 ### LED Control (Beta)
 ![LED Control Tab](screenshots/Led%20control.png)
 
