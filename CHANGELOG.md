@@ -4,6 +4,17 @@
 
 ---
 
+## v1.0.7-beta — La Prima+ slew-rate boost with high-power PSU (April 28, 2026)
+
+### Changed
+- **La Prima high-power PSU toggle now also lifts the Torque Accel Limit ceiling** from 4.0 Nm/ms (stock) to **6.7 Nm/ms** (matching the Forte spec). The PSU upgrade physically raises both the peak torque and the slew rate, so the slider now reflects that consistently.
+- UI helper text on the PSU toggle updated to call out both ceilings being lifted.
+
+### Acknowledgements
+- Thanks to **@Chris** on Discord for confirming the La Prima+ slew rate is 6.7 Nm/ms when running the high-power PSU.
+
+---
+
 ## v1.0.6-beta — Per-model Torque Accel Limit ceiling (April 28, 2026)
 
 ### Added
