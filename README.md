@@ -254,3 +254,5 @@ If you like this plugin and want to support its development:
 ---
 
 *Made with passion by a sim racer, for sim racers.*
+
+
