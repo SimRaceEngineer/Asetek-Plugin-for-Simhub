@@ -4,6 +4,21 @@
 
 ---
 
+## v1.0.6-beta — Per-model Torque Accel Limit ceiling (April 28, 2026)
+
+### Added
+- **Per-model Torque Accel Limit (slew rate) ceiling** — the slider's max is now capped to what the detected base can physically deliver, mirroring the v1.0.5 Overall Force fix:
+  - **4.0 Nm/ms** on La Prima
+  - **6.7 Nm/ms** on Forte
+  - **9.4 Nm/ms** on Invicta
+- Slider falls back to 9.4 Nm/ms before the base is detected so you don't hit an artificially low ceiling on first connect.
+- Values pulled from Asetek's official product specs (asetek.com/simsports/product pages).
+
+### Acknowledgements
+- Thanks to **@Chris** on Discord for pointing out that the slew rate also varies per model and shouldn't have been left at the Invicta-class 9.4 Nm/ms across the board.
+
+---
+
 ## v1.0.5-beta — La Prima support & per-model Overall Force ceiling (April 28, 2026)
 
 ### Added

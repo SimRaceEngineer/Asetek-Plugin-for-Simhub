@@ -106,7 +106,7 @@ All wheelbase FFB parameters with sliders matching the values available in RaceH
 
 - **Core** — Steering Range (180°–1890°) and Overall Force (capped to the detected base's peak: 12 Nm La Prima / 16 Nm w/ high-power PSU / 18 Nm Forte / 27 Nm Invicta)
 - **Mechanical Feel** — Damping, Friction, Inertia, Anti-Oscillation (0–100%)
-- **Torque Shaping** — Torque Prediction (0–10), Torque Accel Limit (0.1–9.4 Nm/ms), High Frequency Limit (0–4700 Hz)
+- **Torque Shaping** — Torque Prediction (0–10), Torque Accel Limit (capped to the detected base's slew rate: 4.0 Nm/ms La Prima / 6.7 Nm/ms Forte / 9.4 Nm/ms Invicta), High Frequency Limit (0–4700 Hz)
 - **Bumpstop & Cornering** — Cornering Force Assist (0–100%), Bumpstop Hardness (Soft/Medium/Hard), Bumpstop Range (-90°–+90°)
 - **Game Integration** — True Steering Lock checkbox (auto-sync from game), link to Controls tab
 - **Apply & Save** — Sends all slider values to the wheelbase and persists to flash memory. On first use, set all sliders to match your current RaceHub values
