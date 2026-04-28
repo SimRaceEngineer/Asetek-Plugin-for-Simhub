@@ -4,103 +4,81 @@
 
 ---
 
-## v1.0.4-beta — Overall Force fix, live torque monitor, per-track profiles & 360 Hz reading (April 27, 2026)
-
-This patch fixes a real-world FFB issue and adds three long-asked features: live torque/clipping monitoring, per-track profile matching and 360 Hz native sampling on iRacing. The slider plumbing and per-game/car profile auto-match introduced in v1.0.3-beta are now confirmed working in iRacing and LMU.
-
-### Fixed (CRITICAL)
-
-- **Overall Force slider had little perceptible effect.** The plugin was writing the profile-side gain (`main_gain`) but skipping the SMP torque-limit registers that drive the actual motor power cap. Without those, raising the slider didn't raise the felt force because the motor still clipped at the previous limit. RaceHub pairs both writes — we now do the same. Confirmed in iRacing: the Overall Force slider now produces a clear, immediate change in felt torque, comparable to RaceHub.
-- The same dual-write now also fires when you load a profile from the list, so saved profiles restore their full intended force level too.
+## v1.0.5-beta — La Prima support & per-model Overall Force ceiling (April 28, 2026)
 
 ### Added
+- **La Prima wheelbase detection** — PID `0xF303` is now recognized as "La Prima" instead of falling back to "Unknown (PID_F303)". Plugin auto-identifies the base on connect.
+- **Invicta steering wheel detection** — PID `0xF400` is now explicitly recognized as the "Invicta" wheel (was previously caught by the generic auto-scan range without a proper label).
+- **Per-model Overall Force ceiling** — the Overall Force slider's maximum is now capped to what the detected base can physically deliver: **12 Nm** on La Prima, **18 Nm** on Forte, **27 Nm** on Invicta. No more silent firmware clipping when sliding past the base's limit. Slider falls back to 27 Nm before the base is detected so you don't hit an artificially low ceiling on first connect.
+- **La Prima high-power PSU toggle** (FFB Settings → Game Integration). Tick if you've upgraded to the optional power supply — the Overall Force ceiling becomes **16 Nm** instead of the stock 12 Nm. No effect on Forte / Invicta.
 
-- **Live torque monitoring** for clipping detection. New SimHub properties refresh at ~15 Hz so you can wire them into a dashboard widget:
-  - `Asetek.FFB.CurrentTorqueNm` — instantaneous |Nm| reported by the running sim
-  - `Asetek.FFB.MaxTorqueNm` — your configured ceiling (`main_gain × 27`)
-  - `Asetek.FFB.UtilizationPct` — current / max × 100 (jumps over 100 = you're clipping)
-  - `Asetek.FFB.IsClipping` — boolean, true when ≥ 95 % of max (perfect for a flashing LED)
-  - `Asetek.FFB.PeakTorqueNm` — rolling peak with slow decay
-  - Reads from iRacing's irsdk telemetry first, falls back to LMU shared memory and ACC physics. Cross-sim compatible out of the box.
-- **"360 Hz Compatibility Mode" toggle** (FFB Settings → Game Integration). Engages the wheelbase's high-rate FFB pipeline so it stays in sync with iRacing's 360 Hz native steering torque telemetry and LMU's shared-memory feed. State is persisted by the device in flash and re-applied on reconnect. Also exposed as the `Asetek.Toggle360Hz` SimHub action (Controls → TOGGLES) — bindable to a wheel/box button for on-the-fly toggling.
+### Changed
+- Removed "Invicta S" from the wheelbase enumeration — it's a pedal set, not a base. Was never produced as a wheelbase, listing it would have created confusion.
 
-### Confirmed working (from v1.0.3-beta tests in LMU + iRacing)
-
-- All four FFB sliders that were silently broken before the v1.0.3 mapping fix (Damping / Friction / Inertia / Anti-Oscillation) now produce a perceptible change on the wheelbase.
-- Auto-match by game / car class / car id is working across sims. Detection lights up correctly in iRacing too — `Game = IRacing`, `CarClass`, `CarId` and `CarModel` come straight from the SimHub telemetry pipeline. Track is also picked up via `GameData.TrackId`.
-- Quick-Save buttons (by Class / by Car) auto-name and auto-tag profiles correctly across both LMU and iRacing.
-- Re-center wheel button + Standstill Damping toggle behaving as intended.
-
-- **FFB Strength +/- bindings confirmed working** — bind two wheel buttons to `Asetek.FFB.Strength.Up` / `.Down` and adjust force on the fly without digging into a tab.
-
-### Added — Per-track profiles
-
-- **`Track` field on profiles**, alongside Game / CarClass / CarId. Persisted in `profiles.json`. Auto-match priority extended:
-  `(game, carId, track)` > `(game, carClass, track)` > `(game, carId)` > `(game, carClass)` > `(game, track)` > carId-only > carClass-only > track-only > game-only.
-  This means you can now have one base profile per car AND a more specific one for that car at a given track — the more specific one wins automatically.
-- **"Quick save → by Car + Track"** button (3rd button on the FFB Settings tab, alongside by Class and by Car). One-click captures a profile pinned to the current `(game, carId, track)`, e.g. `iRacing Porsche 911 Cup (992.2) @ ledenon`.
-- **Edit dialog** now has a 4th field for `Track`. Empty = matches anything (so you can keep a generic per-car profile and only override per-track when you actually need to).
-- **Tag display** updated: `[iRacing/car: porsche9922cup @ ledenon]` shown next to the profile name.
-
-### Added — 360 Hz native FFB signal reading (iRacing)
-
-Up to v1.0.3-beta we were reading the game's `SteeringWheelTorque` scalar at 60 Hz then republishing at 15 Hz. That misses fast spikes that happen between two 60 Hz frames. iRacing actually exposes a higher-rate array — `SteeringWheelTorque_ST` — that contains **6 sub-samples per 60 Hz tick (= 360 Hz effective rate)**. The plugin now ingests all 6 samples every tick into a rolling 1-second buffer (360 entries) instead of the single scalar. LMU and ACC fall back cleanly to the 60 Hz scalar source.
-
-What this gives you:
-
-- **Sharper clipping detection.** Clipping spikes that happen in the gap between 60 Hz ticks are no longer missed — `Asetek.FFB.IsClipping` is now driven by the max of all 6 samples per tick.
-- **`Asetek.FFB.RoughnessNm` — surface roughness score.** Standard deviation of the 360 Hz signal over a rolling 1-second window. Smooth modern tarmac sits around 0.5-1.0 Nm, fast bumpy tracks (Daytona Roval, Nordschleife 24h) easily climb past 3-4 Nm, street circuits with kerbs even higher. Wire it into a Dash widget and you get a live readout of how rough the surface is, in the same Nm units as your torque.
-- **`Asetek.FFB.SampleRateHz`** advertises 360 (iRacing array) or 60 (scalar fallback) so you know which mode you're in.
-
-**Why it matters for tuning** — same idea as community guides like Karsten Hvidberg's: smooth surfaces let you run no high-frequency filtering and full slew rate, but on bumpy or street circuits the road noise saturates the wheel and buries the genuine "limit signal". Lowering the High Frequency Limit + Slew Rate + raising Anti-Oscillation cleans the signal so you can still feel grip transitions through the noise. The Roughness number gives you a quantitative anchor instead of guessing — pair it with the per-track profile system above and you can store a tuned set per surface type per car, loaded automatically when you arrive on track.
-
-> **Note:** other Controls-tab bindings (steering range presets, force presets, toggles, LED modes) haven't been hands-on tested across all configurations yet. They should work but are still experimental — please open a GitHub issue if any of them misbehaves on your setup.
+### Acknowledgements
+- Thanks to **@Chris** on Discord for confirming PID_F303 and suggesting the per-model torque cap.
+- Thanks to **@jse67** on Discord for testing Invicta wheel detection paths.
 
 ---
 
-## v1.0.3-beta — FFB rewiring, profile auto-match & quality of life (April 25, 2026)
-
-This release is a major iteration. It fixes a long-standing FFB mapping bug, rewires the slider plumbing, and adds a full profile system tied to the running game and car. All work was done after decompiling RaceHub 4.4.3's `Assembly-CSharp.dll` and cross-checking against 11 RaceHub XML preset exports.
+## v1.0.4-beta — Overall Force fix, live torque monitor & 360 Hz toggle (April 27, 2026)
 
 ### Fixed (CRITICAL)
+- **Overall Force slider had no perceptible effect** because the plugin was only writing the profile-side `main_gain` and skipping the SMP torque-limit registers (`SMP_TORQUELIMIT_CONT`/`SMP_TORQUELIMIT_PEAK` via cmd 150). The motor was clipping at the previous limit regardless of slider position. Both writes are now paired with each other in `CommitSlidersToCache` and again in `ApplyAllCoreSettings` so loading a profile also restores the SMP caps. Confirmed working in iRacing.
 
-- **Damping / Friction / Inertia / Anti-Oscillation sliders now write the correct hardware addresses.** Previous versions wired these UI sliders to firmware-constant registers (`damper_gain`, `friction_gain`, `inertia_gain`) that don't drive the FFB feel — moving the sliders had no perceptible effect. The mapping is now confirmed against the decompiled RaceHub source:
-  - `Damping` → `ioni_damping` (was `damper_gain`)
-  - `Friction` → `ioni_friction` (was `friction_gain`)
-  - `Inertia` → `ioni_inertia` (was `inertia_gain`)
-  - `Anti-Oscillation` → `latency_comp_factor` (was `ioni_damping`)
-- **APPLY & SAVE only persisted 8 of the 12 FFB sliders.** The Torque Prediction, Torque Accel Limit, Cornering Force Assist and Bumpstop Hardness sliders were silently dropped before this release.
-- **The per-profile "Save" button silently lost slider edits.** It called `LoadProfile()` *before* `SaveCurrentToProfile()`, overwriting the user's current sliders right before saving. Now it commits sliders to cache, then writes the cache to the target profile.
+### Added
+- **Live torque monitoring properties** (~15 Hz refresh): `Asetek.FFB.CurrentTorqueNm`, `MaxTorqueNm`, `UtilizationPct`, `IsClipping`, `PeakTorqueNm`. Reads from `GameRawData.Telemetry.SteeringWheelTorque` (iRacing) with fallbacks to LMU shared memory and ACC physics.
+- **"360 Hz Compatibility Mode" toggle** (FFB Settings → Game Integration) + `Asetek.Toggle360Hz` SimHub action. Sends cmd 233 (`set_360hz_compatibility`) and is re-applied on reconnect.
 
-> **Migration note** — profiles saved with v1.0.2-beta or earlier still hold the Damping / Friction / Inertia / Anti-Oscillation values in the wrong addresses. After upgrading: re-set those four sliders manually, or re-import your RaceHub presets.
+### Confirmed working
+- v1.0.3 slider mapping fix validated in iRacing & LMU.
+- Auto-match by Game / CarClass / CarId works across sims (iRacing exposes Game, CarId and CarModel; CarClass may be empty for some series like Porsche Cup — use the "Quick save → by Car" button for those).
+- Quick-Save buttons + Re-center + Standstill Damping all behaving as designed.
 
-### Added — Wheel utilities
+### Known beta
+- Controls-tab button bindings (FFB Strength +/-, range / force presets, toggles, LED modes) not yet hands-on validated across configs. Please open a GitHub issue if any binding misbehaves.
 
-- **"RE-CENTER WHEEL"** button on the FFB Settings tab. Sends `set_wheel_center_here` + `save_to_flash` so the new zero point survives a power cycle. Useful after swapping rims when the wheel keeps trying to rotate to the previous center. Also exposed as the `Asetek.RecenterWheel` SimHub action — bindable to a button on a wheel or button box from the Controls tab.
-- **"↻ RELOAD PRESET"** button. Discards unsaved slider edits and restores the active profile's saved values.
-- **"Standstill Damping"** toggle (Game Integration). Auto-boosts `ioni_damping` to 95 % at slow speed (under 13 km/h) to kill wheel oscillations in pits / on grid / pit lane, then restores the user's normal value at racing speed (above 15 km/h, 2 km/h hysteresis prevents flicker).
+---
 
-### Added — Profile system
+## v1.0.3-beta — FFB slider mapping fix + Re-center wheel (April 25, 2026)
 
-- **Auto-match profile by game / car class / car id.** Every profile gains optional `Game`, `CarClass` and `CarId` tags. When the toggle is enabled (Overview tab), the plugin auto-loads the best-matching profile when the active sim or car changes. Match priority: exact `(game, carId)` → `(game, carClass)` → carId-only → carClass-only → game-only.
-- **Smart toggle behaviour**: turning auto-match on when no profile matches the current game/class auto-creates a profile from your current sliders and tags it for you.
-- **"Quick save → by Car Class" / "by Car (specific)"** buttons (FFB Settings tab). One-click profile capture from your current sliders, auto-named and auto-tagged from the running sim:
-  - by Class: e.g. `LMU GT3`, tagged `Game=LMU CarClass=GT3` (covers every GT3 in LMU)
-  - by Car: e.g. `LMU GT3 - United Autosports 2025`, tagged with the specific `CarId`
-- **Live "Detected:" status line** above the Quick Save buttons that previews the names that will be created before you click — refreshed every second.
-- **"Load" / "Tag" / "Edit"** buttons on every profile row. Tag auto-fills from the running sim; Edit opens an inline editor for Game / CarClass / CarId (empty field = match anything).
-- **"Save current sliders to…"** dropdown on the FFB Settings tab. Pick any profile and write your current slider values to it without applying to the wheelbase — useful for fine-tuning incrementally.
+### Added
+- **"360 Hz Compatibility Mode" toggle** (FFB Settings → Game Integration). Enables the wheelbase's high-rate FFB pipeline so it stays in sync with iRacing's 360 Hz native telemetry and LMU's shared-memory feed. State is persisted by the device in flash and re-applied on reconnect. Also available as the bindable `Asetek.Toggle360Hz` SimHub action (Controls → TOGGLES).
+- **"RE-CENTER WHEEL" button** at the bottom of the FFB Settings tab. Sends `set_wheel_center_here` + `save_to_flash` so the new zero point survives a power cycle. Useful after swapping rims when the wheel keeps trying to rotate to the previous center.
+- **SimHub action `Asetek.RecenterWheel`** — bindable to any button on a wheel/box via the Controls tab (DEVICE section).
+- **"Standstill Damping" toggle** (Game Integration section). Auto-boosts `ioni_damping` to 95% at slow speed (< 13 km/h) to kill wheel oscillations in pits / on grid / pit lane, then restores the user's normal value at racing speed (> 15 km/h, 2 km/h hysteresis prevents flicker). Persisted in `ffb_settings.json`.
+- **"↻ RELOAD PRESET" button** next to RE-CENTER WHEEL. Discards unsaved slider edits and restores the active profile values (shortcut for clicking the profile name in the list).
+- **Auto-match profile by game / car class**. Toggle on the Overview tab (next to the profile list). Each profile gains optional `Game` and `CarClass` tags. When enabled, the plugin auto-loads the best-matching profile when the active sim or car class changes. Priority: exact `(game, class)` match → game-only match → class-only match. Use the "Tag" button on each profile to auto-fill from the currently running game.
+- **Smart toggle** for Auto-match: if no profile already matches the current game+class when you enable it, the plugin auto-creates a new profile with your current slider values and tags it for you.
+- **"Load" button** on each profile row (Overview tab) — explicit one-click apply of any saved profile to the wheelbase.
+- **"Import RaceHub Presets" button** (Overview tab). Scans `%USERPROFILE%\Documents\RaceHub Profiles\Wheelbase\Backup\` and imports every XML preset auto-exported by RaceHub as a plugin profile. Auto-tags the `Game` field heuristically from the preset name (LMU, iRacing, ACC, RFactor2, AMS2, EAWRC, Dakar, Kart). Skips profiles whose name already exists.
+- **"Edit" button** on each profile row — inline editor for the `Game` and `CarClass` tags. Empty field = matches anything. Examples: `Game="LMU" CarClass=""` matches all LMU cars; `Game="" CarClass="GT3"` matches GT3s in any sim; `Game="LMU" CarClass="GT3"` matches all GT3s in LMU.
 
-### Added — Import / backup
+### Fixed (CRITICAL)
+- The per-profile "Save" button silently lost slider edits — it called `LoadProfile()` *before* `SaveCurrentToProfile()`, overwriting your current sliders with the profile's stored values just before saving. Now it commits sliders to cache, then writes the cache to the target profile (no pre-load).
+- "APPLY & SAVE" only persisted 8 of the 12 FFB sliders. The Torque Prediction, Torque Accel Limit, Cornering Force Assist and Bumpstop Hardness sliders were silently dropped. All 12 sliders now flow through a unified `CommitSlidersToCache()` helper.
 
-- **"Import RaceHub Presets"** button. Scans `%USERPROFILE%\Documents\RaceHub Profiles\Wheelbase\Backup\` and imports every XML preset auto-exported by RaceHub as a plugin profile. Auto-tags the `Game` field heuristically from the preset name (LMU, iRacing, ACC, RFactor2, AMS2, EAWRC, Dakar, Kart). Skips profiles whose name already exists. **Note:** RaceHub appears to only auto-export those XML files on a major version upgrade — they reflect the preset state at the time of export, not your current RaceHub configuration.
-- **RaceHub-format XML mirror.** Every profile save also writes `Plugin - <Name> - Asetek Plugin Backup.xml` to `Documents\RaceHub Profiles\Wheelbase\Backup\` as a redundant readable backup alongside the plugin's `profiles.json`.
+### Added
+- **"Save current sliders to..." dropdown** on the FFB Settings tab (below APPLY & SAVE). Pick any profile from the list and write your current slider values to it without applying to the wheelbase. Useful when fine-tuning a session and you want to commit incrementally.
+- **`CarId` field** on profiles (more specific than `CarClass`). Match priority: `CarId` > `CarClass` > game-only. Persisted in `profiles.json`. Edit dialog now has 3 fields (Game / CarClass / CarId).
+- **"Quick save → by Car Class" / "by Car" buttons** on the FFB Settings tab. Detects the running sim and current car, creates a new profile from your current sliders, auto-tagged either with the broad CarClass (covers all cars of that class) or the specific CarId.
+- **Live status line** "Detected: Game=… Class=… Car=…" refreshing every second so you can see what the plugin will tag before you save.
+- **RaceHub-format XML mirror**: each plugin profile is also written to `%USERPROFILE%\Documents\RaceHub Profiles\Wheelbase\Backup\Plugin - <Name> - Asetek Plugin Backup.xml` on every save. Provides a redundant readable backup alongside the plugin's `profiles.json`.
 
-### Discoveries (RaceHub 4.4.3 reverse engineering)
 
-- `addr_reserved_ui_simple_1` (26) is **not reserved** — it's a packed bitfield holding the four Simple Mode values (MainGain / SteeringRange / Smoothing / Damping, 8 bits each).
-- `addr_profile_settings_bits_1` (28) is a bitfield: bit 0 = `SimpleMode` flag, bit 1 = `Dirty` flag.
-- The "profile hash" sent via cmd `0x7F` is the profile's GUID in little-endian, not an arbitrary content hash.
+### Fixed (CRITICAL)
+- **Damping / Friction / Inertia / Anti-Oscillation sliders now write the correct hardware addresses**. Previous versions wired these UI sliders to firmware-constant registers (`damper_gain`, `friction_gain`, `inertia_gain`) that don't drive the FFB feel — moving the sliders had no perceptible effect. Confirmed via decompilation of RaceHub 4.4.3 `Assembly-CSharp.dll` and cross-analysis of 11 RaceHub XML preset exports.
+  - `Damping` → now writes `ioni_damping` (was: `damper_gain`)
+  - `Friction` → now writes `ioni_friction` (was: `friction_gain`)
+  - `Inertia` → now writes `ioni_inertia` (was: `inertia_gain`)
+  - `Anti-Oscillation` → now writes `latency_comp_factor` (was: `ioni_damping`)
+
+### Migration note
+Profiles saved with v1.0.2-beta or earlier have the Damping / Friction / Inertia / Anti-Oscillation values stored in the wrong addresses. After upgrading: re-set those 4 sliders manually, or re-import your RaceHub presets.
+
+### Discoveries
+- `addr_reserved_ui_simple_1` (26) is **not reserved** — it's a packed bitfield holding the 4 Simple Mode values (MainGain / SteeringRange / Smoothing / Damping, 8 bits each)
+- `addr_profile_settings_bits_1` (28) is a bitfield: bit 0 = `SimpleMode` flag, bit 1 = `Dirty` flag
 
 ---
 
@@ -138,3 +116,13 @@ This release is a major iteration. It fixes a long-standing FFB mapping bug, rew
 - **LED Control (Beta)**: set RPM LED colors and Rev Light brightness
 - **Button Mapping**: view real-time button/axis inputs from the wheelbase and Forte GT wheel
 - **Live Diagnostics**: connection status, HID report details, last write hex dump
+
+### Requirements
+- SimHub 9.x
+- Asetek SimSports wheelbase (Invicta confirmed, Forte/La Prima support added in v1.0.1)
+- **RaceHub must be closed** before launching SimHub
+
+### Known Limitations
+- Settings cannot be read back from the device — the plugin persists them locally in JSON
+- LED Control is experimental and not fully tested on all configurations
+- Dynamic FFB (real-time telemetry modulation) was removed — `setprofiledata` does not produce perceptible real-time effects
