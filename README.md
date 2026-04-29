@@ -1,8 +1,8 @@
-# Asetek Control — SimHub Plugin for Invicta & Forte
+# Asetek Control — SimHub Plugin for Invicta, Forte & La Prima
 
-> **Beta Release — v1.0.0-beta**
+> **Beta Release — v1.0.8-beta**
 
-A SimHub plugin that brings **direct FFB settings control**, **True Steering Lock**, **per-game profiles**, and **LED control** to Asetek SimSports wheelbases and Forte GT steering wheels — all from within SimHub.
+A SimHub plugin that brings **direct FFB settings control**, **True Steering Lock**, **per-game / per-car profiles**, **LED control**, and a **safe RaceHub coexistence layer** to Asetek SimSports wheelbases and Forte GT steering wheels — all from within SimHub.
 
 ---
 
@@ -15,7 +15,7 @@ A SimHub plugin that brings **direct FFB settings control**, **True Steering Loc
 - This plugin communicates with Asetek hardware via the standard HID (Human Interface Device) protocol, the same USB interface used by any compatible software.
 - **No warranty** is provided, express or implied. The authors are not responsible for any damage, misconfiguration, or unexpected behavior that may result from using this plugin.
 - This plugin **may stop working** after a firmware update from Asetek.
-- **RaceHub must be closed** before launching SimHub with this plugin — both applications cannot access the wheelbase simultaneously.
+- **RaceHub coexistence is now handled automatically** — the plugin detects when RaceHub is running and auto-pauses (releases the HID handle, greys out controls). You no longer need to close RaceHub manually before launching SimHub. A "Disconnect" button is also available to hand the wheelbase over on demand. See *Coexistence with RaceHub* below.
 - By using this plugin, you acknowledge that you understand these limitations and accept full responsibility.
 
 ### Why this plugin exists
@@ -34,22 +34,27 @@ These are features the Asetek community has been requesting for a long time, and
 
 ### ✅ Confirmed Working
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **True Steering Lock** | Stable | Auto-syncs steering range from the game via LMU REST API. The wheelbase range matches the car automatically |
+| Feature | Description |
+|---------|-------------|
+| **Auto base detection** | Plugin enumerates VID_2433 on connect and auto-identifies Invicta / Forte / La Prima (and the supported wheels). Slider ceilings adapt to the detected base's spec (12 / 16 / 18 / 27 Nm). |
+| **True Steering Lock** | Auto-syncs steering range from the game (LMU REST API + per-car CarClass detection). The wheelbase range matches the car automatically. |
+| **FFB Settings** | Full control of all wheelbase parameters: Overall Force, Steering Range, Damping, Friction, Inertia, Anti-Oscillation, Torque Prediction, Slew Rate, HF Limit, Cornering Assist, Bumpstop. |
+| **Apply & Save to Flash** | Sends settings to the wheelbase and persists them to flash. |
+| **Per-game / per-car profiles** | Unlimited profiles with save / load / rename / delete. Auto-match by Game / CarClass / CarId so the right profile loads when you switch sims or cars. RaceHub XML preset import (Documents\RaceHub Profiles\Wheelbase\Backup\). |
+| **FFB Strength +/-** | Bindable SimHub actions — assign to wheel buttons for on-the-fly force adjustment without alt-tabbing. |
+| **Steering Range / Force Presets** | Quick-switch between 360° / 540° / 900° / 1080° steering and Low/Med/High/Max force via bindable buttons. |
+| **Re-center Wheel** | Sets the current wheel position as the new zero, persisted to flash (also exposed as a bindable SimHub action). |
+| **Reset Torque Limits** | Restores the detected base to its factory torque configuration in one click. Recovers a wheelbase that has been silently capped. |
+| **Disconnect / Reconnect** | Releases the HID handle on demand so RaceHub can take over without closing SimHub. |
+| **RaceHub auto-pause** | Polls for the RaceHub UI process and auto-disconnects when detected, surfacing a warning banner and greying out plugin controls so the two apps never write to the IONI flash at the same time. |
 
 ### 🧪 Beta
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **FFB Settings** | Beta | Full control of all wheelbase parameters: Overall Force, Steering Range, Damping, Friction, Inertia, Anti-Oscillation, Torque Prediction, Slew Rate, HF Limit, Cornering Assist, Bumpstop. Only steering range fully tested so far |
-| **FFB Strength +/-** | Beta | Bindable SimHub actions — assign to wheel buttons for on-the-fly force adjustment without leaving the cockpit |
-| **Steering Range Presets** | Beta | Quick-switch between 360° / 540° / 900° / 1080° via bindable buttons |
-| **Force Presets** | Beta | Quick-switch between Low (10 Nm) / Medium (18 Nm) / High (24 Nm) / Max (27 Nm) |
-| **Software Profiles** | Beta | Unlimited profiles with save/load/rename/delete. Set a default profile loaded at startup |
-| **Apply & Save to Flash** | Beta | Send settings to the wheelbase and persist to flash memory |
-| **Wheelbase Center LED** | Beta | Set the center LED color, flag mode (auto-color based on race flags) |
-| **Forte Rev Lights** | Beta | External control of the rev light strip from game telemetry |
+| Feature | Description |
+|---------|-------------|
+| **Wheelbase Center LED** | Set color + flag mode (auto-coloured by race flags). |
+| **Forte Rev Lights** | External control of the rev-light strip from game telemetry. |
+| **360 Hz Compatibility Mode** | Toggle the wheelbase's high-rate FFB pipeline so it stays in sync with iRacing's 360 Hz native telemetry. |
 
 ---
 
@@ -151,6 +156,20 @@ You can set a **default profile** that loads automatically when SimHub starts.
 ### Settings Persistence
 The wheelbase does not expose a "read settings" command. The plugin maintains a local cache of all settings and persists them in `%APPDATA%\AsetekPlugin\ffb_settings.json`. On first use, make sure to configure all sliders to match your current RaceHub values before applying.
 
+### Coexistence with RaceHub
+
+The plugin detects when RaceHub is running and automatically releases the wheelbase so the two apps never end up controlling it concurrently. Behaviour:
+
+- When RaceHub starts, the plugin pauses itself within a second, greys out the tab content, and shows a warning banner.
+- When RaceHub closes, the banner switches to an "appears closed" state with a Reconnect button right inside it.
+- An explicit **Disconnect** button on the Overview tab lets you hand the wheelbase over on demand without closing SimHub.
+
+### Reset Torque Limits
+
+If your wheelbase ends up capped well below its rated torque — especially if RaceHub itself shows the slider stuck and a firmware reflash didn't help — open the Overview tab and click **Reset Torque Limits**. The button restores the detected base to its factory torque configuration and re-initialises the drive. After clicking, **power-cycle the wheelbase** (USB unplug + replug) and verify in RaceHub that the Overall Force slider reaches its full peak again.
+
+A confirmation dialog protects the button so it can't be triggered accidentally. Running it on a healthy base is a safe no-op.
+
 ---
 
 ## SimHub Properties (for dashboard developers)
@@ -179,11 +198,20 @@ The plugin exposes the following SimHub properties that can be used in custom da
 | `Asetek.FFB.SteeringRange.540` | Set steering range to 540° |
 | `Asetek.FFB.SteeringRange.900` | Set steering range to 900° |
 | `Asetek.FFB.SteeringRange.1080` | Set steering range to 1080° |
-| `Asetek.FFB.Force.Low` | Set force to 10 Nm |
-| `Asetek.FFB.Force.Medium` | Set force to 18 Nm |
-| `Asetek.FFB.Force.High` | Set force to 24 Nm |
-| `Asetek.FFB.Force.Max` | Set force to 27 Nm |
+| `Asetek.FFB.Force.Low` | Set force to 30 % of the detected base's peak |
+| `Asetek.FFB.Force.Medium` | Set force to 60 % of the detected base's peak |
+| `Asetek.FFB.Force.High` | Set force to 85 % of the detected base's peak |
+| `Asetek.FFB.Force.Max` | Set force to 100 % of the detected base's peak |
 | `Asetek.FFB.TrueSteeringLock.Toggle` | Toggle True Steering Lock |
+
+> Force-preset Nm equivalents per model:
+>
+> | Preset | Invicta (27 Nm) | Forte (18 Nm) | La Prima (12 Nm) | La Prima+ PSU (16 Nm) |
+> |--------|-----------------|----------------|-------------------|------------------------|
+> | Low    | ≈ 8 Nm         | ≈ 5 Nm         | ≈ 4 Nm            | ≈ 5 Nm                |
+> | Medium | ≈ 16 Nm        | ≈ 11 Nm        | ≈ 7 Nm            | ≈ 10 Nm               |
+> | High   | ≈ 23 Nm        | ≈ 15 Nm        | ≈ 10 Nm           | ≈ 14 Nm               |
+> | Max    | 27 Nm          | 18 Nm          | 12 Nm             | 16 Nm                 |
 | `Asetek.ApplyAndSave` | Apply current settings & save to flash |
 | `Asetek.Reconnect` | Reconnect to devices |
 | `Asetek.Led.Off` | Turn off LEDs |
@@ -194,11 +222,11 @@ The plugin exposes the following SimHub properties that can be used in custom da
 
 ## Known Limitations
 
-- **RaceHub conflict** — RaceHub and this plugin cannot run simultaneously. Close RaceHub before launching SimHub.
-- **True Steering Lock** currently only works with **Le Mans Ultimate / rFactor 2** (requires the LMU REST API on port 6397). Support for other sims is planned.
+- **RaceHub coexistence** — handled automatically. The plugin auto-pauses (releases its handle, greys out controls, shows a banner) when RaceHub is running, and a Reconnect button appears as soon as RaceHub closes. You can also click Disconnect manually to hand the wheelbase over.
+- **True Steering Lock** currently only works with **Le Mans Ultimate / rFactor 2** (requires the LMU REST API on port 6397). Multi-sim support is on the roadmap.
 - **LED features are in beta** — behavior may vary depending on firmware version.
 - **Settings are not readable from the wheelbase** — the plugin persists your last settings locally. On first use, make sure to set all sliders to match your current RaceHub values before applying.
-- **Forte GT HID conflict** — If Leoxz SimBridge is managing the Forte wheel, the plugin skips Forte enumeration to avoid conflicts.
+- **High Torque Mode toggle** must currently be set in RaceHub. If it's disabled there, the wheelbase will cap motor output to a low safe value regardless of the slider. Keeping the auto-enable option turned on in RaceHub is the recommended setup.
 
 ---
 
@@ -206,11 +234,12 @@ The plugin exposes the following SimHub properties that can be used in custom da
 
 | Problem | Solution |
 |---------|----------|
-| Both devices show "DISCONNECTED" | Close RaceHub, click Reconnect |
-| Wheelbase shows "0 Found" | RaceHub is still running, or another app has the HID handle |
-| Settings don't apply | Click "Apply & Save" — sliders only update the display until you apply |
-| True Steering Lock shows "err" | Make sure LMU is running and in a session (not at the main menu) |
-| Plugin doesn't appear in SimHub | Make sure `AsetekPlugin.dll` is in the SimHub root folder, not a subfolder |
+| Plugin shows "RaceHub is running — paused" banner | Expected behavior. Close RaceHub completely (or wait for it to release the handle) then click Reconnect in the banner. |
+| Wheelbase shows "0 Found" | Another app has the HID handle. Close RaceHub, click Reconnect. If the issue persists, kill `RaceHubWindowsService.exe` from Task Manager. |
+| RaceHub Overall Force slider is stuck at ~7 Nm (Invicta) / ~3 Nm (Forte) / ~1 Nm (La Prima), and a firmware reflash didn't help | Open the Overview tab and click **Reset Torque Limits** → confirm → power-cycle the wheelbase (USB unplug + replug). The slider should reach the full peak again. |
+| Settings don't apply | Click "Apply & Save" — sliders only update the display until you apply. |
+| True Steering Lock shows "err" | Make sure LMU is running and in a session (not at the main menu). |
+| Plugin doesn't appear in SimHub | Make sure `AsetekPlugin.dll` is in the SimHub root folder, not a subfolder. |
 
 ---
 
@@ -219,7 +248,11 @@ The plugin exposes the following SimHub properties that can be used in custom da
 This plugin is under active development. Planned features include:
 
 - [ ] Multi-sim True Steering Lock (ACC, iRacing, AMS2...)
-- [ ] Auto-profile switching based on game/car
+- [x] Auto-profile switching based on game / car (v1.0.3)
+- [x] Per-base torque & slew rate ceiling auto-detection (v1.0.5–1.0.7)
+- [x] One-click factory recovery for corrupted SMP limits (v1.0.8)
+- [x] Safe RaceHub coexistence — auto-pause + Disconnect/Reconnect (v1.0.8)
+- [ ] In-plugin High Torque Mode toggle
 - [ ] LED patterns and animations
 - [ ] Forte pedal telemetry integration
 - [ ] Community-contributed profiles library

@@ -4,6 +4,37 @@
 
 ---
 
+## v1.0.8-beta — Torque-limit recovery + Disconnect button (April 29, 2026)
+
+### Fixed
+- **Wheelbase could end up silently capped at a low torque after repeated
+  Apply+Save cycles** on certain configurations — sometimes still visible in
+  RaceHub after closing SimHub, and not always recoverable via a firmware
+  reflash. The Apply+Save path has been simplified so the Overall Force
+  slider only adjusts the user-facing gain and no longer writes any
+  motor-controller setting that could persist into a stuck state.
+
+### Added
+- **"Reset Torque Limits" button** (Overview tab, bottom row). Restores the
+  detected base to its factory torque configuration in one click and
+  re-initialises the drive. After clicking, power-cycle the wheelbase
+  (USB unplug + replug) and verify in RaceHub that the Overall Force slider
+  reaches the full peak. Confirmation dialog before the write so it's not
+  triggered accidentally.
+- **"Disconnect" button** (Overview tab, between Reconnect and Reset Torque
+  Limits). Releases the HID handle without closing SimHub, so RaceHub or any
+  other tool can take over on demand. Click "Reconnect" afterwards to reattach.
+- **RaceHub auto-pause**. The plugin now detects when RaceHub is running and
+  automatically releases the wheelbase, surfacing a warning banner with an
+  inline Reconnect button when RaceHub closes again. Plugin controls are
+  greyed out while paused so the two apps never end up writing concurrently.
+
+### Acknowledgements
+- Thanks to **@Uzurod** on Discord for the bug report that triggered the
+  investigation.
+
+---
+
 ## v1.0.7-beta — La Prima+ slew-rate boost with high-power PSU (April 28, 2026)
 
 ### Changed
