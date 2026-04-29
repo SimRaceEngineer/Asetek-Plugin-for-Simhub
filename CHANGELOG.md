@@ -4,6 +4,75 @@
 
 ---
 
+## v1.0.9-beta — Telemetry-driven LEDs + High Torque recovery (April 29, 2026)
+
+### Added
+
+- **Telemetry-driven RPM bar on the wheel** — when RaceHub is running with the
+  wheel profile set to "SimHub", the plugin now drives the wheel's RPM LEDs
+  (incl. the centre LED that wasn't reachable before) and the 6 Flag LEDs
+  directly from SimHub telemetry. Auto-throttled to ~30 Hz, no extra config.
+  Works on **all SimHub-supported sims** (LMU, iRacing, ACC, AMS2, F1,
+  AC, rF2, EA WRC, Dakar, kART, …). Toggle in **LED Control → Wheel LEDs
+  via RaceHub MMF**. The SimHub-native "Asetek RaceHub LEDs and display"
+  device must be DISABLED to avoid flicker.
+- **RPM fill direction selector** — three modes match the RaceHub options:
+  Left to Right (classic shift bar), Center to Side (grows symmetrically
+  from the centre LED), Side to Center (both ends fill toward the middle).
+  Applies to both the wheel's RPM bar and the wheelbase strips so they
+  stay in sync.
+- **RPM start threshold slider** — below this percent of redline the bar
+  stays dark. Default 75 % gives a useful approaching-shift indicator
+  without lighting the LEDs at cruise.
+- **Wheelbase contextual overlays** (LMU native telemetry):
+  - **Pit limiter** flash orange (existing, kept)
+  - **ABS engaged** → pulsing pink at ~6 Hz on all LEDs
+  - **TC engaged** → strobing cyan at ~15 Hz (very fast, distinguishable from ABS in peripheral vision)
+  - **Lift &amp; Coast** progressive violet bar (also fills the 6 wheel Flag
+    LEDs progressively — driver sees coasting window remaining at a glance)
+  - **Race flag** colour (yellow / blue / red / black / white / checkered / FCY)
+  - **RPM bar** classic green→yellow→red gradient with redline flash
+  - Priority: Pit > ABS > TC > Flag > Lift & Coast > RPM
+- **"Restore High Torque" button** (Overview tab) — recovers a wheelbase
+  that's stuck at its low-torque safe limit (~7 Nm Invicta, ~10.5 Nm Forte,
+  ~3 Nm La Prima) when RaceHub disabled the High Torque toggle. Lighter
+  weight than Reset Torque Limits — try this first.
+- **RaceHub coexistence** — the plugin no longer disconnects when RaceHub
+  starts. It keeps direct FFB control and re-applies your saved profile
+  5 s after RaceHub launch (which would otherwise overwrite your settings).
+  Wheel LEDs are routed through the RaceHub bridge automatically when the
+  wheel profile is set to "SimHub".
+- **Per-base diagnostic properties**: `Status.Wheelbase.Connected`,
+  `Status.Wheelbase.Model` ("Invicta" / "Forte" / "La Prima"),
+  `Status.Wheelbase.Pid`, plus equivalents for `Status.Wheel.*`. Use these
+  in your dashboards to display the actual detected model rather than
+  a generic boolean.
+- **Debug properties** for telemetry verification: `Debug.LastFlag`,
+  `Debug.RpmRatio`, `Debug.RpmThreshold`, `Debug.RpmFillMode`.
+
+### Changed
+
+- LED tab simplified — wheel-LED test palette and rev-lights customization
+  panel removed; the new MMF bridge covers the same scope and adds the
+  contextual overlays. SimHub-native "Asetek RaceHub LEDs and display"
+  device should be disabled when the plugin's MMF push is active.
+- Status banner re-styled — green/info instead of red/warning, with a
+  short clear status line. Applies to RaceHub coexistence state.
+- Plugin reads RPM from `CarSettings_CurrentDisplayedRPMPercent` — the
+  same source SimHub itself uses for dashboards / shift-light plugins —
+  for consistent behaviour across sims.
+- Brighter UI text colours (secondary / tertiary greys lifted) for better
+  readability on dark theme.
+
+### Acknowledgements
+
+- Thanks to **@Chris** on Discord for the early feedback on telemetry FFB
+  direction and the per-base ceilings input.
+- Thanks to **@Uzurod** on Discord for continued bug reports that pushed
+  both the v1.0.8 and v1.0.9 recovery paths.
+
+---
+
 ## v1.0.8-beta — Torque-limit recovery + Disconnect button (April 29, 2026)
 
 ### Fixed
