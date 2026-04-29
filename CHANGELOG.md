@@ -4,6 +4,57 @@
 
 ---
 
+## v1.0.8-beta — Torque-limit recovery + Disconnect button (April 29, 2026)
+
+### Fixed (CRITICAL)
+- **Wheelbase silently capped at low-torque safe limit after several Apply+Save cycles**
+  (~7 Nm on Invicta, ~3 Nm on Forte, ~1 Nm on La Prima — visible even in RaceHub
+  after closing SimHub). Root cause: v1.0.4 → v1.0.7 wrote `SMP_TORQUELIMIT_CONT`
+  and `SMP_TORQUELIMIT_PEAK` on every `SetOverallForce` and `ApplyAllCoreSettings`,
+  with values calculated against the Invicta-scale `TORQUE_CONSTANT` (1.333) and
+  without the surrounding `goto_test_mode` / `SMP_MAX_OUTPUT_POWER` /
+  `SMP_SYSTEM_CONTROL=1` / `restart_drive` sequence the motor controller actually
+  expects. Eventually the IONI persisted those bogus limits in flash and the
+  base stayed capped even when the plugin was uninstalled.
+  - Both `SetOverallForce` and `ApplyAllCoreSettings` no longer touch
+    `SMP_TORQUELIMIT_CONT/PEAK`. The Overall Force slider only writes
+    `main_gain` (profile addr 3) now, like RaceHub does for the user-facing
+    slider.
+  - `goto_test_mode = 107` added to `WheelbaseUsbCommand` (needed by the new
+    Reset path).
+  - `WheelbaseSpec` extended with `ContTorqueNm` and `MaxOutputPower` so the
+    Reset path knows the right values per model.
+
+### Added
+- **"Reset Torque Limits" button** (Overview tab → bottom row, next to
+  Reconnect/Disconnect). Reproduces RaceHub's
+  `CO_ChangeWheelbaseTorqueLimits` sequence (decompiled from RaceHub 4.4.4):
+  `goto_test_mode` → write `SMP_TORQUELIMIT_CONT/PEAK/MAX_OUTPUT_POWER` and
+  `SMP_SYSTEM_CONTROL=1` (one register per packet) → `restart_drive`. Restores
+  the detected base to its factory torque limits in one click. Confirmation
+  dialog before the write so it's not triggered accidentally. After the reset,
+  power-cycle the wheelbase (USB unplug + replug) and verify in RaceHub that
+  the Overall Force slider reaches the full peak.
+  - Per-model factory values: Invicta peak 27 Nm / cont 19 Nm / power 950,
+    Forte peak 18 / cont 14 / power 600, La Prima peak 12 / cont 10 / power 400
+    (16 Nm peak when high-power PSU is enabled in plugin settings).
+- **"Disconnect" button** (Overview tab, between Reconnect and Reset Torque
+  Limits). Releases the HID handle without closing SimHub, so RaceHub or any
+  other tool can take exclusive access. Mirrors the clean-shutdown sequence
+  used in `Dispose` (`SMP_SYSTEM_CONTROL = 1` → `restart_drive` → 150 ms grace)
+  so the firmware exits the plugin's session cleanly. Click "Reconnect"
+  afterwards to reattach.
+
+### Acknowledgements
+- Thanks to **@Uzurod** on Discord for the bug report (Forte capped at 3 Nm /
+  10.5 Nm) that triggered the investigation.
+- Decompilation cross-checked against RaceHub 4.4.4 `Assembly-CSharp.dll`
+  (`DeviceUpgradeMediator.CO_ChangeWheelbaseTorqueLimits`,
+  `WheelbaseCommunicationService.ChangeRegisterValue`,
+  `WheelbaseSMPRegisters` and `WheelbaseUsbCommand` enums).
+
+---
+
 ## v1.0.7-beta — La Prima+ slew-rate boost with high-power PSU (April 28, 2026)
 
 ### Changed
