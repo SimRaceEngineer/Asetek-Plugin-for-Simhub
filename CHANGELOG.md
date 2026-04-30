@@ -4,6 +4,42 @@
 
 ---
 
+## v1.0.17-beta — Forte / La Prima Overall Force scale fix (April 30, 2026)
+
+### Fixed
+
+- **Forte and La Prima users : Overall Force slider now hits the full
+  base peak.** The previous code computed `main_gain = nm / 27 × 100`,
+  using the Invicta scale (27 Nm) for every base. On a Forte (18 Nm
+  factory) that capped the slider's effective output at `18 / 27 = 67 %`
+  — the firmware then re-aligned `SMP_TORQUELIMIT_PEAK` to 67 % of factory
+  (≈ 12 Nm flashed instead of 18 Nm) any time `SetOverallForce` was called
+  with the slider at full. Same effect on La Prima (12 Nm or 16 Nm with
+  high-power PSU). The fix uses the detected base's own factory peak so
+  100 % on the slider always means 100 % on the firmware.
+- Same correction applied to the live `Asetek.FFB.MaxTorqueNm` and
+  utilisation / clipping metrics so they report against the correct
+  ceiling on Forte / La Prima.
+
+### How to recover (Forte / La Prima users still capped after v1.0.16-beta)
+
+The fix removes the source of the capping, but a base that was already
+flashed at 67 % needs a Reset Torque Limits to come back to factory peak :
+
+1. Update to v1.0.17-beta (overwrite `AsetekPlugin.dll` in your SimHub
+   folder).
+2. Asetek Control → Overview → ▶ Advanced.
+3. Click **Reset Torque Limits** → confirm.
+4. Click **Restore High Torque** if HT bit is OFF.
+5. Power-cycle the wheelbase (off / on).
+6. **Cold-Start Diag** — should now read SMP_TORQUELIMIT_PEAK = 13503
+   (~18 Nm Forte), 9002 (~12 Nm La Prima stock) or 12003 (~16 Nm La Prima
+   with high-power PSU). On Invicta : 20255 (~27 Nm).
+7. Adjust Overall Force from the FFB tab to taste — at 100 % you now get
+   the real factory peak of your model.
+
+---
+
 ## v1.0.16-beta — PEAK torque drift eliminated + Cold-Start Diagnostic (April 30, 2026)
 
 This is a major reliability release. Several PEAK-torque drift issues that
