@@ -4,138 +4,737 @@
 
 ---
 
+## v1.3.1 — Game detection via DataCorePlugin.CurrentGame (May 6, 2026)
+
+### Changed
+- Auto-match now polls `DataCorePlugin.CurrentGame` every 2s via a background
+  timer — profile loads as soon as SimHub detects a sim, even before telemetry
+  flows. No longer depends on `DataUpdate` for game detection.
+- Removed redundant properties `Asetek.Profile.ActiveGame` and
+  `Asetek.Profile.DetectedGame` — `DataCorePlugin.CurrentGame` already
+  exists in SimHub and is the single source of truth.
+- Timer directly loads the ★ per-game favourite when a game is detected,
+  bypassing `FindMatchingProfile` which couldn't match starred profiles
+  that have car/track tags when called without telemetry context.
+- New actions `Asetek.Profile.GameCycle.Next` / `.Prev` — cycle only
+  through profiles tagged with the currently detected game.
+- Controls tab renamed to "Controls (Beta)" and now includes a PROFILES
+  section with all 4 cycle bindings (all / game-filtered).
+- Auto-reconnect: timer verifies HID handle every 2s via
+  `HidD_GetPreparsedData` probe — detects stale handles after SimHub
+  game switches and reconnects automatically.
+- UI auto-refresh: profile list + game pill auto-updates when the active
+  profile or detected game changes (1s poll in the settings control).
+- Game-change reconnect: after auto-reconnect on game switch, shows a
+  warning banner prompting the user to press the physical power button
+  (the LED blinks in standby — no HID command can control it). Banner
+  auto-dismisses when the base reports HT ON (button pressed).
+  Removed all prior wake attempts (`re_enable_torque_mode`, `activate_profile`,
+  forced HT handshake) — none could control the hardware LED.
+- Heartbeat: `request_status` ping every 2s detects power-off even when
+  USB remains connected.
+- `WriteWheelbase` marks `_wheelbaseConnected = false` when all write
+  methods fail (was only on exception).
+
+### Fixed
+- **CRITICAL: SMP_TORQUELIMIT_PEAK degradation on every save_to_flash**.
+  The firmware rescales PEAK by `main_gain/100` whenever addr 3 (main_gain) is
+  included in a setprofiledata batch. Flash batches now ALWAYS skip addr 3 —
+  main_gain is only applied at runtime via SetOverallForce (single-addr, RAM only).
+  Previously: 27 Nm → 22.9 → 19.5 → … after each Save to Wheelbase click.
+- HF Limit slider: restored correct left-to-right order (100 Hz → 4700 Hz → No Limit).
+  Was inverted (No Limit at left) due to `IsDirectionReversed`. Now uses 4800↔0 remapping.
+- Physical button LED blinks after auto-reconnect on game change —
+  now shows a clear banner instead of silently failing HT handshake attempts.
+- Profile creation moved from Overview to FFB Settings (single "+ Create" entry
+  point). "Save to profile" combo is now editable — type a new name to create,
+  pick an existing one to overwrite.
+- FFB Settings sliders now live-sync with the parameter cache every second
+  (guarded by `_refreshingSliders` to prevent false dirty state). Previously
+  sliders retained stale values after profile auto-match or game switch.
+
+---
+
+## v1.3.0 — Major UI restructure + recovery polish (May 6, 2026)
+
+The release rolls up everything from v1.0.20 → v1.0.28 dev iterations into a
+single clean 1.3.0 milestone. Headlines :
+
+- One-click Reconnect that does Connect + Restore High Torque + Apply FFB
+  profile — covers the full RaceHub-coexistence recovery path in a single
+  button click on Overview.
+- Profile list redesigned with clickable Game-tag pills, default-profile
+  auto-load on startup, and the per-row Save / Load clutter removed.
+- New Detection card on Overview shows the wheelbase model, factory peak,
+  base slew ceiling, and live HT bit at a glance.
+- New Debug tab (right-aligned) hosts the firmware diagnostic dump,
+  Dump / Cold-Start Diag buttons, and a collapsed Recovery Actions
+  expander with a step-by-step procedure for the rare cases where the
+  bare Reconnect doesn't suffice.
+- Save controls (SAVE TO WHEELBASE, Save to profile, Quick saves) now sit
+  *above* the slider sections so the user always sees them without
+  scrolling.
+- Re-center Wheel moved to the Overview bottom row alongside Reconnect /
+  Disconnect.
+- 5 new SimHub properties for active profile + active game/car class so
+  dashboards and wheel-button bindings can reflect the loaded preset
+  (`Asetek.Profile.ActiveName`, `ActiveIndex`, `Count`, `ActiveGame`,
+  `ActiveCarClass`).
+
+Detailed notes (carry-over from the v1.0.28-beta development snapshot) :
+
+### Added — UI restructure for clarity
+
+- **Overview / Detection card.** New read-out at the top of the Overview tab
+  showing the wheelbase model, factory peak torque, base slew ceiling, the
+  active Overall Force / slew rate (live), and the High Torque mode bit.
+  Replaces the raw firmware diagnostic dump that used to clutter the page.
+- **Debug tab (right-aligned, separated from regular tabs).** Hosts the
+  firmware diagnostic dump (`_diagText`), the Dump Diagnostic and Cold-Start
+  Diag buttons, and a collapsed "Recovery actions" expander with a strong
+  disclaimer + step-by-step procedure for the rare case where Reset Torque
+  Limits + Restore High Torque are needed.
+- **Profile list — pills filter.** The Overview profile list now starts with
+  a row of clickable pills, one per Game tag (case-insensitive merge of
+  variants like "iRacing" / "IRacing"), plus an "All" pill. Click a pill to
+  filter ; the active pill is highlighted in orange. Untagged profiles
+  always appear under the rightmost "Untagged" pill, never silently dropped.
+- **Per-row Save / Load buttons removed.** Clicking the profile name loads
+  the profile (existing behaviour from v1.0.3) ; the FFB Settings tab
+  "APPLY & SAVE" button + "Save current sliders to..." dropdown handle
+  writing back. Per-row buttons were redundant clutter.
+- **★ Default profile auto-loaded at SimHub startup.** Setting a profile as
+  default via the star icon now actually loads it on plugin Init (was
+  decorative-only before). Falls back to the runtime cache if the default
+  profile name no longer matches any saved profile.
+- **Tag button has a usable fallback.** When no game is currently running
+  (so SimHub's `data.GameName` is empty), clicking Tag opens the inline
+  Game / CarClass editor instead of silently writing a status message to
+  the diagnostic text block.
+
+### Added — SimHub properties / actions
+
+- **Active profile properties** for dashboards :
+  - `Asetek.Profile.ActiveName` (string)
+  - `Asetek.Profile.ActiveIndex` (1-based, alphabetical order)
+  - `Asetek.Profile.Count`
+  - `Asetek.Profile.ActiveGame`
+  - `Asetek.Profile.ActiveCarClass`
+
+  Pair these with the existing actions `Asetek.Profile.Cycle.Next` /
+  `.Cycle.Prev` and `Asetek.Profile.LoadSlot.0..N` to bind in-wheel buttons
+  for "next profile" / "GT3 setup" / "wet-track setup" without leaving the
+  cockpit.
+
+### Changed — Reconnect / RaceHub coexistence
+
+- **One-click Reconnect** rolls Connect + Restore High Torque +
+  Apply-FFB-profile into a single sequence. After closing RaceHub, this
+  recovers HT bit + re-pushes the user's saved FFB profile in one click.
+  No Reset Torque Limits in the chain — that path is reserved for explicit
+  manual use because of the firmware quirk described in v1.0.27 notes.
+- **High Torque banner is RaceHub-aware.** When RaceHub is running
+  alongside the plugin, the warning explains that Restore High Torque is
+  blocked (the challenge / answer handshake conflicts with RaceHub's own
+  polling) and points the user to the Disconnect button to hand the
+  wheelbase off to RaceHub instead. RaceHub re-enables HT on its own.
+- **HF Limit slider direction.** Reverted v1.0.22's 100–4800 remap. The
+  slider stays at 0–4700 with `IsDirectionReversed = true`, matching the
+  v1.0.21 ordering — "No Limit" on the right, 100 Hz on the left.
+
+### Fixed
+
+- **Smart Tune slew-rate "Reduce" suggestion stops at the right floor.**
+  v1.0.21 introduced a smoothed/raw ratio guard ; v1.0.28 adds two more
+  stop conditions (peak headroom against `DeltaMaxNm`, absolute 2.0 Nm/ms
+  floor) so the recommendation no longer descends asymptotically when the
+  FFB is already at the useful minimum for the surface.
+- **Smart Tune Increase logic mirrors Reduce** with three independent
+  triggers (peaks clipping, detail loss, P95 clipping) and confidence
+  rating reflecting which one fired.
+- **LogAnalyzer reads slew rate from the CSV log, not the live cache.**
+  The cache resets to firmware defaults at every SimHub restart, so
+  reading `GetParam(slew_rate_limit)` after a fresh boot returned 9.4
+  even when the slider showed the user's tuned value. Now uses
+  `s.HwSlewNmPerMs` from the recorded CSV — what the user was actually
+  feeling during the lap.
+- **Detection card reads from the runtime cache, not SimHub properties.**
+  Properties only update during DataUpdate ticks (game running) ; reading
+  the cache gives a fresh value at startup / in the menu / paused.
+- **HT bit force-refresh on Detection panel.** If `HealthHighTorqueOn`
+  is null when the panel renders, the panel triggers a synchronous
+  `RefreshHealthSnapshot()` instead of waiting up to 5 s for the next
+  scheduled tick.
+- **Inline Rename / Edit Tag dialogs insert below the pills row.**
+  Inserting at `_profileListPanel.Children.Insert(0, …)` was pushing the
+  pills below the dialog and visually swapping the active filter view.
+  Now insert at index 1 when the first child is the pills `WrapPanel`.
+- **Live Auto-tune AutoTune fixes (carry-over from v1.0.20).** `IoniLpf`
+  values now in Hz (was indices 0–11 read as Hz on the slider, producing
+  near-total filtering). "AO" suggestions write to `latency_comp_factor`
+  (was wrongly writing to `ioni_damping`). `AutoTuneRefine` HF nudge is
+  ±500 Hz with a clean 0 ↔ 3000 Hz transition across the No Limit edge.
+  Slew-rate suggestions clamped to `MaxSlewRateForCurrentBase × 1000`.
+
+### Notes
+
+- Asetek themselves confirmed (Discord, 24 Mar 2026) that their "iRacing
+  360Hz mode" is a software 60Hz→360Hz interpolation with a double buffer,
+  ~16.7 ms slower than the default DirectInput FFB. The plugin's
+  `360 Hz Compatibility Mode` toggle activates exactly that path. Future
+  releases will document this trade-off explicitly rather than presenting
+  it as a pure upgrade.
+
+---
+
+## v1.0.27-beta — One-click full recovery on Reconnect (May 5, 2026)
+
+(Note : kept for changelog continuity ; the one-click flow is now the
+permanent default in v1.0.28.)
+
+
+
+### Changed
+
+- **New "Debug" tab as the last tab.** Hosts the firmware diagnostic
+  dump (`_diagText`) that used to take up the upper half of the Overview
+  tab. The dump is still populated automatically at startup and after
+  every Reconnect, and by the manual Dump Diagnostic / Cold-Start Diag
+  buttons — but it's now tucked away in its own tab so the Overview
+  stays focused on device status and live torque feedback.
+- **Overview tab gains a "Live Read-out" card** in place of the dump,
+  refreshed every second :
+  - Peak / Max torque (Nm)
+  - Utilisation % and clipping flag
+  - Roughness raw and post-slew-clamp (Nm stddev)
+  - Hardware and Software slew rates (Nm/ms)
+
+  This is the unambiguous "what does the wheelbase actually deliver
+  right now?" view — values come from live `Asetek.FFB.*` properties,
+  independent of the saved profile shown by the FFB Settings sliders.
+- **FFB Settings tab unchanged** — the Advanced FFB Diagnostic expander
+  (Software Slew Limit, FFB Log, Smart Tune, Live Auto-tune) stays
+  exactly where it was.
+
+---
+
+## v1.0.27-beta — One-click full recovery on Reconnect (May 5, 2026)
+
+### Changed
+
+- **The "Reconnect" button is now a one-click full recovery.** Whatever
+  state the wheelbase is in — capped at the safe torque, High Torque
+  toggled off, FFB profile overwritten by RaceHub — clicking Reconnect
+  performs the full sequence in one shot :
+  1. Refreshes the HID handle (idempotent if already connected).
+  2. Restores SMP_TORQUELIMIT_PEAK / CONT / MAX_OUTPUT_POWER to the
+     detected base's factory peak (27 Nm Invicta, 18 Nm Forte, 12 / 16 Nm
+     La Prima depending on PSU).
+  3. Re-engages HIGH_TORQUE_MODE_BIT via the firmware challenge / answer.
+  4. Re-applies the user's saved FFB profile to RAM.
+  No flash writes — everything is runtime-only, so power-cycle if you want
+  to start fresh from the firmware's persistent state.
+- The separate **"Reset Torque Limits"** and **"Restore High Torque"**
+  buttons are removed from the UI — Reconnect now covers both. The
+  underlying API methods (`ResetWheelbaseTorqueLimits`,
+  `RestoreHighTorqueMode`) remain on `AsetekManager` for SimHub action
+  bindings or surgical use.
+- The Reconnect button in the RaceHub-closed banner uses the same
+  recovery path, so closing RaceHub mid-session and clicking the inline
+  Reconnect always brings you back to a known-good full-torque state.
+
+---
+
+## v1.0.26-beta — Smart Tune reads slew from log, not stale cache (May 5, 2026)
+
+### Fixed
+
+- **Smart Tune was reading the current slew rate from the live cache,
+  which is reset to firmware defaults (9.4 Nm/ms on Invicta) at every
+  SimHub restart.** Applied AutoTune / Live Auto-tune values are runtime
+  only until the user clicks Apply & Save — but Smart Tune was using
+  `GetParam(slew_rate_limit)` to know what to compare against, which
+  returned 9.4 even when the slider visibly showed 3.9. Result: the
+  analyzer would propose reducing 9.4 → 7.5 immediately after a restart,
+  forgetting the user had already converged at 3.9.
+- The CSV log captures `hw_slew_nm_per_ms` per sample; that's the actual
+  hardware slew rate at the time of recording. `LogAnalyzer` now reads
+  `s.HwSlewNmPerMs` as the current value (falling back to cache only if
+  the log didn't capture it). The recommendations now reference what the
+  user was actually feeling during the lap, not the post-restart default.
+
+---
+
+## v1.0.25-beta — Slew-rate Increase logic mirrors Reduce (May 5, 2026)
+
+### Changed
+
+- **Smart Tune "↑ Increase" suggestion now uses the same three-factor
+  framework as Reduce.** The previous Increase rule only fired when P95
+  reached 90 % of the budget — a single statistical trigger that ignored
+  peak clipping (kerbs) and detail loss. The new logic surfaces an
+  Increase if any of these holds :
+  - **Peaks clipping** : `DeltaMaxNm > maxBudgetAtCurrent` — the worst
+    transients are getting flattened. Strongest signal (confidence 3).
+  - **Detail loss** : smoothed/raw ratio < 0.85 — the slew is absorbing
+    real signal even on typical content, not just spikes.
+  - **P95 clipping** : preserved from before, weakest of the three.
+- The reco card cites which trigger fired so you can see *why* the
+  algorithm thinks you have headroom to go up. Symmetric with the v1.0.24
+  Reduce / Hold treatment.
+
+---
+
+## v1.0.24-beta — Slew-rate "Reduce" stop conditions (May 5, 2026)
+
+### Fixed
+
+- **Smart Tune kept proposing slew rate reductions even when the FFB was
+  already good.** The v1.0.21 detail-loss guard checked the smoothed/raw
+  ratio, but on smooth-ish surfaces that ratio stays at 1.00 down to very
+  low slew values — by which point the wheel has gone mushy. Three stop
+  conditions now gate every "↓ Reduce" suggestion :
+  - **Peak headroom :** the proposed budget must stay > 1.5 × `DeltaMaxNm`
+    (the worst transient ever observed in the log). P95 hides kerb hits ;
+    DeltaMaxNm catches them. Without this, the recommendation could push
+    slew below what kerbs need to keep their edge.
+  - **Detail loss :** smoothed/raw ratio must stay above 0.85 (unchanged
+    from v1.0.21).
+  - **Absolute floor :** current slew must be > 2.0 Nm/ms. Below that,
+    HFFB starts feeling lifeless on bumpy tracks regardless of what the
+    statistics say (Jerome + Chris reproduced this at 0.9 Nm/ms on
+    Nordschleife).
+- When any of those conditions trigger, Smart Tune now emits a "→ Hold"
+  info card explaining which gate fired and citing the relevant metric
+  (max delta, ratio, or absolute floor). The user gets a clear "the
+  algorithm has converged" signal instead of an endless descent.
+
+---
+
+## v1.0.23-beta — Revert HF Limit slider remap (May 5, 2026)
+
+### Reverted
+
+- v1.0.22's HF Limit slider 100-4800 remap is reverted to the v1.0.21
+  behaviour (slider 0-4700 with `IsDirectionReversed = true`). LMU was
+  crashing more aggressively under v1.0.22 — same crash signature as
+  before (`hwinput.cpp:2029 Failed to read steering wheel range`) but
+  triggered at startup instead of after long sessions. Reverting the
+  remap to validate the slider change is involved before iterating again.
+
+---
+
+## v1.0.22-beta — HF Limit slider order fix (May 5, 2026)
+
+### Fixed
+
+- **HF Limit slider order corrected end-to-end.** v1.0.19 made the slider
+  use `IsDirectionReversed = true` to put "No Limit" on the right, but
+  this also reversed the 100-4700 Hz scale (max filtering ended up on the
+  left). The conceptual order users expect is `100 Hz → 4700 Hz → No Limit`
+  left-to-right (No Limit = least restrictive = right end). Slider now
+  uses a normal direction with range 100–4800 (step 100), where position
+  4800 represents "No Limit" — firmware value 0 maps to slider 4800 on
+  display, slider 4800 maps to firmware 0 on apply.
+
+---
+
+## v1.0.21-beta — Slew-rate detail-loss guard (May 5, 2026)
+
+### Changed
+
+- **Smart Tune slew-rate "Reduce" recommendation now gated on detail loss.**
+  The previous rule descended geometrically (-20 % per apply) until P95 delta
+  reached 30 % of the slew budget — convergent in theory, but P95 doesn't
+  capture peak transients (kerbs, sharp corner exits) and the slider could
+  end up well below the useful floor for the surface, trading kerb clarity
+  for no real benefit.
+- New gate uses the existing `Asetek.FFB.SmoothedRoughnessNm` /
+  `Asetek.FFB.RoughnessNm` properties (added in v1.0.18). Their ratio = how
+  much of the raw signal is making it through the slew limiter. At 1.0 the
+  slew is transparent ; below 0.85 it's already absorbing > 15 % of the
+  high-frequency content. The Reduce recommendation now requires the ratio
+  to stay above 0.85.
+- When the statistical headroom suggests reducing but the ratio shows
+  detail loss, Smart Tune now emits a **"→ Hold"** info card explaining why
+  it's *not* recommending a step down — the user learns the slew floor for
+  this surface rather than blindly following the recommendation downward.
+
+---
+
+## v1.0.20-beta — Live Auto-tune resurrected (May 5, 2026)
+
+### Added
+
+- **Live Auto-tune button** (FFB Settings → Advanced FFB Diagnostic).
+  Reads the rolling 60 s torque buffer (roughness Nm, clipping %,
+  utilisation %) and proposes filter values matched to the surface —
+  HF Limit, Slew Rate, Anti-Oscillation, Inertia. No CSV log needed.
+  Preview-then-apply flow: click "Auto-tune now" to see what would
+  change, click "Apply suggestion" to push to the wheelbase. Stamps
+  the snapshot as the active profile's baseline so subsequent Auto-tune
+  calls behave as delta refinements (small ±500 Hz / ±1 Nm/ms / ±3 % AO
+  nudges) rather than full re-assessments.
+
+### Fixed (latent bugs in dormant Auto-tune code)
+
+- **HF Limit suggestion values were indices, not Hz.** The pre-removal
+  Auto-tune wrote 6 / 8 / 11 to `ioni_lpf` for street / bumpy / elevation
+  archetypes — those map to 6 Hz / 8 Hz / 11 Hz on the real Hz scale,
+  i.e. near-total filtering. Now uses 1500 / 2000 / 3000 Hz (and 0 = No
+  Limit for smooth surfaces).
+- **"AO" was being written to the Damping slider register** (`ioni_damping`)
+  instead of the Anti-Oscillation register (`latency_comp_factor`).
+  Both `AutoTuneRefine` reads and `ApplyAutoTuneSuggestion` writes now
+  target `latency_comp_factor`. Field renamed `IoniDamping` →
+  `LatencyCompFactor` in `AutoTuneSuggestion` for clarity.
+- **`AutoTuneRefine` HF nudge was ±2 indices, not ±Hz.** Now ±500 Hz
+  with proper handling of the 0 = No Limit edge (special-cased so we
+  jump 0 ↔ 3000 Hz cleanly when crossing the threshold).
+- **Slew rate suggestions could exceed the detected base ceiling.**
+  `ApplyAutoTuneSuggestion` now clamps `slew_rate_limit` to
+  `MaxSlewRateForCurrentBase × 1000` so a Forte never gets pushed 9.4
+  Nm/ms when its hardware caps at 6.7.
+
+These fixes were why the original Auto-tune produced "extreme swings"
+and was disabled. Combined with the v1.0.16 PEAK stability fixes, the
+feature is safe to re-enable.
+
+---
+
+## v1.0.19-beta — High Frequency Limit slider direction fix (May 5, 2026)
+
+### Fixed
+
+- **High Frequency Limit slider inverted** to match RaceHub direction:
+  "No Limit" now on the right, most restrictive values on the left.
+
+---
+
+## v1.0.18-beta — Software slew rate limiter (May 1, 2026)
+
+### Added
+
+- **Software slew rate limiter** on the torque monitoring signal.
+  Caps the maximum delta between consecutive 360Hz samples to a
+  configurable Nm/ms value, matching the hardware slew rate setting.
+  The smoothed signal feeds new SimHub properties that reflect what
+  the user actually feels at the wheel, rather than the raw game
+  signal that the hardware never fully reproduces.
+  - `Asetek.FFB.SmoothedTorqueNm` — slew-limited |torque|
+  - `Asetek.FFB.SmoothedRoughnessNm` — stddev of the limited signal
+  - `Asetek.FFB.SoftwareSlewRate` — current limit (Nm/ms), 0 = off
+- **Auto-sync mode** (default): software slew rate tracks the hardware
+  `slew_rate_limit` register so the smoothed metrics always match the
+  current profile's torque acceleration setting.
+- **Manual override** via SimHub action `Asetek.FFB.SoftwareSlew.Set`
+  (pass Nm/ms as argument). Disables auto-sync. Reset with
+  `Asetek.FFB.SoftwareSlew.AutoSync`.
+
+---
+
 ## v1.0.17-beta — Forte / La Prima Overall Force scale fix (April 30, 2026)
 
 ### Fixed
 
-- **Forte and La Prima users : Overall Force slider now hits the full
-  base peak.** The previous code computed `main_gain = nm / 27 × 100`,
-  using the Invicta scale (27 Nm) for every base. On a Forte (18 Nm
-  factory) that capped the slider's effective output at `18 / 27 = 67 %`
-  — the firmware then re-aligned `SMP_TORQUELIMIT_PEAK` to 67 % of factory
-  (≈ 12 Nm flashed instead of 18 Nm) any time `SetOverallForce` was called
-  with the slider at full. Same effect on La Prima (12 Nm or 16 Nm with
-  high-power PSU). The fix uses the detected base's own factory peak so
-  100 % on the slider always means 100 % on the firmware.
-- Same correction applied to the live `Asetek.FFB.MaxTorqueNm` and
-  utilisation / clipping metrics so they report against the correct
-  ceiling on Forte / La Prima.
+- **`SetOverallForce` was using the Invicta scale (27 Nm) for every base.**
+  The slider's effective output saturated at `baseFactory / 27` on
+  non-Invicta wheelbases : Forte 18 Nm full slider = 67 % main_gain →
+  firmware re-aligned PEAK to 67 % × 13503 = 9047 SMP (~12 Nm flashed
+  instead of 18). La Prima saturated at 12/27 = 44 %, La Prima HiPSU at
+  16/27 = 59 %. Confirmed on Uzurod's Forte (PEAK = 9047 in Cold-Start
+  Diag). Fix uses `baseMax = MaxTorqueForCurrentBase` so 100 % on the
+  slider always means 100 % on the firmware regardless of model.
+- Same correction in `AsetekSimHubPlugin.UpdateTorqueMonitoring` so the
+  live `Asetek.FFB.MaxTorqueNm`, utilisation %, and clipping flag report
+  against the detected base's real ceiling.
 
-### How to recover (Forte / La Prima users still capped after v1.0.16-beta)
+Invicta users were not affected by this scaling bug (ratio 27/27 = 1).
 
-The fix removes the source of the capping, but a base that was already
-flashed at 67 % needs a Reset Torque Limits to come back to factory peak :
+### Recovery procedure (Forte / La Prima users still capped after v1.0.16)
 
-1. Update to v1.0.17-beta (overwrite `AsetekPlugin.dll` in your SimHub
-   folder).
-2. Asetek Control → Overview → ▶ Advanced.
-3. Click **Reset Torque Limits** → confirm.
-4. Click **Restore High Torque** if HT bit is OFF.
-5. Power-cycle the wheelbase (off / on).
-6. **Cold-Start Diag** — should now read SMP_TORQUELIMIT_PEAK = 13503
-   (~18 Nm Forte), 9002 (~12 Nm La Prima stock) or 12003 (~16 Nm La Prima
-   with high-power PSU). On Invicta : 20255 (~27 Nm).
-7. Adjust Overall Force from the FFB tab to taste — at 100 % you now get
-   the real factory peak of your model.
+The fix removes the source of capping but cannot undo a flashed PEAK on
+its own. Run Reset Torque Limits + Restore High Torque + power-cycle
+once after updating to bring the wheelbase back to factory peak.
 
 ---
 
-## v1.0.16-beta — PEAK torque drift eliminated + Cold-Start Diagnostic (April 30, 2026)
-
-This is a major reliability release. Several PEAK-torque drift issues that
-could leave a wheelbase delivering less force than configured (sometimes
-session after session) are now fixed at the root. The plugin no longer pushes
-`main_gain` (the Overall Force slider value) to the firmware in routine apply
-paths — only deliberate user actions can change the flash baseline.
+## v1.0.16-beta — PEAK drift killed + Cold-Start Diag + Advanced UI (April 30, 2026)
 
 ### Critical fixes — PEAK torque stability
 
-- **No more drift between SimHub sessions.** Loading a profile, auto-matching
-  to a game, recentering the wheel, or simply restarting SimHub no longer
-  causes `SMP_TORQUELIMIT_PEAK` to drift down. Earlier versions pushed
-  `main_gain` on every apply, and the firmware applied a `PEAK *= main_gain/100`
-  rescale on each push — over a few sessions this eroded the maximum torque
-  visibly (Invicta dropped from 27 Nm to ~20 Nm in some test cycles). The
-  routine apply path now omits `main_gain` entirely; the firmware keeps its
-  current value untouched, so the slider's effect on PEAK is bounded and
-  intentional.
-- **Apply &amp; Save no longer double-scales PEAK.** The save-to-flash sequence
-  used to send the settings batch twice before flushing (mimicking RaceHub).
-  Because each batch triggered the firmware's PEAK rescale, two sends with
-  `main_gain = 81 %` ended up persisting `PEAK × 0.81² = 0.66`. The save now
-  uses a single batch pass — one rescale, the result the user actually
-  intended.
-- **Recenter Wheel and Load Factory Center no longer write to flash.** Both
-  are now runtime-only (the wheel center is re-applied at the next session by
-  the user). Eliminates two paths that previously persisted whatever
-  `main_gain` happened to be in RAM, sometimes shrinking PEAK on every click.
-- **Reset Torque Limits restores factory peak reliably.** The button now
-  pushes `main_gain = 100 %` to the firmware before writing the factory SMP
-  registers, so the firmware's auto-rescale doesn't immediately undo the
-  reset. After clicking, the Overall Force slider reads 100 % — adjust it to
-  taste from the FFB tab.
+- **Routine apply paths no longer push `main_gain`.** `ApplyAllCoreSettings(saveToFlash:false)`
+  now omits addr 3 from batch1 (8 entries instead of 9). The firmware's
+  `PEAK *= main_gain/100` rescale therefore doesn't fire at start-up,
+  auto-match, profile load, or any non-flash apply. Confirmed via Jerome's
+  test : reboot SimHub with Overall Force at 24.8 Nm, PEAK stays at 20255
+  (27 Nm factory) — previously dropped to ~22.8 Nm per session.
+- **Apply &amp; Save now uses a single batch pass.** The previous code
+  re-sent the 3-batch + name + hash sequence twice before `save_to_flash`
+  (mimicking RaceHub's USB capture pattern). Each pass triggered the
+  firmware's PEAK rescale, so two passes with `main_gain = 81 %` ended
+  up persisting `PEAK × 0.81² = 0.66 × factory`. Single pass : one
+  rescale, exactly the user's intent.
+- **`RecenterWheel` and `LoadFactoryCenter` no longer flush to flash.**
+  Both are runtime-only — the wheel center has to be re-applied after a
+  cold boot, but in exchange routine recenters can no longer shave PEAK
+  on every click.
+- **`ResetWheelbaseTorqueLimits` pushes `main_gain = 100` to RAM before
+  writing factory SMP regs.** Without this, the firmware immediately
+  re-aligned the SMP_PEAK we just wrote down to `current_main_gain × factory`
+  (e.g. user at 92 % → 18634 instead of 20255). Now PEAK stays at factory
+  and the slider reads 100 % — adjustable from the FFB tab.
 
-### Added
+### Added — UI &amp; diagnostics
 
-- **Cold-Start Diagnostic button** (Overview → Advanced). Refreshes the HID
-  handle and dumps the firmware's current state — SMP torque limits in
-  Nm, High Torque bit (read from `request_status` byte 12), challenge probe.
-  The dump is written to a timestamped file under
-  `%APPDATA%\AsetekPlugin\diag\` and copied to the clipboard so it can be
-  pasted directly into Discord support threads. Equivalent of the standalone
-  Python diagnostic, integrated in the plugin.
-- **Auto-Cold-Start-Diag at startup and on Reconnect.** The Overview tab
-  populates with the current wheelbase state automatically — no need to
-  click any button to see if PEAK / HT / SMP regs are healthy.
-- **Advanced section** (collapsible) on the Overview tab. Hides the recovery
-  &amp; diagnostic buttons (Reconnect / Disconnect / Reset Torque Limits /
-  Restore High Torque / Dump Diagnostic / Cold-Start Diag) by default — the
-  default UI stays clean for normal use, the advanced controls are one click
-  away when needed.
+- **`Cold-Start Diag` button** (Overview → Advanced). Refreshes the HID
+  handle (closes / reopens without firing `restart_drive` on the firmware)
+  and dumps the firmware state — SMP torque limits in Nm, HT bit (read
+  from `request_status` byte 12 bit 1), challenge probe. Equivalent of
+  the standalone Python diagnostic, integrated in the plugin.
+- **Auto Cold-Start Diag at start-up and on every Reconnect.** The Overview
+  tab populates with the current wheelbase state automatically — no need
+  to hunt for any button.
+- **`Advanced` collapsible section** on Overview. Hides Reconnect / Disconnect
+  / Reset Torque Limits / Restore High Torque / Dump Diagnostic / Cold-Start
+  Diag by default — clean default UI, advanced controls one click away.
 - **Live FFB slider values exposed as SimHub properties.** Damping, Friction,
-  Inertia, Anti-Oscillation, Torque Prediction, Slew Rate, HF Limit,
-  Cornering Force Assist, Bumpstop Hardness / Range — all now publish their
-  current value as `Asetek.FFB.*` properties for dashboards. `OverallForce`
-  is in Nm (= `main_gain × MaxTorque` of the detected base).
-- **`Asetek.FFB.TorqueSourcePath` debug property.** Tells you which SimHub
-  property the live torque metrics are reading from (iRacing 360 Hz array,
-  iRacing scalar, LMU shared memory, NeoRed LMU plugin, ACC physics).
+  Inertia, Anti-Oscillation, Torque Prediction, Slew Rate (Nm/ms), HF Limit
+  (Hz), Cornering Force Assist, Bumpstop Hardness / Range — all publish via
+  `Asetek.FFB.*`. `OverallForce` is in Nm.
+- **`Asetek.FFB.TorqueSourcePath` debug property.** Reports which SimHub
+  game property the live torque metrics are sourced from (iRacing 360 Hz
+  array, iRacing scalar, LMU `mSteerTorque`, NeoRed LMU plugin, ACC physics).
 
 ### Changed
 
-- **High Torque bit detection** uses the firmware status report (byte 12, bit 1)
-  instead of the legacy challenge probe. The status byte is invariant across
-  reads; the challenge gets regenerated by the firmware after every
-  interaction and is therefore noisy. Both indicators are still shown in the
-  diagnostic dump for cross-reference.
-- **Restore High Torque** loop is now bounded (max 9 iterations) and verifies
-  success via the status byte rather than the challenge value. Spinning
-  forever is no longer possible if the base is in a hard fault state — the
-  plugin returns a clear error message asking for a USB power-cycle in that
-  case.
-- **HID I/O hardening.** The wheelbase read path now pins its buffer and
-  overlapped structures during pending I/O. Eliminates a 0xc0000005 access
-  violation that could crash SimHub during heavy diagnostic / recovery
-  operations on long-running sessions.
+- **HT bit detection** uses `byte 12 bit 1` of `reply_status` (= 0 for ON,
+  != 0 for OFF). The challenge probe at register 6071 is regenerated by
+  the firmware after every interaction and is therefore unreliable
+  post-handshake; status byte 12 is the firmware's own source of truth
+  (matches RaceHub's `WheelbaseSimucubeStatusBits.HIGH_TORQUE_MODE_BIT`).
+- **`RestoreHighTorqueMode`** is bounded (9 iterations max) and verifies
+  success via status byte 12 instead of the challenge value. Returns a
+  clear "fault state — power-cycle the wheelbase" message if no progress.
+- **`ReadWheelbase` HID I/O hardened.** Pins buffer + overlapped struct
+  with `GCHandle.Alloc(Pinned)` for the duration of each I/O, with a
+  bounded cancel-wait on timeout. Eliminates a 0xc0000005 access violation
+  observed during heavy diagnostic / recovery operations on long-running
+  sessions.
 
-### How to recover a wheelbase that's stuck at low torque
+### Why a single big release instead of v1.0.10–v1.0.15 patches
 
-1. Open SimHub → Asetek Control → Overview → click **▶ Advanced** to expand.
-2. Click **Reset Torque Limits** (confirms with a dialog).
-3. Click **Restore High Torque** if the base is in safe mode (HT bit off).
-4. **Power-cycle the wheelbase** via the USB cable or main power switch.
-5. Click **Cold-Start Diag** — `SMP_TORQUELIMIT_PEAK` should now read
-   `20255 (~27 Nm)` on Invicta, `14254 (~19 Nm)` on Forte, `9002 (~12 Nm)` on
-   La Prima (or `12003 / 16 Nm` if the optional high-power PSU is enabled in
-   FFB Settings).
-6. Adjust Overall Force from the FFB Settings tab to taste.
+Each of v1.0.10 → v1.0.15 was a milestone in the diagnosis (HID parser fix,
+status-byte HT detection, no auto-flash on auto-match, no flash on
+Recenter, single-pass save, no main_gain in routine batches). The public
+release rolls them all up into v1.0.16 because they need to ship together
+to actually solve the drift — partial fixes were ineffective.
 
-### Acknowledgements
+---
 
-- Thanks to **@Uzurod** on Discord for the persistent Forte-cap reports that
-  drove most of the v1.0.10 → v1.0.16 work, and to everyone who reported
-  diagnostic dumps that helped triangulate the firmware's PEAK-rescale
-  behaviour.
+## v1.0.15-beta — Stop the auto-flash hammer (HOTFIX, April 30, 2026)
+
+### Critical fix
+
+- **`LoadAndApplyProfile` no longer triggers `save_to_flash`.** v1.0.14 went
+  out with this method still calling `ApplyAllCoreSettings(saveToFlash: true)`
+  on every load — and `LoadAndApplyProfile` is invoked by `AutoMatchAndLoad`
+  on every game/car change. So opening SimHub fired a flash write
+  immediately, before the user did anything. On Jerome's Invicta this
+  dropped `SMP_TORQUELIMIT_PEAK` from 20255 (27.0 Nm) to 17518 (23.35 Nm)
+  in a single startup cycle — confirmed via cold-boot Python diagnostic
+  before / after launching SimHub v1.0.14. The flash-batch `main_gain = 100`
+  protection added in v1.0.14 was therefore not enough on its own; whatever
+  side effect drives the PEAK drift, the only safe answer is "don't flash
+  on auto-paths".
+
+  From v1.0.15 onward, `LoadAndApplyProfile` is a runtime-only push (no
+  `save_to_flash`). Flash persistence happens **exclusively** through user
+  actions:
+
+  - The `SaveToFlash()` API method (no UI yet — used by the SimHub action
+    `Asetek.ApplyAndSave` if a user binds it).
+  - The post-confirmation flush inside `RestoreHighTorqueMode`, which
+    triggers only when the user clicks "Restore High Torque" and the
+    firmware reports HT enabled.
+  - The new `LoadApplyAndSaveProfile()` API for callers that explicitly
+    want the persisted-on-disk-and-in-flash behaviour.
+
+  Net effect: a default SimHub session never writes to IONI flash. Profile
+  changes are runtime apply only, so they survive until the next
+  power-cycle of the wheelbase but don't risk the persistent PEAK value.
+
+### Why v1.0.15 instead of v1.0.14.1
+
+The behaviour change in `LoadAndApplyProfile` is significant enough to
+warrant its own minor version. Existing callers that relied on auto-flash
+must migrate to `LoadApplyAndSaveProfile`.
+
+---
+
+## v1.0.14-beta — Low-torque root-cause fixes + health auto-detection (April 30, 2026)
+
+### Fixed (root-cause work)
+
+- **Default `main_gain` 93 % → 100 %.** The plugin shipped with a runtime
+  `main_gain = 93` baked in, derived from one of Jerome's old captures. RaceHub's
+  exported XML presets (`Documents\RaceHub Profiles\Wheelbase\…`) all carry
+  `addr_main_gain = 100` — confirmed in "LMU 900 27nm.xml". Matching that default
+  removes a class of slow-drift symptoms where each profile change shaved another
+  small slice off the perceived peak.
+- **`addr_profile_settings_bits_1` (28) now sent as 0 instead of 2.** The
+  decompiled RaceHub `WheelbaseProfile.SaveSettings` (Assembly-CSharp.dll line
+  109955) clears the `Dirty` bit before pushing the profile to the wheelbase.
+  Sending 2 (Dirty = true) on every Apply was harmless but inconsistent with the
+  firmware's expected post-save state.
+- **`save_to_flash` now writes `main_gain = 100` in the flash batches.** Working
+  theory after observing repeated diagnostic dumps where `SMP_TORQUELIMIT_PEAK`
+  drifted from 20255 (27 Nm) toward 14988 (≈ 20 Nm) on Jerome's Invicta — a 74 %
+  ratio that matches `93 % ⁴`. RaceHub never triggers this drift because every
+  preset it saves writes `main_gain = 100`. The plugin's user-facing main_gain
+  is now applied as a runtime-only write *after* the flash commit, so the
+  slider still behaves the same to the user but never shrinks the IONI flash
+  copy of PEAK. Even if the multiplicative theory ends up wrong,
+  `main_gain = 100` in flash is strictly safer.
+
+### Changed
+
+- **`RestoreHighTorqueMode` rewritten around the firmware status byte.** Now
+  mirrors RaceHub's `WheelbaseCommunicationService.ActivateHighTorque`
+  (decompiled Assembly-CSharp.dll line 113272): a `while (!HT_BIT_ON)` loop that
+  reads a fresh challenge, sends the answer (cmd 150 + value2 = 107), waits
+  100 ms, then verifies the result via `request_status` byte 12 (= 0x00 ON,
+  = 0x02 OFF) — the same indicator RaceHub watches. The previous v1.0.13
+  multi-variant probe used the challenge value itself for verification, which
+  the firmware regenerates after every interaction and is therefore unreliable
+  post-handshake. Capped at 12 iterations to avoid spinning forever in fault
+  state.
+- **`Dump Diagnostic` now reads the HT bit from `request_status` byte 12**
+  alongside the legacy challenge probe. The status byte is the firmware's
+  source of truth; the challenge probe stays for cross-reference but is
+  documented as unreliable post-interaction.
+
+### Added
+
+- **Auto-detection at connect + one-click recovery.** On every successful
+  `Connect()` the plugin reads `SMP_TORQUELIMIT_PEAK` and the HT status bit
+  (read-only, no writes). When the base is in a known-bad state (HT off, or
+  peak < 95 % of model spec), the Overview tab shows a yellow top-banner
+  warning describing the issue with `Restore High Torque` and `Reset Torque
+  Limits` buttons inline. The banner suppresses itself when RaceHub is
+  running so two warnings never stack at once.
+- **New public API: `IsHighTorqueModeEnabled()`, `RefreshHealthSnapshot()`,
+  and read-only properties `HealthHighTorqueOn`, `HealthSmpPeakRaw`,
+  `HealthSmpPeakExpected`, `HealthPeakDegraded`, `HealthNeedsAttention`,
+  `HealthSummary`** — safe to call any time after a successful connect.
+
+### Why "v1.0.14" instead of v1.0.13.x
+
+We changed the semantics of what gets persisted to flash (`main_gain → 100`
+in the flash batches, then re-asserted at runtime to the user value). That's
+a behaviour change in the save path, even if the on-screen UX is the same.
+
+---
+
+## v1.0.12-beta — Fresh-challenge-per-round Restore (April 29, 2026)
+
+### Fixed
+
+- **Restore High Torque now reads a fresh challenge before EVERY answer it
+  sends.** v1.0.11 read the challenge once, then sent the same precomputed
+  answer up to 15 times — but the firmware regenerates the challenge after
+  every interaction (any read, status query or write), so by the time the
+  answers were sent the challenge was already stale and the firmware
+  silently rejected each one. The new flow per round is :
+    1. Read fresh challenge (strict match parser).
+    2. If challenge == 0, the bit is already set → done.
+    3. Compute answer for THIS challenge.
+    4. Send the answer + request_status round-trip.
+    5. Loop. The next round's read IS the verify.
+- **Apply + saveToFlash deferred to AFTER bit confirmation.** Save_to_flash
+  itself perturbs the firmware's challenge state, so doing it before the
+  handshake completed in v1.0.11 invalidated the answer mid-flight. Now we
+  only push main_gain → 100 % once the firmware has confirmed the HT bit
+  is set, never before.
+
+---
+
+## v1.0.11-beta — Strict reply match + verified handshake (April 29, 2026)
+
+### Fixed
+
+- **Critical: HID reply parser was matching joystick frames as cmd-153
+  replies.** The wheelbase's input pipe carries joystick state (axes,
+  buttons) at ~60 Hz alongside cmd-reply frames. The previous parser
+  matched on `byte[1] == 0x99` only, which is also a valid axis-byte
+  value — so on each read it would lock onto a random joystick frame and
+  read whatever bytes happened to be at offset 22 as "the challenge".
+  Result: every Diagnostic dump returned a different non-zero challenge,
+  and Restore High Torque sent answers computed from junk values, which
+  the firmware silently rejected. New strict parser verifies all of
+  `byte[0] == 0x6C` (REPORT_ID_IN) + `byte[1] == 0x99` (cmd 153) +
+  `bytes[4..5] == requested register (LE)` before accepting the value
+  at bytes 22-25. Discovered by comparing raw IN dumps from the Python
+  reference recovery script against C# captures.
+- **Restore High Torque** now actually verifies the firmware's High-Torque bit
+  is enabled after sending the answer, rather than blindly assuming success.
+  Previous v1.0.10 reported "High Torque re-enabled" even when the firmware
+  silently rejected the answer and the base remained capped — confirmed
+  via the new Diagnostic dump button (challenge stayed non-zero after
+  Restore returned success).
+- Each answer packet is now paired with a `request_status` round-trip and a
+  read drain — this matches the working Python reference recovery script
+  and gives the firmware time to commit the bit between writes.
+- Up to 3 rounds of 5 answer packets are sent, with a verification read
+  between each round. As soon as the firmware reports challenge = 0 (bit
+  confirmed enabled) the loop exits early.
+- The `Apply + saveToFlash` step (which restores the user's main_gain to
+  the base's full peak) now runs **before** the challenge/answer sequence
+  rather than after, so the flash-save can't interfere with the bit flip.
+
+### Added
+
+- **Honest failure path** — if all 3 rounds finish without the firmware
+  confirming the bit, Restore High Torque now returns false with a clear
+  message telling the user to fall back to the High Torque toggle in the
+  RaceHub UI (top-right corner). RaceHub's own implementation always
+  takes effect because it uses a private path — no point pretending we
+  succeeded when we didn't.
+
+### Why this matters
+
+The High Torque bit is the difference between feeling 14 Nm and 27 Nm on
+an Invicta. A button that silently lies about enabling it is worse than
+no button at all. This release makes the bit-state verifiable in real
+time and gives users an actionable next step when the soft path fails.
+
+---
+
+## v1.0.10-beta — Read-only firmware diagnostic dump (April 29, 2026)
+
+### Added
+
+- **"Dump Diagnostic" button** (Overview tab, next to Restore High Torque) —
+  performs a read-only probe of the wheelbase firmware and saves a timestamped
+  text file to `%APPDATA%\AsetekPlugin\diag\` containing :
+  - Detected base / wheel models and PIDs
+  - Current values stored in flash for `SMP_TORQUELIMIT_CONT`,
+    `SMP_TORQUELIMIT_PEAK`, `SMP_SYSTEM_CONTROL` and `SMP_MAX_OUTPUT_POWER`
+    (with raw + Nm conversion for the torque limits)
+  - High Torque challenge response (0 means the bit is already enabled,
+    non-zero means the firmware is in Low Torque state)
+  No writes are issued — totally safe to run on a healthy or capped base.
+  After the dump, the file's folder opens in Explorer and the dump text is
+  copied to the clipboard so it can be pasted into Discord / a support
+  thread immediately.
+
+### Why this matters
+
+The High Torque toggle in RaceHub reflects the user-requested state, not
+the actual firmware state. When a base is stuck capped, this dump tells
+you exactly what the firmware reports — no more guessing whether the
+SMP limits are corrupted, whether High Torque really is enabled, or
+whether the base is responding at all.
 
 ---
 
