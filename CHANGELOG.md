@@ -4,6 +4,23 @@
 
 ---
 
+## v1.3.3 — HF Limit slider fix (May 8, 2026)
+
+### Fixed
+- **HF Limit slider jumping back to 100 Hz after Save.** Three root causes:
+  1. Default `ioni_lpf` was 10 (invalid — valid range is 0 or 100-4700).
+     The WPF slider clamped it to its minimum of 100, producing a phantom
+     "100 Hz" that the user never chose. Default is now 0 (No Limit).
+  2. Values 1-99 from old profiles/defaults were treated as valid Hz.
+     Now any value below 100 maps to "No Limit" (slider position 4800),
+     matching the firmware semantics where 0 = unfiltered.
+  3. "Save to Wheelbase" did not sync the new values back into the active
+     profile. On next auto-match or startup, the stale profile overwrote
+     the cache with the old HF Limit. Now auto-saves to the active profile
+     after a successful flash write.
+
+---
+
 ## v1.3.2 — La Prima MAX_OUTPUT_POWER fix (May 8, 2026)
 
 ### Fixed
