@@ -4,15 +4,16 @@
 
 ---
 
-## v1.3.2 — La Prima MAX_OUTPUT_POWER fix for 180W PSU (May 8, 2026)
+## v1.3.2 — La Prima MAX_OUTPUT_POWER fix (May 8, 2026)
 
 ### Fixed
-- **La Prima 180W PSU stuck at 7 Nm.** `ResetWheelbaseTorqueLimits` and
+- **La Prima stock PSU stuck at 7 Nm.** `ResetWheelbaseTorqueLimits` and
   `RunDiagnosticDump` always wrote/expected `MAX_OUTPUT_POWER = 400`
-  (the 400W HiPSU value) regardless of the `LaPrimaHighPowerPsu` flag.
-  On a stock 180W PSU La Prima, the firmware sees 400W configured but only
-  180W available, so it failsafes the motor to ~45% of peak = ~7 Nm.
-  Now respects the PSU flag: stock La Prima writes 180, HiPSU writes 400.
+  (the HiPSU value) regardless of the `LaPrimaHighPowerPsu` flag.
+  On a stock PSU La Prima, the firmware sees 400W configured but the PSU
+  can't deliver it, so it failsafes the motor to ~7 Nm.
+  Now respects the PSU flag: stock La Prima writes 220 (confirmed from
+  RaceHub cold-boot diagnostic), HiPSU writes 400.
 - Diagnostic dump header and expected-value comparisons now also reflect
   the PSU mode for peak Nm and max power.
 
