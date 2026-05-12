@@ -4,6 +4,47 @@
 
 ---
 
+## v1.3.4 — Recovery overhaul & live in-game tuning (May 12, 2026)
+
+### Changed
+- **High Torque restore now uses a soft drive cold-boot** instead of the
+  challenge/answer handshake on register 6071. The new path sends
+  `goto_test_mode + restart_drive` (no SMP register writes), which triggers
+  the firmware's automatic High Torque enable at cold boot. Result : a
+  reliable, fast, non-destructive recovery that works consistently after
+  any RaceHub session, on every base model.
+- **Recovery section in Debug tab split in two** :
+  - **"Standard procedure after using RaceHub"** is now visible directly,
+    with a clean step-by-step procedure and the **Restore High Torque**
+    button as the primary action. No more scary disclaimer for a normal
+    operation.
+  - **"Advanced Recovery"** stays collapsed behind an expander, only for
+    confirmed SMP corruption (when the Firmware PEAK in Dump Diagnostic is
+    below the model's factory spec). The Reset SMP Registers button is
+    now gated behind an explicit confirmation checkbox to prevent misuse.
+- **`Reconnect` on Overview tab** also switched to the new soft-restart
+  path internally, so the one-click recovery is now bulletproof.
+
+### Added
+- **In-game live tuning for HF Limit and Torque Accel Limit.** Two new
+  control bindings in the *Controls (Beta)* tab, *Torque Shaping* section :
+  - `HF Limit +/- 100 Hz`
+  - `Torque Accel Limit +/- 0.1 Nm/ms`
+
+  Bind them to wheel / button-box keys to adjust those two parameters
+  **on the fly while driving**, with the same step values as the FFB
+  Settings sliders. When you come back to the plugin, the sliders show
+  the values you've dialled in live ; one **Save to Wheelbase** click
+  persists the perfect setup. RAM-only — no flash write during the
+  tuning session, so SMP_PEAK stays untouched.
+
+### Fixed
+- Pre-flight check in High Torque restore now cross-verifies the
+  challenge probe against the HT status bit. Avoids skipping the
+  recovery when the firmware reports inconsistent state.
+
+---
+
 ## v1.3.3 — HF Limit slider fix (May 8, 2026)
 
 ### Fixed
