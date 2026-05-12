@@ -4,6 +4,35 @@
 
 ---
 
+## v1.3.5 — Slider live sync + enriched diagnostics (May 12, 2026)
+
+### Fixed
+- **Slider/firmware desync.** Sliders are now the source of truth : every
+  movement commits the new value to the plugin cache AND pushes it to the
+  wheelbase RAM immediately, instead of waiting for a Save to Wheelbase
+  click. Previously, importing a RaceHub preset (or any path that wrote to
+  the cache) could leave the slider visual showing one value while the
+  firmware ran with another — typical signature : slider at 18 Nm, dump
+  reports `main_gain=75%`, wheelbase actually delivers 13.5 Nm. Live RAM
+  push only — no flash write, so SMP_PEAK stays protected.
+
+### Added
+- **Plugin profile cache section in Dump Diagnostic.** The dump now includes
+  a "Plugin profile cache (live in-memory values)" block with the current
+  values for Overall Force, Steering Range, HF Limit, Torque Accel Limit,
+  Mechanical Feel sliders, Torque Shaping, Bumpstop & Cornering, plus the
+  active profile name and auto-match flag. Useful to spot at a glance any
+  mismatch between what the sliders show and what the wheelbase actually
+  runs with.
+- **More live in-game tuning bindings.** New *MECHANICAL FEEL* section in
+  the Controls (Beta) tab with +/- 5 % bindings for Damping, Friction,
+  Inertia and Anti-Oscillation. Bind them to wheel keys to adjust those
+  parameters on the fly while driving — same workflow as the *Torque
+  Shaping* bindings from v1.3.4. Sliders reflect the live value, one
+  Save to Wheelbase persists the setup.
+
+---
+
 ## v1.3.4 — Recovery overhaul & live in-game tuning (May 12, 2026)
 
 ### Changed
