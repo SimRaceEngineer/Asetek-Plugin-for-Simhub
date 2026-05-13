@@ -4,6 +4,86 @@
 
 ---
 
+## v1.3.8 — Factory torque recovery & simplified Debug UX (May 13, 2026)
+
+### Fixed
+- **Reset Torque Limits now actually works.** The previous implementation wrote
+  the SMP registers in test mode and called `restart_drive` — but the IONI motor
+  controller reloaded from flash on restart, dropping our RAM-only writes back
+  to the corrupted value. Now the sequence is :
+  1. Enter test mode and **poll the SimuCubeStatus** until `test_mode == 22` is
+     confirmed (RaceHub-style, was a blind 300 ms wait before).
+  2. Write SMP_TORQUELIMIT_CONT / PEAK / MAX_OUTPUT_POWER / SYSTEM_CONTROL=1.
+  3. **`save_to_flash` (cmd 4)** — the missing piece — persists the writes to
+     IONI flash before the restart.
+  4. `restart_drive` reloads the now-correct values.
+  5. Read-back verifies the new peak matches the factory target.
+  Validated end-to-end on an Invicta : a slider lowered to 15 Nm in RaceHub
+  (SMP_PEAK = 11545) is fully recovered to 27 Nm (SMP_PEAK = 20255), and the
+  next RaceHub open shows the slider max at 27 Nm — no power-cycle, no manual
+  steps.
+
+### Changed
+- **Renamed "Reset SMP Registers" to "Restore Factory Default"** in the Debug
+  tab Advanced Recovery section. Same destructive action, friendlier name.
+- **Removed the redundant "Restore High Torque" button** from the Debug tab
+  recovery section. The Disconnect button on the Overview tab already triggers
+  the same firmware cold-boot (which auto-re-enables High Torque) — no need
+  for a duplicate explicit button in Debug. Replaced with a clear info banner :
+  "After using RaceHub : close RaceHub completely, then click Disconnect on
+  the Overview tab."
+
+### Added
+- **Dump Diagnostic — "Last Reset SMP trace" section.** Captures the full
+  step-by-step log of the last Restore Factory Default operation (test_mode
+  entry, write outcomes, pre-restart verify, save_to_flash, post-restart
+  verify). Survives subsequent dumps for after-the-fact debugging.
+- **STM32 hardware settings read.** Dump now includes a "Wheelbase hardware
+  settings (STM32 flash)" section listing the values stored in the wheelbase
+  STM32 firmware flash — including `addr_max_motor_current`, the motor-current
+  cap that drives the slider max in RaceHub. Reverse-engineered from RaceHub
+  Assembly-CSharp.dll (cmd 110 `requesthwdata` / reply cmd 120).
+
+### Notes
+- A `RestoreFactoryMaxMotorCurrent()` API method and the
+  `Asetek.Wheelbase.RestoreMaxMotorCurrent` SimHub action remain in the
+  codebase for power-user scripting, but the dedicated UI button was removed —
+  *Restore Factory Default* already synchronises `max_motor_current` to the
+  factory value via the `save_to_flash` step.
+
+---
+
+## v1.3.7 — STM32 hardware settings read & restore (May 13, 2026)
+
+### Added
+- **Wheelbase hardware settings read.** The Dump Diagnostic now includes a
+  "Wheelbase hardware settings (STM32 flash)" section listing the values
+  stored in the STM32 firmware flash (distinct from the IONI SMP registers).
+  Notable entry : `addr_max_motor_current` — the actual motor-current cap
+  that drives the slider max in RaceHub. Reverse-engineered from RaceHub
+  Assembly-CSharp.dll (cmd 110 / reply cmd 120).
+- **Restore Factory Max Motor Current button** in Advanced Recovery
+  (Debug tab). Writes the model-specific factory `max_motor_current` to
+  STM32 flash via `sethwdata` (cmd 122). Use this if RaceHub shows the
+  slider maxed-out at a Nm value below the model's factory peak — typical
+  signature when a previous RaceHub Save persisted a sub-factory motor
+  current. No power-cycle needed.
+- New SimHub action : `Asetek.Wheelbase.RestoreMaxMotorCurrent` (bindable
+  for power users or recovery scripts).
+
+### Why this matters
+The Asetek firmware caps deliverable torque at two independent layers :
+1. **IONI motor controller** : `SMP_TORQUELIMIT_PEAK` (factory value per model).
+2. **STM32 wheelbase firmware** : `addr_max_motor_current` (user-adjustable
+   via the RaceHub Overall Force slider Save flow).
+
+The plugin already handled layer 1 (Reset SMP Registers). Layer 2 was
+invisible until this release — so a base could show factory SMP regs but
+still deliver less torque physically because `max_motor_current` was below
+the IONI's allowed peak. v1.3.7 closes that gap.
+
+---
+
 ## v1.3.6 — Forte central encoders configuration (May 12, 2026)
 
 ### Added
