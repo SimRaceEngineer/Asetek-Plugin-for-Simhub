@@ -4,6 +4,59 @@
 
 ---
 
+## v1.3.6 — Forte central encoders configuration (May 12, 2026)
+
+### Added
+- **New "Wheel (Beta)" tab** dedicated to the 3 central gold encoders on
+  the Forte GT wheel. For each encoder (LEFT / CENTER / RIGHT) :
+  - Choose a mode in the dropdown : **Incremental (+/-)**, **Switch — Latching
+    (hold)** or **Switch — Pulse**. Modes are written to the wheel firmware
+    over HID (reverse-engineered from RaceHub) and persisted to
+    `%APPDATA%\AsetekPlugin\encoders.json`. Modes are re-applied automatically
+    on every plugin startup.
+  - Name the 12 switch positions (e.g. TC, ABS, BB, Diff, …) for use on
+    dashboards.
+
+  ![Wheel (Beta) tab — Forte central encoders](screenshots/wheel%20beta.png)
+
+- **Live position tracking** per encoder, decoded from the Forte HID input
+  report (memory : `forte_gt_hid_mapping.md`). Position name + number are
+  exposed as SimHub properties for dashboards :
+  - `Asetek.Encoder.{Left|Center|Right}.Mode` (string)
+  - `Asetek.Encoder.{Left|Center|Right}.Position` (int : 1-12 in switch
+    modes, 13 = CW pulse / 14 = CCW pulse in Incremental mode, 0 = idle)
+  - `Asetek.Encoder.{Left|Center|Right}.PositionName` (user-defined name or
+    fallback "Pos N", "+", "−")
+- **Live HID debug** panel at the bottom of the Wheel tab : raw bytes from
+  the Forte input report + decoded positions, useful to verify the byte
+  mapping and confirm position reads.
+
+### Workflow with SimHub Control Mapper
+This release **does not create virtual buttons by itself** — the standard
+way to use central-encoder positions in your game today is via SimHub's
+built-in **Control Mapper** :
+
+1. Set the encoder to **Switch — Latching (hold)** in the Wheel (Beta) tab.
+   In this mode the wheel firmware holds a unique button (B32-B43 for LEFT,
+   B46-B57 for RIGHT, B64-B75 for CENTER) for each of the 12 positions.
+2. In SimHub Control Mapper, create chord bindings :
+   `held button (= position) + your physical "+" button → keyboard key TC+`
+   `held button (= position) + your physical "−" button → keyboard key TC−`
+3. Use HID Hide to expose only the virtual buttons to the game.
+
+A future v1.4 will add an integrated **vJoy bridge** so the same workflow
+works plug-and-play without Control Mapper chords.
+
+### Notes
+- Confirmed central-encoder button ranges on the Forte GT firmware :
+  LEFT incremental B44/B45, position B32-B43 ; RIGHT incremental B58/B59,
+  position B46-B57 ; CENTER incremental B76/B77, position B64-B75.
+- Mode setting via HID : `cmd 0x02 / group 0x50 / cmd 0x00 / rotaryIndex / mode`,
+  reverse-engineered from `USB_SET_ROTARY_STATE_TYPE` in RaceHub's decompiled
+  Assembly-CSharp.dll.
+
+---
+
 ## v1.3.5 — Slider live sync + enriched diagnostics (May 12, 2026)
 
 ### Fixed
