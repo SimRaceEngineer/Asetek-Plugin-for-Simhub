@@ -4,6 +4,28 @@
 
 ---
 
+## v1.3.9 — La Prima PSU variant selector (May 14, 2026)
+
+### Added
+- **La Prima PSU variant dropdown** in Debug → Restore Factory Default panel.
+  La Prima (12 Nm, 180W PSU) and La Prima+ (20 Nm, 350W PSU) share USB PID
+  0xF303 — auto-detect cannot tell them apart. User picks the PSU variant :
+  - La Prima — stock 180W PSU (12 Nm)
+  - La Prima+ — high-power 350W PSU (20 Nm)
+- Dropdown is **only visible** when La Prima is detected. Invicta and Forte
+  have distinct PIDs so auto-detect remains reliable for them.
+- Selection persisted across sessions (existing `LaPrimaHighPowerPsu` flag).
+
+### Fixed
+- Restore Factory Default on La Prima+ no longer writes 12 Nm values by mistake.
+  Selecting "La Prima+" applies the correct 20 Nm / 400W factory targets.
+
+### Internal
+- New `IsLaPrimaDetected` property in `AsetekManager` (UI visibility helper).
+- Re-uses existing `LaPrimaHighPowerPsu` flag — no new state introduced.
+
+---
+
 ## v1.3.8 — Factory torque recovery & simplified Debug UX (May 13, 2026)
 
 ### Fixed
