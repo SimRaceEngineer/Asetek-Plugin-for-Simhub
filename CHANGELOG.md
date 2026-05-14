@@ -4,6 +4,31 @@
 
 ---
 
+## v1.3.10 — Stop / Start Plugin button + Force Release HID (May 15, 2026)
+
+### Added
+- **⏸ STOP PLUGIN / ▶ START PLUGIN toggle button** in Overview tab (bottom row).
+  - **Stop** : disconnects HID **AND** disables the 2s auto-reconnect loop. The
+    plugin becomes fully passive — base stays free (RaceHub / other tools can
+    grab it indefinitely).
+  - **Start** : re-enables auto-reconnect, base reconnects within ~2s.
+  - State **persisted across sessions** — if you stop the plugin, it stays
+    stopped after a SimHub restart until you click Start.
+- **Force Release HID button** — brutal HID handle close (no packets sent). Use
+  only when normal Disconnect hangs because the firmware is unresponsive.
+
+### Why
+- Previous "Disconnect" did a clean teardown but the plugin's auto-reconnect
+  loop would grab the wheelbase back within 2 seconds. Stop Plugin makes the
+  pause persistent.
+
+### Internal
+- New `IsPluginStopped` flag + `StopPlugin()` / `StartPlugin()` methods.
+- Auto-reconnect logic in `AsetekSimHubPlugin` now respects `IsPluginStopped`.
+- Persisted under `"PluginStopped"` in settings JSON.
+
+---
+
 ## v1.3.9 — La Prima PSU variant selector (May 14, 2026)
 
 ### Added
