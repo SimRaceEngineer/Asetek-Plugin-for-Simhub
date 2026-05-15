@@ -4,6 +4,219 @@
 
 ---
 
+## v1.3.17 — Low Torque Mode (safety / accessibility) (May 15, 2026)
+
+### What this adds
+A voluntary safety clamp on the wheelbase output. New section at the bottom
+of the **Overview** tab, with an orange-bordered card titled "🛡 LOW TORQUE MODE"
+that's impossible to miss.
+
+When ACTIVE, the firmware's `main_gain` register is clamped so the wheelbase
+never exceeds the user-configured Nm cap (default 6 Nm), regardless of slider
+position. The slider stays where the user left it visually — Smart re-clamps
+at every `SetOverallForce` call.
+
+### Use cases
+- Letting kids learn on a direct-drive base (27 Nm Invicta can sprain a wrist on a spin).
+- Letting first-time guests drive your rig safely.
+- Demo / showcase setups where many people will drive briefly.
+
+### Disclaimer modals
+Hardware safety is real on direct drive, so we force the user through a modal :
+- **On first activation** — full disclaimer ("voluntary safety feature, kids/first-time guests, does NOT replace good driving habits"). Acceptance remembered after that.
+- **Every deactivation** — short reminder ("output will jump back to ~X Nm, keep both hands on wheel"). NEVER suppressed — even if you've seen it 100 times, deactivating a safety feature deserves a beat of thought.
+
+### Behaviour
+- `ActivateLowTorqueMode(maxNm)` :
+  - Snapshots the current Overall Force value (the user's "real" setting).
+  - Sets `main_gain` so effective output ≤ `maxNm`.
+  - Pushes single-addr `setprofiledata` immediately.
+  - Persists in `ffb_settings.json` → survives restart.
+- `DeactivateLowTorqueMode()` :
+  - Restores the snapshotted Overall Force.
+  - Pushes the restore via HID.
+- `SetOverallForce(nm)` (any caller, any source) :
+  - Silently downscales `nm` to `LowTorqueMaxNm` if Low Torque is active.
+
+### UI affordances
+- Orange chip in the section header : `ACTIVE — 6.0 Nm cap` or `OFF`
+- Button colour switches : red-orange when active, green when inactive
+- Slider 2 Nm … base max — to tune the cap (default 6 Nm)
+
+### New SimHub properties
+- `Asetek.FFB.LowTorqueMode` — bool, true if active
+- `Asetek.FFB.LowTorqueMaxNm` — current cap value in Nm
+
+Bind these to a dashboard chip so the active state is visible on the
+overlay while driving — important if multiple users share the rig.
+
+### Persistence
+- `LowTorqueModeEnabled` survives restart (so a parent leaves Low Torque ON
+  before handing the rig to a kid the next day).
+- `LowTorqueMaxNm` persisted.
+- `LowTorqueDisclaimerAccepted` persisted (first-activation modal only fires once per user setup).
+
+---
+
+## v1.3.16 — Smart Driving Mode (master toggle + N-lap learn gate) (May 15, 2026)
+
+### What this adds
+A single prominent **"Smart Driving Mode"** toggle in FFB Settings, above the
+Advanced Diagnostic expander. It's the master gate for all per-segment
+adaptive auto-tune features (currently Smart Slew v2, future Smart HF / Smart AO).
+
+### The N-lap learn gate
+When enabled, the algorithm spends the first **N laps** (default 5,
+configurable 1–15) **recording per-segment clipping data without pushing
+any HID changes**. After lap N completes, the map is committed and the
+algorithm starts adjusting `slew_rate_limit` predictively as before.
+
+Status text live in the UI :
+- Off → `Off`
+- Enabled, lap 0..N-1 → `Learning lap 3 / 5 on monza (no FFB change yet)`
+- Enabled, lap ≥ N → `Active — learned 12 segments on monza`
+
+### Closed-circuit ONLY (auto-gated)
+The mode relies on SimHub publishing :
+- `TrackId` (stable across the session)
+- `CompletedLaps` (incrementing every crossed start/finish)
+- `LapDist` or `TrackPositionPercent × TrackLength` (lap distance in m)
+
+None of those are reliable on :
+- Rally stages (point-to-point, lap stays at 1)
+- Open-world maps (Dakar, free exploration — no lap concept)
+- Free-roam practice (lap counter may not advance)
+
+The plugin auto-detects "no lap progression" by watching `CompletedLaps`
+and **parks Smart Driving in the learn state forever** in those contexts.
+Enabling the toggle outside a track is harmless — it just never commits.
+
+UI carries a yellow warning chip explaining the limitation.
+
+### Implementation
+- Master toggle `SmartDrivingEnabled` persisted in `ffb_settings.json`.
+- `SmartDrivingMinLaps` slider (1–15 laps).
+- `SmartSlewTickV2` now takes `currentLap` and gates HID writes behind a
+  `commitAllowed = SmartDrivingEnabled && completedLaps >= minLaps` flag.
+- Per-track lap counter resets on TrackId change.
+- Status string `SmartDrivingStatus` reflects state for SimHub property
+  binding (`Asetek.FFB.SmartDrivingStatus`).
+
+### New SimHub properties
+- `Asetek.FFB.SmartDrivingEnabled` — bool
+- `Asetek.FFB.SmartDrivingActive` — bool (= committed phase, post-gate)
+- `Asetek.FFB.SmartDrivingCompletedLaps` — int
+- `Asetek.FFB.SmartDrivingStatus` — string for dashboard overlays
+
+### Philosophy
+The user puts their sliders where they LIKE the FFB. Smart Driving never
+raises above those values — it only lowers locally on segments where the
+firmware would slew-clip. So the "max FFB feel" the user dialed in is
+preserved on every smooth section ; the algorithm only intervenes where
+the firmware physically cannot deliver the requested ramp.
+
+---
+
+## v1.3.15 — Smart Slew v2 : predictive per-section, self-learning (May 15, 2026)
+
+### Why v1.3.14 wasn't enough
+v1.3.14 was reactive : "if slew clipping ≥ 12 % sustained 3 s, lower slew". The
+problem in practice : you take the carrousel, it oscillates for 3 s, *then* the
+plugin lowers slew, *then* you exit. Next lap we raise it back, same kerb, same
+3 s of oscillation. Not a learning curve, just a loop of suffering.
+
+### How v1.3.15 fixes it
+Per-track segmentation + look-ahead :
+
+1. **50 m buckets** indexed off SimHub's `LapDist` (or `TrackPositionPercent × TrackLength`).
+2. **Per-segment learned target** : each time slew clipping is detected while
+   in segment N, that segment's `TargetNmPerMs` drops 0.3 Nm/ms (clamped to
+   Smart Slew Floor). Clean passes through a learned segment drift it back
+   up 0.05 Nm/ms every 3 visits — so a line change auto-uncools old hot
+   spots and lets new ones cool down.
+3. **Predictive push** : at each tick we look 1 segment ahead. If segment N+1
+   has a learned target lower than the current hardware slew, we push that
+   target NOW via single-addr `setprofiledata` — so we enter the problem
+   zone already filtered, not 3 s into the oscillation.
+4. **Per-track persistence** : map auto-saves every 30 s while driving to
+   `%APPDATA%\AsetekPlugin\trackmaps\<trackId>.json`. Next session at the
+   same track loads it instantly — no re-learning.
+
+### Baseline anchor
+The user's manual slew slider is the **ceiling** of the auto-tune envelope.
+Smart Slew **only lowers, never raises above it**. The "Smart Slew Floor"
+slider sets the lowest value the algorithm is allowed to push (default
+0.9 Nm/ms — Chris's bumpy preset). This guarantees the FFB stays inside
+the envelope the user explicitly chose.
+
+### UI
+- "Smart Slew v2 — Predictive per-section (BETA)" section in the Advanced
+  Diagnostic expander.
+- **Reset Track Map** button — clears learned segments for the current track
+  (use when changing car or after a major game patch).
+
+### New SimHub properties
+- `Asetek.FFB.SmartSlewTrackId` — currently loaded map id
+- `Asetek.FFB.SmartSlewCurrentSegment` — int index, current 50 m bucket
+- `Asetek.FFB.SmartSlewLearnedSegments` — int count of segments with HasLearned == true
+- (existing `SmartSlewLastReason` / `SmartSlewLastTargetNmPerMs` reused)
+
+### Removed
+- Reactive 5-second cooldown auto-tune from v1.3.14 (replaced by predictive).
+
+---
+
+## v1.3.14 — Smart Slew Auto-tune (BETA, superseded by v1.3.15) (May 15, 2026)
+
+### Why this exists
+Chris (community) hit slew-rate-induced oscillation on Nordschleife Döttinger
+Höhe in iRacing 360 Hz mode. Asetek's own advice : lower the slew rate. But a
+lower slew kills cornering signal detail. RaceHub's only answer is "tune it
+manually per track" — there's no feedback loop. Now there is.
+
+### Added — Smart Slew Auto-tune
+The plugin watches the live `Asetek.FFB.SlewClippingPct` and
+`SmoothedRoughnessNm` metrics (both already published since v1.3.13) and
+**adjusts the firmware's `slew_rate_limit` register in real time** :
+
+| Trigger | Action |
+|---|---|
+| Slew clipping ≥ 12 % sustained 3 s | Lower slew by 0.5 Nm/ms (immediate fix) |
+| Slew clipping ≤ 2 % AND roughness < 2 Nm sustained 10 s | Raise slew by 0.3 Nm/ms (reclaim detail) |
+| Otherwise | Hold |
+
+Global 5-second cooldown between any two adjustments to prevent flapping.
+Clamped between user-configurable floor (default 0.9 Nm/ms — Chris's bumpy
+preset) and ceiling (default = detected base's max slew rate).
+
+The change is pushed via a single-addr `setprofiledata` to `slew_rate_limit` —
+immediate firmware effect, no flash write, no PEAK degradation risk.
+
+### UI
+New section in **FFB Settings → Advanced Diagnostic** expander, just below
+the existing Software Slew Limit slider :
+- Checkbox **"Enable Smart Slew Auto-tune"** (off by default — BETA flag)
+- **Smart Slew Floor** slider (0.1 .. detected base max)
+- **Smart Slew Ceiling** slider (0.5 .. detected base max)
+
+Persisted in `ffb_settings.json` as `SmartSlewEnabled` / `SmartSlewMinNmPerMs`
+/ `SmartSlewMaxNmPerMs`.
+
+### New SimHub properties
+- `Asetek.FFB.SmartSlewEnabled` — bool
+- `Asetek.FFB.SmartSlewLastReason` — string ("Slew clip 18% sustained → lowering 5.0→4.5 Nm/ms")
+- `Asetek.FFB.SmartSlewLastTargetNmPerMs` — last value the tuner pushed
+
+Bind these to a dashboard widget for a live "FFB engineer" overlay that
+narrates the auto-tune decisions.
+
+### Why this is "beyond RaceHub"
+RaceHub gives you sliders. We close the loop : measure → decide → write. The
+user doesn't have to know what slew rate means, doesn't have to remember
+which track was bumpy. The plugin adapts continuously, section-by-section.
+
+---
+
 ## v1.3.13 — Beyond RaceHub : TRUE clipping detection (slew + sustained) (May 15, 2026)
 
 ### Why this exists
