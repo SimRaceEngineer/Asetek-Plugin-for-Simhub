@@ -4,6 +4,171 @@
 
 ---
 
+## v1.3.13 — Beyond RaceHub : TRUE clipping detection (slew + sustained) (May 15, 2026)
+
+### Why this exists
+RaceHub shows you sliders. v1.3.13 tells you **which slider is wrong and why**.
+The whole point of having reverse-engineered the firmware down to the slew rate
+register is that we can now do something RaceHub can't : detect, in real time,
+both kinds of clipping the firmware can apply, and translate the diagnostic
+into a single actionable line of text.
+
+### Added — true-clipping detection suite
+
+The plugin now distinguishes the two firmware-level clipping modes :
+
+- **Magnitude clipping** — `|torque| ≥ 95 %` of `mainGain% × baseMaxNm`. Already
+  tracked, now upgraded with a duration filter : a single-tick spike (kerb hit)
+  no longer counts ; the clip must last ≥ 30 ms to flag as `SustainedMagClipping`.
+- **Slew clipping** — sample-to-sample `|delta|` exceeds what the hardware
+  `slew_rate_limit` register can pass through. The firmware caps the ramp so
+  the wheel's actual torque follows a linear ramp instead of the requested
+  step. **This is the clipping the user feels but can't see** : muted bumps,
+  vague kerb response, even when the magnitude bar isn't pegged. We compute
+  the threshold deterministically from the slew register we ourselves wrote.
+
+### New properties (all under `Asetek.FFB.*`)
+
+| Property | Meaning |
+|---|---|
+| `SlewClipping` | bool — slew-saturating *right now* |
+| `SlewClippingPct` | int — % of last 60 s in slew clipping |
+| `SlewClippingEvents` | int — distinct slew-clip events in last 60 s |
+| `IsTrueClipping` | bool — composite live indicator (sustained mag OR slew ≥ 12 %) |
+| `SustainedMagClipping` | bool — magnitude clip lasting ≥ 30 ms |
+| `HeadroomNm` | double — Nm before wheel pegs (negative = over) |
+| `HeadroomPct` | double — headroom as % of `maxNm` |
+| `Suggestion` | string — one-line actionable advice, updated every 5 s |
+
+### Suggestion engine
+
+A 5-second-debounced helper translates the rolling stats into one of :
+
+- `⚠ Slew clipping X% — raise Torque Acceleration Limit (bumps/kerbs being smoothed)`
+- `⚠ Magnitude clipping X% — lower Overall Force by ~10% or reduce game's FFB strength`
+- `⚠ Mag X% + Slew Y% — game FFB strength too high, reduce it first`
+- `💡 Peak only X% of base — you can safely raise Overall Force for more feel`
+- (empty when nothing to act on)
+
+Bind `Asetek.FFB.Suggestion` to any Dash Studio text element and you get a live
+FFB doctor in your dashboard.
+
+### Why this matters
+Jerome reported clipping in cornering that v3.3.37's clipping detector (in SRE)
+didn't catch — because that detector only looked at SteeringTorque magnitude
+drops. The real clipping was slew-clipping : the game's high-frequency content
+exceeded the configured `slew_rate_limit` and got rate-limited. With v1.3.13
+we now flag that explicitly.
+
+---
+
+## v1.3.12 — TRUE RaceHub-equivalent FFB (slider scaling fixes) (May 14, 2026)
+
+### Why this version matters
+Calibrated against Jerome's `LMU 900 mini` (all sliders at 0 %) and `LMU 900 maxi`
+(all sliders at 100 %) RaceHub XML reference presets. Before this fix, **5 sliders
+were silently mis-scaled** — users were getting a tiny fraction (or in one case, 5×
+too much) of the FFB effect RaceHub would deliver for the same nominal slider
+position. This is the version that makes our plugin's FFB feel bit-for-bit identical
+to RaceHub's.
+
+### Fixed — silent slider scaling bugs
+
+| Slider | Old behaviour | Real firmware range | Fix |
+|---|---|---|---|
+| **Damping** | 100 % UI → fw 100 | 0-300 | × 3 — users were getting ⅓ of real Damping |
+| **Friction** | 100 % UI → fw 100 | 0-250 | × 2.5 — users were getting 40 % of real Friction |
+| **Inertia** | 100 % UI → fw 100 | 0-300 | × 3 — users were getting ⅓ of real Inertia |
+| **Cornering Force Assist** | 100 % UI → fw 100 | 0-4000 | × 40 — **users were getting 2.5 % of the effect** |
+| **Anti-Oscillation** | 100 % UI → fw 100 | 0-20 | × 0.2 — **users were getting 5× too much**, likely cause of "weird" cornering feel |
+| **HF Limit** | UI Hz sent raw | fw 0-2500 | non-linear remap (UI 100 Hz → fw 0, UI 4700 Hz "No Limit" → fw 2500) |
+
+### Architecture
+- New `UiToFw(addr, ui)` / `FwToUi(addr, fw)` helpers in `AsetekManager`.
+- `_paramCache` and `profile.Settings` JSON now consistently store **UI units**
+  (0-100 %, UI Hz, etc.). Scaling is applied once, at HID-write time inside
+  `ApplyAllCoreSettings.V()`.
+- Auto-migration on load : profiles imported by previous plugin versions held
+  firmware-raw values (Damping=300, Cornering=4000…). `MigrateLegacyFwValueIfNeeded`
+  detects any scaled-addr value > 100 and down-scales it back to UI units. One-shot,
+  runs in both `LoadProfiles` and `LoadSettings`.
+- `BuildRaceHubXml` (our mirror export) up-scales UI → fw so the file stays
+  drop-in compatible with RaceHub's own exports.
+- "Compare RaceHub Presets" dump now shows XML values in UI units (auto-converted
+  from fw) so the comparison is apples-to-apples against the plugin cache.
+
+### Changed
+- `SetHighFrequencyLimit(hz)` cache convention : 100 Hz (min) to 4700 Hz (= "No Limit"),
+  no more "0 = No Limit" sentinel.
+- **`damper_gain` / `friction_gain` / `inertia_gain` now forced to RaceHub canonical
+  defaults** (15 / 15 / 0) at HID-write time, regardless of any stale value in
+  `ffb_settings.json`. These 3 addrs are firmware constants RaceHub always pins —
+  confirmed across 45 XML preset exports. Our previous defaults (0 / 20 / 10) were
+  the residual reason the FFB could feel slightly different from RaceHub even with
+  the same slider %.
+- `_paramCache` default for `ioni_lpf` : was fw 0 (legacy "No Limit" sentinel), now
+  UI 4700 (matches the v1.3.12 cache convention).
+- Dump header version string now reads `v1.3.12` (was hardcoded to `v1.3.11`).
+- HF slider UI : max value 4800 → 4700, label switches to "No Limit" at the max
+  position. `SavedHfLimit` defaults to 4700 instead of 4800.
+- Auto-tune engine : `IoniLpf = 0` (= No Limit) replaced by `IoniLpf = 4700` for
+  consistency with the new UI-unit cache convention.
+
+### Calibration data (firmware values from XML, all `Invicta`)
+```
+LMU 900 mini   : Damp=0    Fric=0    Iner=0    AO=0    Corn=0    HF=0    Slew=100
+LMU 900 maxi   : Damp=300  Fric=250  Iner=300  AO=20   Corn=4000 HF=2500 Slew=9400
+```
+
+---
+
+## v1.3.11 — Compare RaceHub Presets diagnostic + fixed Import (May 14, 2026)
+
+### Fixed
+- **"Import RaceHub Presets" button** now scans `Documents\RaceHub Profiles\Wheelbase\`
+  **recursively** instead of only the `Backup\` subdir. RaceHub puts freshly
+  saved presets at the root of `Wheelbase\` (live profiles) and only rotates
+  older ones into `Backup\` — so the previous import path missed any preset
+  the user had just exported. Jerome's `LMU 900test` was invisible because
+  of this.
+- Skips our own mirror exports (filename contains `"Asetek Plugin Backup"`)
+  so the import doesn't duplicate plugin-written files.
+
+### Added
+- **"Compare RaceHub Presets" button** (Debug tab) — reads every XML preset
+  RaceHub has auto-exported to
+  `%USERPROFILE%\Documents\RaceHub Profiles\Wheelbase\` (recursive) and dumps a
+  side-by-side table vs the plugin's live parameter cache.
+  - One column per RaceHub preset, one row per slider (HF Limit, Damping,
+    Friction, Inertia, Anti-Osc, Cornering, Bumpstop, Slew Rate, plus all
+    secondary `*_gain` channels).
+  - Cells marked `*` mean the preset's firmware value differs from the
+    plugin's live cache → that slider's direction / scale is wrong.
+  - Output copied to clipboard + saved under `%APPDATA%\AsetekPlugin\diag\`.
+
+### Why
+- User reported HF Limit slider felt inverted (UI "No Limit" gave RaceHub
+  display "100 Hz"). Rather than guess slider-by-slider, this tool reads the
+  canonical firmware values RaceHub itself writes for each saved preset.
+  Workflow : load preset A in RaceHub → Save (forces XML export) → close
+  RaceHub → push the same UI values in our plugin → run Compare. Any row
+  still marked `*` is a mapping bug to fix.
+- Goal : guarantee the FFB produced by our plugin is bit-for-bit identical
+  to the FFB RaceHub would produce for the same named preset.
+
+### Changed
+- Reverted the experimental `ioni_lpf` inversion attempted in v1.3.10 (`hz <= 0
+  ? 4700 : ...`) — the original mapping (`hz < 100 ? 0`) stays in place until
+  the comparison tool confirms the correct direction empirically.
+
+### Internal
+- New `AsetekManager.DumpRaceHubPresetComparison(out filePath, out dumpText)`.
+- Parses XML with `System.Xml.XmlDocument` (already referenced — no new deps).
+- Strips `addr_` prefix on each `<Key>` to match `WheelbaseProfileAddr` enum
+  names.
+
+---
+
 ## v1.3.10 — Stop / Start Plugin button + Force Release HID (May 15, 2026)
 
 ### Added
