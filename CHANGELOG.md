@@ -4,6 +4,28 @@
 
 ---
 
+## v1.5.6 — Status read robustness (race with 60 Hz heartbeat) (May 18, 2026)
+
+### Fixed
+- **HT bit + safe-mode both showing "(status read failed)"** in v1.5.5
+  dumps. Uzorod's 23:19 dump had two back-to-back `request_status`
+  reads fail simultaneously because the dump section issued one HID
+  request per consumer (HT detection, then safe-mode detection) and
+  both raced with the 60 Hz `set_all_leds` heartbeat traffic. Auto-prime
+  and SMP-register reads worked fine — only the `reply_status` frame
+  consumers were affected.
+- Now : the dump section reads the status frame **once** and reuses
+  the same bytes for both the HT verdict and the safe-mode flag.
+- `ReadStatusBitfield()` itself is also more robust : 3 full
+  request/read cycles (was 1 send + 3 reads), per-read timeout backs
+  off across cycles (150 / 200 / 250 ms), and the reply length
+  requirement relaxed from 64 to 15 bytes (then padded to 64) so
+  partial frames don't get rejected when the device splits the reply.
+- `IsHighTorqueModeEnabled()` now delegates to `ReadStatusBitfield()`
+  so the live banner refresh and the dump share the same robust path.
+
+---
+
 ## v1.5.5 — Challenge probe interpretation cleanup (May 18, 2026)
 
 ### Fixed
