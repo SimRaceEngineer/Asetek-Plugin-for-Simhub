@@ -4,6 +4,763 @@
 
 ---
 
+## v1.5.1 — Shift beep "Test now" button fix (May 18, 2026)
+
+### Fixed
+- **"Test beep now" silently did nothing** when the user hadn't ticked
+  "Enable Shift Beep" first. The button called `ShiftBeepTick()` which
+  early-returns on `!ShiftBeepEnabled`. Now the test bypasses the
+  enable/threshold/min-interval guards and plays the configured
+  wheelbase Beep (or PC sound) directly — useful for confirming the
+  route is wired up before tuning the threshold.
+
+---
+
+## v1.5.0 — Shift beep silent (route default fix) (May 18, 2026)
+
+### Fixed
+- **Shift beep didn't trigger any sound.** Default `ShiftBeepRoute` was
+  still `"pc"` from v1.3, which fell back to
+  `System.Media.SystemSounds.Asterisk` — usually inaudible in a headset
+  or VR setup, where Windows system sounds are bypassed.
+- New default : `ShiftBeepRoute = "wheelbase"` → plays Beep 8 on the
+  Invicta piezo buzzer directly through the base.
+- **One-time migration** : on load, if the saved route is `"pc"` AND no
+  wav path is configured, we silently upgrade to `"wheelbase"`. Users
+  who explicitly set a wav file are respected and stay on PC route.
+
+---
+
+## v1.4.9 — Remove duplicate Smart Driving Mode block (May 18, 2026)
+
+### Removed
+- **Legacy "Smart Driving Mode (BETA)" card** removed from FFB Settings —
+  it was a v1.3.16 module that wrote to the firmware's Torque Acceleration
+  Limit live, which conflicts with the post-v1.4 *"no firmware writes"*
+  architecture. The new **Adaptive FFB Zones (Phase 1)** card replaces it
+  with a safe per-profile modulation approach.
+- `SmartDrivingEnabled` / `SmartSlewEnabled` properties retained in
+  AsetekManager for backwards compat with saved settings, but no longer
+  exposed in the UI.
+
+---
+
+## v1.4.8 — Shift Beep relocation + adaptive target laps (May 18, 2026)
+
+### Changed
+- **Shift Beep card relocated** to the top of *FFB Settings*, right under
+  the quick-save row. Since the RPM threshold is part of the profile,
+  it now sits next to the per-car save actions instead of buried at
+  the bottom of the tab.
+- **Adaptive FFB Zones — "Laps to learn" slider** (2-20, default 5).
+  The user picks how many laps the learner should observe before the
+  model is declared "complete" for the current track + car. Extra laps
+  still refine the rolling peaks ; the slider drives the *"X of Y laps"*
+  progress label and (in Phase 2) gates auto-modulation until enough
+  data is in.
+
+---
+
+## v1.4.7 — Adaptive FFB Zones (beta — Phase 1 : Learning) (May 18, 2026)
+
+### Added — Smart Driving Mode, Phase 1
+- **Per-track / per-car FFB peak learning.** While you drive, the plugin
+  bins `|FFB level|` by track position (200 bins of 0.5 %) and tracks
+  the rolling peak per bin across laps. After 2+ laps with samples
+  ≥ sensitivity threshold, consecutive flagged bins are merged into
+  contiguous **hot zones** (e.g. *"56.0 % → 58.5 %, peak 96.2 %"* =
+  Karussell at Nordschleife on a GT3).
+- **Persistence** : zones are stored per `(game, track, car)` in
+  `%APPDATA%/AsetekPlugin/adaptive_zones.json`, restored on plugin start.
+- **FFB Settings UI** :
+  - Green explainer card describing the concept (beta).
+  - "Capture telemetry (learning)" toggle (default ON).
+  - **Sensitivity slider** 50–100 % (default 90 %) — tunes which peaks
+    count as a hot zone. Slider value persists ; **its effect lands in
+    Phase 2** (auto-soften) — for Phase 1 it just gates which zones
+    show up in the list.
+  - Live stats line (laps captured, zones detected, current track + car).
+  - Top-10 zone list with start %, end %, peak |ffb|.
+  - **"Forget zones for this track"** button.
+  - Greyed-out **"Apply modulation (coming in v1.5)"** placeholder.
+- **Zero wheelbase writes.** Pure read of SimHub's `GameFfbLevel` +
+  `TrackPositionPercent`. No HID traffic, no firmware risk.
+
+### Roadmap — Phase 2 (planned v1.5)
+- Pre-bake "soft -15 %" and "soft -30 %" variants of the active profile.
+- GPS-anticipated `setprofiledata` switches : push soft variant ~150 ms
+  before entering a known hot zone, restore on exit.
+- Per-zone intensity tuning via the existing sensitivity slider.
+
+---
+
+## v1.4.6 — Per-profile shift beep + UI cleanup (May 18, 2026)
+
+### Changed
+- **Shift Beep RPM threshold is now saved per profile.** Different cars
+  have different ideal shift points, so the slider lives in *FFB Settings*
+  and gets captured into the active profile (via `CaptureCurrentAsProfile`)
+  alongside the other FFB values. Quick-save / "Save to wheelbase" commit
+  it like any other slider.
+- **Safety tab beep section removed.** WHEELBASE BUILT-IN BEEPS probe +
+  SHIFT BEEP route/volume/wav controls are wrapped in
+  `#if SHOW_SAFETY_BEEP_LEGACY` (not compiled by default). The remaining
+  beep config — Asetek wheelbase buzzer, Beep 8, enabled — is now defaulted.
+
+### Fixed
+- **Safe-mode banner not appearing.** Refresh of `IsBaseSafeMode` was
+  running on the gameDetectTimer threadpool, which raced with the
+  60 Hz heartbeat HID writes and sometimes returned stale frames.
+  Moved the refresh into the 1 s UI status timer (where it's serialized
+  with the existing health snapshot read), so the banner now shows
+  within ~1 s of pressing the Invicta torque-off button.
+
+---
+
+## v1.4.5 — Invicta safe-mode button detection (May 18, 2026)
+
+### Added
+- **Safe-mode detection.** The plugin now detects when the Invicta
+  TORQUE-OFF button is pressed (the yellow safety button on the base).
+  Confirmed mapping via 2-dump diff: firmware status reply
+  **byte 45 bit 6 (mask 0x40)** flips `0 → 1` exactly when the button
+  is pressed (FFB cut). Bytes 48–50 also carry a non-zero event payload
+  when safe mode engages.
+
+- **`Base.SafeMode` SimHub property** (boolean). Surfaces the flag to
+  dashboards / NCalc expressions.
+
+- **Red banner in Overview** appears within ~1 s of pressing the button :
+  *"⚠ Base in SAFE MODE — FFB is cut. Press the yellow TORQUE-OFF button
+  on the Invicta to re-arm."*
+
+- **Diag dump** now shows a clean `Safe-mode detection` section with
+  the decoded flag + fault payload, plus the full 64-byte status reply
+  hex dump (kept for future reverse-engineering).
+
+### Internals
+- `AsetekManager.IsBaseSafeMode` cached property, refreshed every 2 s
+  by the existing game-detection timer (no extra HID polling thread).
+- `RefreshBaseSafeMode()` public method for on-demand UI refresh.
+
+---
+
+## v1.4.1 — Auto-enable High Torque mode (May 18, 2026)
+
+### Added
+- **Auto-HT at startup.** After `Connect()` succeeds, the plugin now
+  automatically runs `RestoreHighTorqueMode()` — mirroring RaceHub's
+  `WheelbaseDataMediator.InitializeMediator()` which calls
+  `ActivateHighTorqueWithAction()` when `WheelbaseAutoEnableHighTorque=true`.
+  Previously the plugin just opened HID handles and stayed in whatever
+  torque state the firmware was in. If HT was disabled for any reason
+  (RaceHub interaction, firmware glitch, USB reconnect), the plugin stayed
+  at 8 Nm LT cap with no automatic recovery.
+
+- **Challenge probe in health monitoring.** `RefreshHealthSnapshot()` now
+  verifies HT status via the register 6071 challenge probe (every 10s)
+  when byte 12 reports HT=ON. On Forte (and possibly other models),
+  byte 12 bit 1 can read "HT enabled" while the firmware is actually
+  in Low Torque mode. Without this double-check, `HealthHighTorqueOn`
+  was `true`, the warning banner never appeared, and force was silently
+  capped at 8 Nm.
+
+- **Auto-recovery when HT OFF detected.** When 3 consecutive health
+  readings confirm HT is OFF, the plugin automatically attempts a
+  `SoftRestartDriveForHT()` (IONI cold boot → HT auto-on). Capped at
+  3 attempts per session to avoid infinite loops on genuinely faulted
+  hardware. Previously the user had to manually click the recovery button.
+
+### Root cause analysis
+RaceHub's codebase (decompiled) revealed:
+1. `WheelbaseDataMediator.InitializeMediator()` auto-enables HT at every
+   startup via challenge/answer on reg 6071 — our plugin never did this.
+2. `SetOverallForceSliderRange()` caps main_gain to `8Nm / torqueConst`
+   when `HIGH_TORQUE_MODE_BIT` is OFF — this is the 8 Nm cap mechanism.
+3. `GameSettingMediator` does NOT toggle HT per-game — HT is firmware
+   persistent state, not per-session.
+4. The status byte 12 bit 1 can be a false positive (says HT=ON when
+   actually LT) — the challenge probe (reg 6071 value=0 means truly HT)
+   is the only authoritative indicator.
+
+---
+
+## v1.4.0z10 — Plugin/RaceHub coexistence fixed (May 16, 2026)
+
+### Fixed
+- **STOP PLUGIN now actually stops everything.** Previously the 360 pkt/s
+  heartbeat thread was started on Connect but never killed — only gated by
+  `_wheelbaseConnected`. If anything briefly re-flipped that flag (status
+  reads, UI refresh, Forte detection) the heartbeat resumed firing while
+  RaceHub thought it owned the device, triggering Windows USB add/remove
+  "bibip" sounds and degraded RaceHub FFB. `StopPlugin()` now calls
+  `StopWheelbaseHeartbeat()` before `Disconnect()`.
+
+### Changed
+- **`WheelbaseHeartbeatEnabled` default → false.** Until we have proof the
+  360 pkt/s stream actually helps standalone FFB, it stays off by default
+  so the plugin coexists cleanly with RaceHub. Toggle in the bottom row
+  re-enables it for plugin-only testing.
+- **`AutoReleaseWheelOnGame` default → false.** The auto-release was meant
+  to hand the wheel HID to DirectInput at game start, but the HID
+  transitions confused RaceHub. Opt-in via the toggle if needed.
+
+---
+
+## v1.4.0z9 — REVERT z6/z7/z8 — back to z5's known-working form (May 16, 2026)
+
+### Reverted
+Jerome confirmed in field test that **v1.4.0z5 worked perfectly** (full 27 Nm,
+no LT cap in corners), and every "more correct" attempt to mirror RaceHub
+byte-for-byte (z6/z7/z8) regressed back to ~8 Nm capping. Reverting the
+read-side and answer-side packet construction to exactly z5:
+
+- **TryReadDriveParam**: `pkt151[2] = 107, pkt151[3] = 0` (z5 form,
+  applied to ALL register reads — the firmware apparently ignores
+  value1/value2 on cmd 151 reads except for some unknown state machine
+  on reg 6071 that gets confused if we send value2=107 there).
+- **BuildHighTorqueAnswerPacket**: `p[2] = 0, p[3] = 107` (z5 form,
+  value1=0 instead of echoing replyValue1).
+
+### Lesson
+The decompiled RaceHub source says one thing about packet layout
+(value1=byte2, value2=byte3, value2 set to 107 on read AND write), but the
+empirical wire protocol the firmware accepts is something else. **The
+empirical test (does HT stay during a 2-3 lap drive?) is the only
+authoritative validation.** From now on we keep z5's form unless a real
+USB sniff comparison vs RaceHub proves otherwise.
+
+---
+
+## v1.4.0z8 — value2=107 token now scoped to reg 6071 only (May 16, 2026)
+
+### Fixed
+- **CRITICAL — HT no longer drops during drive.** v1.4.0z6 unconditionally
+  set `value2 = 107` on every `start_read_drive_params` (cmd 151) read,
+  including generic SMP/status reads done continuously while driving.
+  RaceHub actually has TWO separate code paths
+  (`_racehub_WheelbaseCommService.cs`):
+  - `ActivateHighTorque` line 970: `value2 = 107` (HT session token) —
+    only when reading reg 6071 (VAL_ACTIVATE_HIGH_TORQUE_CHALLENGE).
+  - `ReadWheelbaseSetSettingsDataPacket` line 1545 (used by every other
+    register read in RaceHub): `value2 = 0` (default).
+
+  Sending the HT session token on non-HT reads while driving made the
+  firmware drop HT mid-session — exactly the regression Jerome reported
+  after a fresh cold boot (HT ENABLED at startup, then disappeared after
+  a few laps). z8 conditions `value2` on `regAddr == 6071` so generic
+  reads stay neutral.
+
+---
+
+## v1.4.0z7 — Echo firmware session token in HT answer (May 16, 2026)
+
+### Fixed
+- **CRITICAL — value1 of the answer packet now echoes the firmware's reply.**
+  RaceHub's `ActivateHighTorque` deserializes the cmd 153 challenge reply
+  into a `WheelbaseSetSettingsDataPacket`, then explicitly mutates only
+  `command`/`value2`/`addrs[0]`/`values[0]` before sending the answer —
+  leaving `value1` (byte 2) UNCHANGED from whatever the firmware put in the
+  reply. Likely a session/sequence token the firmware checks before
+  accepting the answer. Our plugin always sent `value1 = 0`, so the firmware
+  silently rejected every challenge answer with a fresh value1 token. Now
+  `TryReadDriveParam` captures `resp[2]` (replyValue1) and
+  `RestoreHighTorqueMode` passes it through `BuildHighTorqueAnswerPacket`
+  → echoed into byte 2 of the answer, matching RaceHub byte-for-byte.
+
+---
+
+## v1.4.0z6 — HT byte-offset fix completed on READ side too (May 16, 2026)
+
+### Fixed
+- **CRITICAL — symmetric value2=107 on both halves of the handshake.**
+  v1.4.0z5 fixed the offset only on the ANSWER packet
+  (`BuildHighTorqueAnswerPacket`, cmd 150) but left the READ packet
+  (`TryReadDriveParam`, cmd 151) writing `107` to byte 2 (value1). RaceHub
+  (`_racehub_WheelbaseCommService.cs` line 970) sets `value2 = 107` on
+  BOTH the cmd 151 read AND the cmd 150 write — they're paired session
+  tokens. After z5 our handshake was asymmetric: read with value1=107,
+  write with value2=107 — firmware probably treated them as belonging to
+  different sessions and dropped HT mid-drive, explaining the FFB loss
+  reported on z5. z6 makes both packets identical to RaceHub:
+  `value1 = 0, value2 = 107`.
+
+---
+
+## v1.4.0z5 — HT challenge byte-offset fix (May 16, 2026)
+
+### Removed (Overview bottom row cleanup)
+- `Force Release HID` button — debug-only brute-close, never needed by users.
+- `🪄 Replay RaceHub Init` button — RE probe that's now obsolete since the
+  real fix (value2 byte offset) was identified.
+- `Wheelbase heartbeat (360 pkt/s)` toggle — kept enabled silently.
+- `Auto-release wheel HID on game start` toggle — kept enabled silently.
+- `Live FFB : … Peak : …` label — debug telemetry.
+
+The bottom row now fits on one line again: Reconnect • Disconnect • STOP/START •
+Re-center wheel • Dump Diagnostic. Underlying API methods stay on
+AsetekManager so they can be wired to SimHub action bindings or re-exposed
+in the Debug tab later.
+
+### Fixed
+- **CRITICAL: High Torque challenge answer was being rejected silently** by
+  the firmware due to a byte-offset bug in `BuildHighTorqueAnswerPacket`.
+  RaceHub's `WheelbaseSetSettingsDataPacket` struct (Pack=1) has layout
+  `byte 0 reportID | byte 1 command | byte 2 value1 | byte 3 value2`, and
+  RaceHub's `ActivateHighTorque` sets `value2 = 107` (token), leaving
+  `value1 = 0`. Our plugin was writing `107` to `p[2]` (value1) and `0` to
+  `p[3]` (value2) — the firmware checks `value2` for the token and threw
+  every challenge answer on the floor without flipping the HT bit. Net
+  effect: HT bit appeared "already enabled" in status reads (because the
+  base never lost HT on cold boot) but any time the user reset / re-armed,
+  the handshake would fail and the base stayed in the ~8 Nm Low Torque cap
+  we kept seeing in-game despite RaceHub achieving full 27 Nm. Swapped
+  `p[2]` and `p[3]` assignments in all three challenge-answer variants so
+  `value2 = 107, value1 = 0` matches RaceHub byte-for-byte.
+
+  Discovered by disassembling RaceHub's `Assembly-CSharp.dll` with
+  dnSpy.Console and comparing the packet construction path against ours.
+
+---
+
+## v1.4.0 — RaceHub 360 Hz heartbeat parity + LED protocol fixes (May 16, 2026)
+
+### Why
+USB-sniff comparison of RaceHub vs our plugin during 3-lap LMU drives revealed
+RaceHub continuously pushes ~366 wheelbase commands per second (cmd 0xD2
+set_all_leds, 6-chunk pattern at addrs 0/27/54/81/108/135) while our plugin
+pushed only on demand. Without this heartbeat the firmware drops out of its
+360 Hz interpolation mode and FFB feels "smoothed/clipped" above 25-30 %
+torque in fast corners.
+
+### Added
+- **Wheelbase 60 Hz heartbeat thread** : on wheelbase-connect, starts a
+  background thread that mirrors RaceHub's exact wire pattern (6 packets per
+  frame, value1=3, chunks at 0/27/54/81/108/135, refresh=1 only on packet 6)
+  at ~60 frames/sec = 360 packets/sec. Keeps the firmware's 360 Hz mode alive
+  end-to-end during driving.
+- `WheelbaseHeartbeatEnabled` toggle (defaults true).
+- Diagnostic build-version string now reads dynamically from
+  `Assembly.GetExecutingAssembly().GetName().Version` (no more drift between
+  hardcoded label and csproj).
+
+### Investigated / partial
+- MMF host mode color order : after multiple swap attempts (RGBA/BGRA/GBRA),
+  cyclic R→B→G→R shift still observed on the wheel rim. The wire-level test
+  buttons (All RED / All GREEN / All BLUE direct-push) confirm the wheel
+  firmware does NOT use straight RGB byte order in our writes. Investigation
+  ongoing — possibly a per-LED color-format register we haven't reverse-
+  engineered yet.
+
+---
+
+## v1.3.9 — MMF host mode + RaceHub protocol reverse-engineering (May 15, 2026)
+
+### Major changes
+- **MMF host mode (BETA)** : the plugin can now CREATE the `Local\RaceHubXSimHub`
+  MMF itself, replacing RaceHub for LED control. SimHub-native "Asetek RaceHub
+  LEDs and display" device connects to our MMF and writes RPM + Flag colors,
+  which we relay to the wheel via HID. RaceHub no longer required for LEDs.
+- **Reverse-engineered Forte GT LED HID protocol** via USB sniff (USBPcap +
+  tshark) : confirmed `02 52 12 + 15 indices + 15 RGB + refresh=1` per packet,
+  with byte-VALUE addressing (not slot-position).
+- **Fixed RPM_LED_ORDER** from `{41..45, 0..9}` (0-based, wrong) to
+  `{41..45, 1..10}` (1-based, matches RaceHub sniff exactly).
+
+### Added
+- `🏠 Become MMF host` button : creates the MMF as host, arms wheel external
+  control. Lets the plugin drive LEDs without RaceHub running.
+- `🔬 Dump MMF buffers (hex)` : reads current MMF state in reader or host mode.
+- `⚪ All LEDs WHITE (60)` / `⚫ All LEDs OFF` : full-frame test buttons.
+- `R→42 / G→42 / B→42` : direct color test buttons that bypass MMF.
+- Index Probe grid 0-63 with full 4-packet protocol (`ProbeSingleLedFullFrame`).
+- Auto-sweep tool (`StartLedSweep`) to walk firmware indices empirically.
+- USB sniffing helper script `sniff_forte_v2.py` (USBPcap + tshark wrapper).
+
+### Known issues (deferred to next session)
+- Color byte order in MMF still wrong : intent green shows as red on wheel,
+  cyclic R→B→G→R shift remains. Multiple swap attempts (RGBA, BGRA, GBRA) did
+  not fully fix. Need direct color test via new R/G/B test buttons to isolate.
+- Custom RPM curve UI colors are NOT applied in MMF host mode (only direct
+  push). User confusion : "redzone green" UI setting ignored when MMF is host.
+
+### Added
+- **🔬 Dump MMF buffers (hex) button** in LED Control tab → reads the current
+  rev + flag buffers from our hosted MMF and prints them in a scrollable hex
+  panel. Lets us see exactly what SimHub writes when different LED Profile
+  configurations are applied.
+
+---
+
+## v1.3.24 — Properties-based LED pipeline (ATSR_Hub-style) (May 15, 2026)
+
+### Why this version
+After reverse-engineering ATSR_Hub, DanielNewmanRacing, SOELPEC, and Leoxz plugins
+for their LED-Manager integration pattern, we confirmed : there is **no public
+SimHub API to register a custom RGB LED device**. The community pattern is
+universal — plugins expose SimHub **properties** that hold the desired LED
+colors, and the user binds those properties to the SimHub LED Profile that
+targets a built-in device (in our case the native "Asetek RaceHub LEDs and
+display" device, which writes to the wheel via MMF).
+
+This version moves us to that architecture and ships a ready-made LED profile.
+
+### New SimHub properties published every tick (60 Hz)
+
+| Property | Type | Meaning |
+|---|---|---|
+| `Asetek.Led.Rpm.L1`..`L15` | int (ARGB) | Final color of each of the 15 RPM bar LEDs after threshold, gradient, brightness, and redline flash logic |
+| `Asetek.Led.Rpm.L1.Hex`..`L15.Hex` | string | Same as above as 6-char hex (e.g. `"00FF00"`) — easier for JS string templates |
+| `Asetek.Led.Flag.F1`..`F6` | int (ARGB) | Final color of each of the 6 Flag LEDs (lit when its bound property is true, off otherwise) |
+| `Asetek.Led.Flag.F1.Hex`..`F6.Hex` | string | Same as hex |
+| `Asetek.Led.Rpm.Count` | int | 15 (constant) |
+| `Asetek.Led.Flag.Count` | int | 6 (constant) |
+| `Asetek.Led.BrightnessPct` | int | Current global brightness slider value (0-100) |
+| `Asetek.Led.RedlineActive` | bool | True when current RPM > redline threshold (97 % default) |
+
+### Ready-made `.ledsprofile`
+`AsetekPlugin Default LED Profile.ledsprofile` shipped with the plugin :
+- Container 1 : "Asetek RPM Bar (15 LEDs)" — `ScriptedContent` reading `Asetek.Led.Rpm.L1..L15`
+- Container 2 : "Asetek Flag LEDs (6)" — reads `Asetek.Led.Flag.F1..F6`
+
+**To use** :
+1. Re-enable "Asetek RaceHub LEDs and display" in SimHub Devices (if disabled).
+2. SimHub → LED Manager → Import `AsetekPlugin Default LED Profile.ledsprofile`.
+3. Target device : your Forte GT / Invicta wheel.
+4. The profile is now driven by the plugin's per-LED properties — every change in the plugin (RPM thresholds, per-LED colors, brightness, Flag bindings) flows to the wheel via SimHub LED Manager → MMF → RaceHub → wheel firmware.
+
+### Internal architecture changes
+- `AsetekManager.UpdateForteRpmLeds(rpmPct)` no longer early-returns when Forte isn't connected ; it still computes the per-LED frame so the SimHub properties have live data even without HID. Direct HID is now conditional on `_forteConnected`.
+- New public state : `CurrentForteRpmFrame` (Color[15]), `CurrentForteFlagFrame` (Color[6]).
+- `AsetekSimHubPlugin.DataUpdate` now ALWAYS calls `UpdateForteRpmLeds(rpmPct)` and mirrors the resulting frame to the 36 LED properties + brightness + redline flag.
+- Version label in the UI title bar now reads dynamically from `Assembly.GetExecutingAssembly().GetName().Version` — no more hardcoded "v1.3.8" drifting from csproj.
+
+### Notes
+- The direct-HID rendering path (`ForteSetLeds()`) is still used when the SimHub-native Asetek device is disabled. Both paths coexist.
+- The MMF push (`PushTelemetryFrameToMmf`) is kept for users who prefer not to touch the LED Manager UI — toggle in the LED tab.
+
+---
+
+## v1.3.22 — Real Flag LED HID push + RPM demo sweep + Index Probe (May 15, 2026)
+
+### Fixed — Flag LED Test button now drives the physical wheel
+v1.3.21's Test button only flipped the in-UI live indicator dot. Now it
+sends a real `ForteSetLeds()` HID command to the wheel for 800 ms, using
+the slot's configured color AND the configured HID index. You actually
+see the LED light up on the wheel.
+
+### Added — Flag LED HID index field
+Each of the 6 Flag LED slots now has an editable **HID index** input
+(default 10/11/12/13/14/15 for FL1/FL2/FL3/FR1/FR2/FR3). The plugin
+sends `ForteSetLeds([(index, R, G, B)])` to that index when the bound
+SimHub property is true.
+
+### Added — Index Probe sweep (find physical indices empirically)
+At the bottom of the Flag LED card, a grid of buttons 10..39. Click any
+number → that single LED index lights up red for 1.5 s. Watch your
+wheel, identify which physical LED illuminates, then enter that index
+in the appropriate FL/FR slot. Three iterations and you've mapped every
+flag LED on your Forte GT.
+
+### Added — RPM bar Demo Sweep
+Big primary "▶ Run RPM demo sweep (3 s)" button in the RPM customization
+section. Click → animates rpmPct 0 → 1 → 0 over 3 seconds at ~30 Hz so
+the user can preview their per-LED thresholds + colors + redline flash
+WITHOUT firing up a sim. Restores the bar to dark when done.
+
+### Added — Permanent Flag LED rendering loop
+SimHub plugin tick now calls `DriveFlagLedsFromLiveState()` after reading
+the bound properties — that pushes HID writes edge-triggered (only on
+state changes) so the wheel LEDs follow the in-game state continuously.
+60 Hz spam is avoided by a per-slot `_flagLedPushed[]` cache.
+
+### Internal
+- `SetFlagLedPhysical(slot, on)` — single-LED HID write helper.
+- `DriveFlagLedsFromLiveState()` — edge-triggered push driven by plugin tick.
+- `TestFlagLedPulse(slot)` — 800 ms pulse with auto-revert (used by Test button).
+- `RunRpmBarDemo()` — 30 Hz triangle-wave sweep on a background thread.
+- `FlagLedHidIndex[6]` array — persisted under JSON key `FlagLedHidIndex`.
+
+---
+
+## v1.3.21 — Hex-visible color picker + Flag LEDs 3×3 layout (May 15, 2026)
+
+### Changed — color picker UX (back to WPF popup, with everything)
+The Windows-only ColorDialog from v1.3.20 hid the hex code behind multiple
+sliders. v1.3.21 brings back a WPF popup that shows :
+- The **hex code in an editable Consolas-font box** (always visible, type
+  to apply, copy-paste between LEDs in seconds).
+- A 10-color **quick palette** with per-dot hex tooltip.
+- A **🎨 Open color wheel...** button that still launches the full Windows
+  ColorDialog when needed.
+- Explicit **OK / Cancel** so you can preview-then-confirm.
+
+### Changed — Flag LEDs 3-left + 3-right layout
+Cluttered single-row layout of v1.3.20 replaced with a 2-column grid :
+- **◄ LEFT SIDE** : FL1 / FL2 / FL3
+- **RIGHT SIDE ►** : FR1 / FR2 / FR3
+
+Each slot lives in its own bordered card with checkbox / label / color
+swatch / Test button / live dot / preset combo / property textbox. Much
+easier to scan.
+
+### Added — Bulk-apply helpers
+- **Copy LEFT 3 → RIGHT 3** — mirrors left-side config to right side.
+- **Spread FL1 → FL1/FL2/FL3** — replicates FL1 across the 3 left LEDs
+  (e.g. ABS in pink on all 3 left LEDs in one click).
+- **Spread FR1 → FR1/FR2/FR3** — same for the right.
+
+### Added — In-UI explanation
+Inline blue tip explaining how to map multi-LED events :
+> *"Pour allumer 3 LEDs sur le MÊME event (ex : ABS rose sur FL1/FL2/FL3) :
+> mets la même property + même couleur sur les trois slots. Pour 2 events
+> séparés : ABS-rose sur les 3 gauche, TC-jaune sur les 3 droite. Pour un
+> 3e event (Lift & Coast orange) : override 1 ou 2 slots."*
+
+---
+
+## v1.3.20 — Color wheel + Flag LEDs + redline flash color + race defaults (May 15, 2026)
+
+### Added — Windows native color wheel
+Every color picker in the plugin now opens the **Windows `ColorDialog`** :
+- Full color wheel
+- RGB sliders
+- Hex input
+- Custom colors palette (saved during the session)
+
+Replaces the v1.3.19 popup-with-10-palette-dots which made it impossible to
+find a specific hex. Applies to :
+- All 15 RPM LED swatches
+- The 6 Flag LED swatches (new)
+- The redline flash swatch (new)
+
+### Added — Redline flash color
+The blue redline blink is now user-pick. New `RpmRedlineFlash` setting +
+swatch under "Redline blink starts at" slider. Click → Windows color wheel.
+
+### Added — 6 Flag LEDs bindable to any SimHub property
+New "FLAG LEDS" section under the RPM bar customization. Each of the 6 slots
+exposes :
+- **Enable checkbox** — off by default, on to activate the LED
+- **F1..F6 label**
+- **Color swatch** — click → color wheel
+- **Preset combo** — quick-pick : ABS Active / TC Active / DRS Enabled /
+  DRS Available / Pit Limiter / Fuel Low Alert / Lift & Coast (LMU) /
+  Engine Started / Speed Warning / Yellow Flag / Blue Flag / Black Flag /
+  In Pit Lane
+- **Property textbox** — free-text SimHub property path, can be ANY
+  property (e.g. `GameRawData.LMUNativeTelemetry.generic.GPower`,
+  `Maths.IsAbsActive`, a custom Calc, etc.)
+- **Live indicator dot** — pill that fills with the chosen color while the
+  property reads as truthy
+
+The plugin reads each enabled property every telemetry tick. The LED is
+considered "on" when the property is a true bool, non-zero number, or a
+non-empty / non-"None" / non-"Off" string.
+
+**Default bindings** :
+```
+F1 → ABS Active            → red
+F2 → TC Active             → yellow
+F3 → Lift & Coast (LMU)    → cyan
+F4 → DRS Enabled           → green
+F5 → Pit Limiter           → orange
+F6 → Fuel Low Alert        → magenta
+```
+
+All slots start DISABLED so existing users don't see flickering LEDs they
+didn't ask for — toggle each one ON to use it.
+
+⚠ Physical LED indices on the Forte GT wheel are not yet wired — the
+UI captures the state + lives in the SimHub properties, but the actual
+HID command to light the 6 flag LEDs still needs reverse-engineering on
+the wheel firmware. Coming in v1.3.21 once we've probed the indices.
+
+### Changed — RPM default thresholds (race-friendly 3×3 grouping)
+Jerome's race-tested preset, replacing v1.3.19's `70-98 %` linear spread
+that left LEDs lit during race-pace cruise (70-80 % RPM).
+
+```
+LEDs L1-L3    : 78 %  (first warning)
+LEDs L4-L6    : 81 %
+LEDs L7-L9    : 84 %  (shift suggested)
+LEDs L10-L12  : 87 %
+LEDs L13-L15  : 90 %  (SHIFT NOW)
+```
+
+Bar stays DARK at 75-78 % cruise RPM ; lights up only in the shift window.
+Reset button renamed **"Reset to race default (3×3)"**.
+
+### Fixed — linear curve fallback respects RpmStartThreshold
+When "Enable custom curve" is OFF, the wheel RPM bar used a pure linear
+distribution (LED 1 at 6.7 % RPM = always on). Now applies the same
+`RpmStartThreshold` floor as the wheelbase strips (default 75 %), so cruise
+keeps the wheel bar dark regardless of curve mode.
+
+### Internal
+- Added `System.Windows.Forms` + `System.Drawing` references to `AsetekPlugin.csproj`
+  so we can use `System.Windows.Forms.ColorDialog`.
+- New AsetekManager fields : `RpmRedlineFlashR/G/B`, `FlagLedProperties[6]`,
+  `FlagLedColorsR/G/B[6]`, `FlagLedEnabled[6]`, `FlagLedLive[6]`.
+- SimHub plugin tick reads each enabled property and populates `FlagLedLive[]`
+  for downstream consumers (UI live indicator dot, future HID push to wheel).
+- JSON persistence : `RpmRedlineFlash`, `FlagLedProperties`, `FlagLedColors`,
+  `FlagLedEnabled` arrays added to `ffb_settings.json`.
+
+---
+
+## v1.3.19 — RPM LED UX polish + Safety tab moved (May 15, 2026)
+
+### Changed
+- **Safety tab** moved to the right end of the left tab row (between
+  "Controls (Beta)" and the right-aligned Debug tab). Was previously
+  sandwiched between FFB Settings and Wheel, where it was easy to mis-click
+  while moving between FFB-related panels.
+- **Wheelbase Sound Effect Probe** trimmed from 8 buttons to the 4 audible
+  IDs Jerome confirmed on his Invicta : **Beep 1, Beep 5, Beep 6, Beep 8**.
+  IDs 2/3/4/7 are silent or reserved on the tested firmware — no point
+  exposing them.
+- **Notifications section** simplified to a single clearly-labeled toggle
+  "Play sound on wheelbase state changes" with a precise description of
+  what triggers it (HT enter/leave, Safe Mode entry, motor saturation).
+  Resonance Reduction + Tracking Center Damping hidden until we have a
+  documented user-observable effect — they're still in the underlying
+  bitfield but no longer cluttering the UI.
+- **Shift Beep wheelbase ID slider** snaps to the 4 audible IDs only.
+
+### Fixed
+- **Forte RPM LED default thresholds** raised so cruise (40-60 % RPM) no
+  longer keeps the bar fully lit. New defaults : `70, 73, 76, 79, 82, 85,
+  87, 89, 91, 93, 94, 95, 96, 97, 98` (all values are % of redline at which
+  the LED activates). User can still customize each LED via the per-LED
+  sliders or hit "Reset to linear" for the old behaviour.
+
+### Added — per-LED RGB color picker (15 LEDs)
+Replaces the 3-zone color UI of v1.3.18 with full per-LED control :
+
+- **One swatch per LED** above each threshold slider (15 swatches total).
+- **Left-click** on a swatch → popup with :
+  - Palette of 10 colors : Off / Red / Orange / Yellow / Green / Cyan / Blue / Purple / Pink / White.
+  - Hex input (ex : `FF8800`) with Apply button — full RGB control.
+- **Right-click** on a swatch → copies the color to the system clipboard
+  as `#RRGGBB`. Easy to paste elsewhere.
+- **Middle-click** on a swatch → pastes from clipboard if a valid hex is
+  present, else uses the last copied color.
+- **"Apply L1 color to all"** button → propagates LED 1's color across all 15.
+- **"Restore green→yellow→red"** button → resets to the classic shift-light
+  gradient.
+
+The per-LED colors are stored in `RpmLedColors[15]` (hex array in
+`ffb_settings.json`). Legacy 3-zone keys (`RpmLedColor1/2/3`) are still
+written for backward compat — a downgrade to v1.3.18 preserves the zone
+colors that match LEDs 2/7/12.
+
+### Architecture
+- `RpmLedColorsR[15]` / `RpmLedColorsG[15]` / `RpmLedColorsB[15]` arrays in
+  `AsetekManager`. The legacy `RpmLedColor{1,2,3}{R,G,B}` properties remain
+  as compatibility shims (getters return the corresponding zone's LED 2/7/12,
+  setters propagate to all 5 LEDs of that zone).
+- `UpdateForteRpmLeds` now indexes the color array per-LED instead of
+  bucketing into 3 zones.
+- Forward-compatible JSON : new `RpmLedColors` array is preferred ; if
+  absent, fall back to the three legacy `RpmLedColorN` keys.
+
+### Coming next (v1.3.20)
+- **6 Flag-LED bindings** : map each of the wheel's 6 flag LEDs to a SimHub
+  property name (ABS, TC, lift_and_coast, fuel_low, drs_available, custom)
+  with its own user-chosen color. Pending : confirm the physical LED
+  indices on the Forte GT wheel.
+
+---
+
+## v1.3.18 — Safety tab + Universal Shift Beep + Custom RPM LED curve (May 15, 2026)
+
+### New "Safety" tab — RaceHub parity + bonus
+A dedicated tab between FFB Settings and Wheel. Hosts every feature RaceHub
+exposes under its Safety + Notifications panels, plus a sound-effect probe to
+discover the wheelbase buzzer IDs.
+
+| Feature | What it does | Underlying register |
+|---|---|---|
+| Automatic Centering Strength | Spring to center when no game is grabbing FFB | `addr_desktop_spring_gain` (3) |
+| Safe Mode | Auto-drop HT after N minutes of inactivity | `addr_standbys_settings` (22) |
+| Hands-off Detection | Cut FFB momentarily when no driver resistance | `addr_simucube_options` (20) bits 0-1 |
+| Sound Notifications | Wheelbase buzzer on HT change / saturation | `addr_simucube_options` bit 2 |
+| Resonance Reduction | Kerb-vibration filter | `addr_simucube_options` bit 3 |
+| Tracking Center Damping | Damping when off-center | `addr_simucube_options` bit 4 |
+
+`addr_simucube_options` is a packed bitfield. We mirror RaceHub's
+`PrepareSimucubeOptions` layout discovered in
+`_racehub_SimSportsWheelbase.cs:484-491`. Bit positions for the three booleans
+are an educated guess (bits 2/3/4 in declaration order) — the "Wheelbase Sound
+Effect Probe" section below provides 8 test buttons to confirm empirically.
+
+### Wheelbase Sound Effect Probe (BETA)
+Discovered in `_racehub_WheelbaseCommService.cs:1025` : the Invicta has a
+built-in piezo buzzer driven by SMP register `VAL_PLAY_SOUND_EFFECT = 6070`
+(cmd 150 / `set_drive_params`). RaceHub uses it for HT-on/off and Safe Mode
+chimes. We expose 8 trigger buttons so the user can probe IDs 1..8 and discover
+the available effects on their base.
+
+### Universal Shift Beep (works on ANY wheel)
+A short audio cue triggered when engine RPM crosses a configurable threshold,
+edge-triggered so it plays ONCE per shift approach (not continuously while
+above redline).
+
+Three routing options :
+- **PC speakers** — default. Uses `MediaPlayer` so the volume slider works.
+  Loads a user-chosen `.wav` (Browse... dialog), falls back to Windows
+  Asterisk system sound if no file is configured.
+- **Asetek wheelbase buzzer** — routes to `PlayWheelbaseSound(id)` with a
+  user-selectable sound ID (1..8 probed in the section above).
+- **Future** — wheel rim LEDs flash (already covered by the existing
+  "Flash at Optimal Shift Point" in RaceHub's Shift Lights tab).
+
+Persisted : enabled flag, RPM threshold, volume, route, wav path, wheelbase
+sound ID.
+
+### Forte GT RPM Bar — Custom Curve & Colors (BETA)
+The wheel's 15-LED shift bar gets a real customization layer :
+- **Per-LED RPM threshold** : 15 vertical sliders (1..100 %) — each LED lights
+  up when its individual threshold is reached. Goes beyond RaceHub which forces
+  a linear curve across all LEDs.
+- **Per-zone color** : 3 click-to-cycle swatches (zone 1 = LEDs 1-5, zone 2 =
+  6-10, zone 3 = 11-15). Palette : Green / Yellow / Red / Blue / White /
+  Purple / Orange / Cyan / Pink. Full RGB internally — defaults to classic
+  green/yellow/red.
+- **Redline blink threshold** : slider 90..100 % — where the bar starts the
+  blue redline flash. Default 97 %.
+- **Reset to linear** button — restores the default 15-step linear curve.
+
+The legacy linear behaviour is preserved by default — custom curve only kicks
+in when the toggle is on.
+
+### Architecture
+- `AsetekManager` properties : `HandsOffDetectionLevel`, `TorqueSaturationSoundEnabled`,
+  `ResonanceReductionEnabled`, `TrackingCenterDampingEnabled`, `AutoCenteringStrength`,
+  `SafeModeTimeoutMin`, `ShiftBeepEnabled` and friends, `RpmLedCustomCurveEnabled`,
+  `RpmLedThresholds[15]`, `RpmLedColor{1,2,3}{R,G,B}`, `RpmLedBlinkThreshold`.
+- `PushSimucubeOptions()` recomposes the bitfield and writes via existing
+  `WriteHardwareSettings` (cmd 122).
+- `PlayWheelbaseSound(int id)` uses existing `SetSmpRegisters` to write reg 6070.
+- `ShiftBeepTick(double rpm)` called from the 60 Hz telemetry loop. Edge-triggered,
+  throttled by `ShiftBeepMinIntervalMs` (default 250 ms).
+- `UpdateForteRpmLeds(rpmPct)` now consults `RpmLedThresholds[]` per-LED when
+  custom curve is enabled, falls back to linear when off.
+
+### Settings JSON additions
+```
+HandsOffDetectionLevel, TorqueSaturationSoundEnabled, ResonanceReductionEnabled,
+TrackingCenterDampingEnabled, AutoCenteringStrength, SafeModeTimeoutMin,
+ShiftBeepEnabled, ShiftBeepRpmThreshold, ShiftBeepVolume, ShiftBeepRoute,
+ShiftBeepWheelbaseSoundId, ShiftBeepWavPath,
+RpmLedCustomCurveEnabled, RpmLedBlinkThreshold,
+RpmLedColor1, RpmLedColor2, RpmLedColor3,  (hex 6-digit strings)
+RpmLedThresholds  (array of 15 floats)
+```
+
+---
+
 ## v1.3.17 — Low Torque Mode (safety / accessibility) (May 15, 2026)
 
 ### What this adds
