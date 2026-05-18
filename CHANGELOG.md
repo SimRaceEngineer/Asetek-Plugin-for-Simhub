@@ -4,6 +4,39 @@
 
 ---
 
+## v1.5.7 — Sanitize Wheelbase (nuclear recovery) (May 18, 2026)
+
+### Added
+- **"Sanitize Wheelbase" button** in the Advanced Recovery expander
+  (Debug tab), right next to *Restore Factory Default*. Same red
+  confirmation checkbox gates both — tick it once and either button
+  becomes available.
+- Sanitize covers cases where the SMP-only reset doesn't fix the
+  problem because the soft-cap lives in `addr_*` hardware bitfields :
+  - `addr_simucube_options = 0` (HandsOff Off + all safety flags off)
+  - `addr_max_motor_current = factory peak`
+  - `addr_standbys_settings = 0` (no safe-mode auto-off)
+  - SMP regs reset to factory (same as Restore Factory Default)
+  - `main_gain` forced to 100 %
+  - `save_to_flash` + `restart_drive`
+
+### Why
+- Confirmed on Uzorod's Forte (2026-05-18) : RaceHub showed Overall
+  Force max at **10.5 Nm** instead of the 18 Nm nominal even after
+  factory reset + fresh RaceHub install on a new PC. The corruption
+  lives in the STM32 flash (`addr_simucube_options = 2` =
+  `HandsOffDetectionLevel = Medium` capped the firmware output).
+  Standard SMP reset left those addr_* untouched.
+
+### Safety
+- Same confirmation checkbox as *Restore Factory Default* — destructive,
+  requires explicit user opt-in.
+- Aborts if RaceHub is running (would race with HID handle).
+- Uses the same `goto_test_mode → SMP writes → save_to_flash →
+  restart_drive` sequence that's been field-validated as RaceHub-safe.
+
+---
+
 ## v1.5.6 — Status read robustness (race with 60 Hz heartbeat) (May 18, 2026)
 
 ### Fixed
