@@ -4,6 +4,30 @@
 
 ---
 
+## v1.5.3 — Real HT bit identified (byte 14 bit 7) (May 18, 2026)
+
+### Fixed
+- **HT bit detection corrected.** The v1.5.2 release retracted the old
+  rule `(byte[12] & 0x02) == 0` after Uzorod's Forte field test proved
+  it stayed set in both LT and HT modes. The diff of his factory-reset
+  dump (challenge probe = 0x00000000 = HT confirmed ENABLED via the
+  Asetek handshake) against the prior dump (challenge non-zero = LT)
+  isolated **byte 14 bit 7 (mask 0x80)** as the real indicator :
+  - LT mode : byte 14 = `0xE6` (bit 7 set)
+  - HT mode : byte 14 = `0x62` (bit 7 clear)
+  - Cross-checked against Jerome's Invicta dumps @ 22 Nm working :
+    byte 14 = `0x2A` (bit 7 clear) — consistent.
+- **Health banner re-enabled** with the corrected detection. The
+  v1.5.2 kill-switch is removed ; users will once again get a
+  recovery-procedure banner if HT genuinely drops mid-session,
+  without the false positives that plagued v1.0.15b → v1.5.1.
+
+### Memory
+- New rule documented in `asetek_reverse_engineering.md` for future
+  firmware version checks.
+
+---
+
 ## v1.5.2 — Forte bounds verified, standstill damping fix, HT detection retracted (May 18, 2026)
 
 ### Fixed
