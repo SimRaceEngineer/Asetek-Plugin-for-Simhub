@@ -4,6 +4,22 @@
 
 ---
 
+## v1.5.5 — Challenge probe interpretation cleanup (May 18, 2026)
+
+### Fixed
+- **Misleading "firmware is in LOW TORQUE state" verdict in the
+  challenge probe section.** Uzorod's v1.5.3 dump showed challenge
+  = `0x01E18ADB` (non-zero) AND HT confirmed ENABLED via byte 14 bit 7
+  AND auto-prime success AND RaceHub displaying HT=ON simultaneously —
+  proving a non-zero challenge does NOT mean LT mode. The firmware
+  regenerates the challenge continuously ; only the all-zeros state
+  is a clean post-handshake signature.
+- Reworded the dump section as **informational only**, with explicit
+  pointers back to the HT bit section (byte 14 bit 7) as the
+  authoritative status source.
+
+---
+
 ## v1.5.4 — Auto-prime telemetry detailed (May 18, 2026)
 
 ### Fixed
