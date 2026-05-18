@@ -4,6 +4,38 @@
 
 ---
 
+## v1.5.2 — Forte bounds verified, standstill damping fix, HT detection retracted (May 18, 2026)
+
+### Fixed
+- **"High Torque OFF" banner crying wolf.** The v1.0.15b rule
+  `(byte[12] & 0x02) == 0` for HT detection turned out to be wrong on
+  current firmware : Uzorod's Forte with RaceHub reporting HT=ON and
+  SMP_TORQUELIMIT_PEAK reading full spec still showed byte 12 bit 1
+  set ; Jerome's own Invicta dumps at 22 Nm working perfectly showed
+  the same bit set too. Until we identify the real HT indicator, the
+  banner is suppressed and the dump section is rewritten to surface
+  candidate bytes for diagnosis rather than claim a verdict.
+- **Damping slider drifting to 95 % "by itself"** in pits — that was
+  the Standstill Damping feature kicking in (auto-boost ioni_damping
+  when `speed < 13 km/h`). The override value was a 95 % development
+  sledgehammer that turned the wheel into a brick. **Lowered to 60 %**
+  (still kills oscillations, keeps the wheel alive).
+
+### Added
+- **`Base.StandstillActive` SimHub property** + dump annotation when
+  the override is engaged, so users can wire a dashboard indicator
+  and understand why their slider value drifts at low speed.
+- **Game Integration notice** updated to mention the override value
+  (60 %) and clarify it's expected behaviour, not a bug.
+
+### Verified
+- **Forte slider bounds** cross-checked against Uzorod's RaceHub
+  `Test-Mini.xml` / `Test-Maxi.xml` exports : steering 180–1890°,
+  slew 0.1–6.7 Nm/ms, main_gain 28–100 %, bumpstop 0–2 — all already
+  implemented via the per-base `WheelbaseSpec` table.
+
+---
+
 ## v1.5.1 — Shift beep "Test now" button fix (May 18, 2026)
 
 ### Fixed
