@@ -4,6 +4,29 @@
 
 ---
 
+## v1.5.4 — Auto-prime telemetry detailed (May 18, 2026)
+
+### Fixed
+- **Auto-prime result stuck at "(not run)"** in the dump even when the
+  task had been scheduled. The background runner could early-return
+  silently on either of its two guards (wheelbase disconnected during
+  the 12 s wait, or RaceHub launched manually in the meantime), leaving
+  `LastAutoPrimeResult` at its initial value — so the dump couldn't
+  tell us *why* priming hadn't happened.
+- Now we set the result field at every transition :
+  - `scheduled (background, 12 s)` when the task is queued
+  - `skipped (wheelbase disconnected during 12 s wait)` if the device
+    drops between Connect() and the runner wake-up
+  - `skipped (RaceHub launched manually during 12 s wait)` if the user
+    started RaceHub before the runner fired
+  - `skipped (RaceHub already running at Connect)` for the immediate path
+  - `skipped (La Prima — no HT mode needed)` for La Prima bases
+  - `background error : <message>` if an exception is swallowed
+- No functional change to the priming itself ; this is purely a
+  diagnostic improvement so dumps reveal the path that was taken.
+
+---
+
 ## v1.5.3 — Real HT bit identified (byte 14 bit 7) (May 18, 2026)
 
 ### Fixed
