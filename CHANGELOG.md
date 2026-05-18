@@ -4,7 +4,18 @@
 
 ---
 
-## v1.5.7 — Sanitize Wheelbase (nuclear recovery) (May 18, 2026)
+## v1.5.8 — Wording cleanup (May 18, 2026)
+
+### Changed
+- Toned down "nuclear recovery" wording in Sanitize Wheelbase
+  description and confirmation dialog — same feature, less alarmist
+  copy. The button now reads as a "deeper recovery" option that
+  complements *Restore Factory Default* by also touching the
+  `addr_*` hardware bitfields.
+
+---
+
+## v1.5.7 — Sanitize Wheelbase (deeper recovery) (May 18, 2026)
 
 ### Added
 - **"Sanitize Wheelbase" button** in the Advanced Recovery expander
@@ -29,8 +40,8 @@
   Standard SMP reset left those addr_* untouched.
 
 ### Safety
-- Same confirmation checkbox as *Restore Factory Default* — destructive,
-  requires explicit user opt-in.
+- Same confirmation checkbox as *Restore Factory Default* — requires
+  explicit user opt-in.
 - Aborts if RaceHub is running (would race with HID handle).
 - Uses the same `goto_test_mode → SMP writes → save_to_flash →
   restart_drive` sequence that's been field-validated as RaceHub-safe.
