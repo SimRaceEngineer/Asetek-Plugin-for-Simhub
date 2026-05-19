@@ -4,7 +4,7 @@
 
 ---
 
-## v1.6.8 — FFB output now strictly matches Asetek native (May 19, 2026)
+## v1.6.9 — Cleaner UI, FFB strictly matches Asetek native (May 19, 2026)
 
 ### What this means for you
 - **Invicta, Forte, La Prima and Tony Kanaan editions** now deliver
@@ -15,6 +15,15 @@
 - One click on **"Restore Factory Default"** is all it takes. If
   you've ever felt your base was underpowered, run it once and the
   difference will be immediate.
+
+### Cleaner UI
+- The **Overview** tab now shows your wheelbase summary on a single
+  line under the device card : *"27 Nm · 9.4 Nm/ms · HT ENABLED ✓"*.
+  No more scattered fields, no more conflicting verdicts.
+- The **Debug** tab is now a true debug surface : Dump Diagnostic +
+  advanced actions behind an expander, RaceHub recovery banner. The
+  per-register breakdown stays available in Dump Diagnostic for who
+  needs it.
 
 ### Per-track and per-car FFB profiles
 - Beyond the raw FFB fix, the plugin now offers a full **per-car /
