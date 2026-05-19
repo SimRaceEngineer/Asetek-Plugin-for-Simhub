@@ -4,6 +4,88 @@
 
 ---
 
+## v1.6.0 — LIVE slider push (no save required) (May 19, 2026)
+
+### Added — major UX win
+- **All FFB sliders are now live.** Previously, moving Damping, Friction,
+  Inertia, Anti-Oscillation, HF Limit, Slew Rate, Bumpstop, Steering
+  Range, or Cornering Force Assist only updated the in-memory cache —
+  the wheelbase didn't actually feel any change until the user clicked
+  "Save to Wheelbase" (which triggered a full save_to_flash + restart_drive
+  cycle with a ~500 ms FFB hiccup).
+- New mechanism mirrors RaceHub's actual sequence, found by decompiling
+  `WheelbaseDataMediator → SetProfileSetting → SendProfileWithAction`
+  followed by `SetActiveProfileWithAction` :
+  1. `setprofiledata` (cmd 125) pushes new value to firmware RAM
+  2. **`activate_profile` (cmd 38)** forces the firmware to reload the
+     active profile from RAM, applying the change in the FFB pipeline
+- Latency : ~15 ms between the two commands ; user feels the change
+  on the very next telemetry frame. No restart, no flash write, no
+  audible click.
+
+### Why this unblocks Phase 2 Smart Driving Mode
+- The original "GPS-anticipated FFB modulation" idea from the roadmap
+  needed sub-100 ms slider commits to work. The old save+restart cycle
+  was ~500 ms with a perceptible FFB cut — useless for cornering
+  pre-emption. With live push at ~15 ms, **anticipating zone entries
+  by ~150 ms before a Karussell or kerb is now mechanically feasible**.
+- The Adaptive FFB Zones learner (Phase 1, v1.4.7) can now drive
+  Phase 2 directly : detect a known hot zone in approach, push a
+  "soft" variant of Damping / Friction / Slew before entry, restore
+  on exit. All live, all without flash writes.
+
+### Reported by
+- Chris (La Prima 12 Nm, May 19) : *"it feels like it doesn't update
+  when I change the overall force"* — confirmed by reading our
+  `SetProfileSettings` which was cache-only.
+
+### Caveat — main_gain still gated
+- `main_gain` (Overall Force) is **deliberately skipped** in the live
+  push path. Each `setprofiledata` carrying main_gain triggers the
+  firmware's `SMP_PEAK *= main_gain/100` re-alignment (see memory
+  note `peak_degradation_formula.md`), so pushing it on every slider
+  drag would let a sub-100 % value silently degrade SMP_PEAK in flash
+  over a session.
+- To change Overall Force live, users have three options :
+  1. Use the bindable presets : `Asetek.FFB.Force.Low/Medium/High/Max`
+  2. Bind `Asetek.ApplyAndSave` to a button (slider + button workflow)
+  3. Move the slider then click "Save to Wheelbase" once
+
+### Implementation
+- New `PushSettingsLive` helper in `AsetekManager` ; called from
+  `SetProfileSettings` after the cache update.
+- Aborts gracefully when the wheelbase isn't connected or is paused
+  for RaceHub (the HID handle would race).
+
+---
+
+## v1.5.9 — Per-base Overall Force minimum from RaceHub XMLs (May 19, 2026)
+
+### Changed
+- **Overall Force slider lower bound now matches RaceHub's per-model
+  safety floor.** Previously hardcoded to `3 Nm` for every base, which
+  left dragging the slider below what the firmware would actually
+  accept. New values derived from each model's "Minimum" preset XML
+  (community contributions, Uzorod Forte + Chris La Prima, May 2026) :
+  - **Forte** : 28 % × 18 Nm ≈ **5.0 Nm** floor
+  - **La Prima** stock : 43 % × 12 Nm ≈ **5.2 Nm** floor
+  - **La Prima HiPSU** : 43 % × 16 Nm ≈ **6.9 Nm** floor
+  - **Invicta** : 3 % × 27 Nm ≈ **0.8 Nm** floor (no Invicta Min XML
+    yet — keep low until we have field data)
+- Implementation added to `WheelbaseSpec` struct as `MinMainGainPercent`
+  field and surfaced via `AsetekManager.MinOverallForceNmForCurrentBase`.
+
+### Why
+- Coherence with RaceHub : the firmware clamps anyway below these
+  values, so letting the slider drag lower was misleading.
+- The Forte / La Prima XML files from Uzorod and Chris confirmed
+  that **all other slider bounds we already had** (max_angle 180-1890,
+  ioni_* 0-300/250/300/10, static_force_reduction 0-4000,
+  latency_comp 0-20, bumpstop 0-2) match exactly — no changes needed
+  elsewhere.
+
+---
+
 ## v1.5.8 — Wording cleanup (May 18, 2026)
 
 ### Changed
