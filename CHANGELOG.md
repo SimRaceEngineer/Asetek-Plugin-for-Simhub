@@ -4,6 +4,37 @@
 
 ---
 
+## v1.6.10 — Display fixes, RaceHub-free screen streaming (May 22, 2026)
+
+### Invicta/Forte display — fully independent from RaceHub
+- **HID channel fix** — control commands (backlight, clear, cleanup) now
+  correctly use the HID interface (MI_01 / Collection 02) instead of the
+  WinUSB bulk channel. This was the root cause of display commands being
+  silently dropped.
+- **Y-axis inversion** — the frame buffer is now correctly flipped
+  vertically. No more upside-down dashboard rendering.
+- **ACK drain** — the host now reads the firmware acknowledgment
+  (`{0x02, 0x01}`) from the bulk IN endpoint after every frame. Without
+  this, the IN pipe would stall and frames would stop after ~30 seconds.
+- **Init sequence** — on connect, the plugin now sends
+  Cleanup → ClearScreen → Backlight(800) before streaming. This matches
+  the firmware's expected startup handshake and prevents blank-screen on
+  first connection.
+- **Buffer overflow guard** — `Array.Clear` in the transmission buffer
+  builder is now clamped to prevent `IndexOutOfRangeException` on
+  partial-fill frames.
+
+### What this means for you
+If you have an Invicta or Forte with the round display, you can now
+stream your SimHub dashboard directly to it **without RaceHub running**.
+Just enable the Screen tab in the plugin settings — no other software
+needed.
+
+### Obfuscation
+The DLL is now obfuscated for distribution. Functionality is identical.
+
+---
+
 ## v1.6.9 — Cleaner UI, FFB strictly matches Asetek native (May 19, 2026)
 
 ### What this means for you
