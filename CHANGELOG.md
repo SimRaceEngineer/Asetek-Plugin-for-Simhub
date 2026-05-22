@@ -4,7 +4,7 @@
 
 ---
 
-## v1.6.10 — Display fixes, RaceHub-free screen streaming (May 22, 2026)
+## v1.6.10 — Display streaming, live sliders, HF Limit fix (May 23, 2026)
 
 ### Invicta/Forte display — fully independent from RaceHub
 - **HID channel fix** — control commands (backlight, clear, cleanup) now
@@ -29,6 +29,24 @@ If you have an Invicta or Forte with the round display, you can now
 stream your SimHub dashboard directly to it **without RaceHub running**.
 Just enable the Screen tab in the plugin settings — no other software
 needed.
+
+### FFB settings — live & auto-saved
+- **"Save to Wheelbase" removed** — sliders now push directly to the
+  wheelbase in real time and auto-save into the active profile. No more
+  intermediate button, no more risk of forgetting to save.
+- **No flash writes** — the plugin no longer writes to the wheelbase's
+  internal flash memory. This prevents the SMP_PEAK degradation that
+  could reduce torque output after repeated saves. Settings persist in
+  the plugin's profile system and are re-applied on every connection.
+
+### HF Limit slider
+- **4700 Hz is now a real filter frequency**, distinct from "No Limit".
+  Previously both mapped to the same slider position, which was
+  confusing.
+- The slider now goes `100 Hz → … → 4700 Hz → No Limit`, with "No
+  Limit" clearly labeled at the rightmost position.
+- The SimHub property `Asetek.FFB.HfLimit` shows `4800` for "No Limit"
+  instead of `0`.
 
 ### Obfuscation
 The DLL is now obfuscated for distribution. Functionality is identical.
