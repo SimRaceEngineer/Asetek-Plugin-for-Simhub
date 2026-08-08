@@ -207,13 +207,19 @@ def controle_heure(tickets, seances, cle):
     print("    a heure egale (P&L centre par tranche horaire) :")
     print("      ecart %+.2f EUR/tk, p=%s, %d tranches reellement mixtes"
           % (e, "%.3f" % p if p is not None else "-", mixtes))
-    if mixtes < 2:
-        print("      /!\\ moins de 2 tranches mixtes : le centrage ne separe")
-        print("          presque rien du seuil et de l heure. Non concluant.")
-    elif abs(e) < 2.0:
-        print("      -> l ecart s evapore : c est l heure qui parlait, pas le seuil.")
+    # Ne jamais conclure "survit" sur la seule taille de l ecart : la
+    # premiere version le faisait des 2 EUR et annoncait une survie avec
+    # p=0,256 et un signe qui basculait d un seuil a l autre. Il faut le p.
+    if mixtes < 4:
+        print("      /!\\ %d tranches mixtes seulement : le seuil et l heure" % mixtes)
+        print("          sont quasi colineaires, on ne peut PAS les separer ici.")
+    elif p is None or p >= 0.10:
+        print("      -> rien de lisible apres controle (p=%s) : le seuil"
+              % ("%.3f" % p if p is not None else "-"))
+        print("         n ajoute rien a ce que l heure dit deja.")
     else:
-        print("      -> l ecart SURVIT : le seuil dit quelque chose de plus que l heure.")
+        print("      -> l ecart SURVIT au controle horaire (p=%.3f)." % p)
+        print("         A confirmer sur d autres seuils : le signe doit tenir.")
 
 
 def comparer(seances, tickets):
