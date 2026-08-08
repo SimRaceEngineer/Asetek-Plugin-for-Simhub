@@ -35,6 +35,12 @@ FIN_PM = 22
 SEUILS = [0.50, 0.75, 1.00, 1.25, 1.50]
 ACTIFS = ["US30", "SPX500", "NAS100"]
 SORTIE = "seuil_seance.csv"
+# churn_trades nomme les indices autrement que MT5. Sans cette table,
+# 1346 tickets sur 2223 tombaient silencieusement du croisement et tout
+# le resultat ne portait que sur l US30.
+ALIAS_ACTIF = {"US100": "NAS100", "NAS100": "NAS100",
+               "US500": "SPX500", "SPX500": "SPX500",
+               "US30": "US30", "DJ30": "US30"}
 CHURN = [os.path.join("docs", "churn_trades", "churn_trades_archive.jsonl"),
          os.path.join("docs", "churn_trades", "churn_trades.jsonl")]
 
@@ -151,10 +157,63 @@ def charger_tickets():
             ts, pnl, tk = o.get("entry_ts") or "", o.get("pnl_eur"), o.get("ticket")
             if len(ts) < 16 or pnl is None or tk is None or tk in par:
                 continue
+            brut = (o.get("asset") or "").strip().upper()
             par[tk] = {"jour": ts[:10], "hm": ts[11:16],
-                       "asset": (o.get("asset") or "").strip(),
-                       "pnl": float(pnl)}
+                       "brut": brut, "asset": ALIAS_ACTIF.get(brut, brut),
+                       "heure": int(ts[11:13]), "pnl": float(pnl)}
     return list(par.values())
+
+
+def controle_heure(tickets, seances, cle):
+    """LE CONTROLE QUI DECIDE.
+
+    Le seuil tombe vers 16h30-17h de mediane, or on sait deja que la fin
+    de session US est le bon creneau. "Apres le seuil" pourrait donc n etre
+    qu un synonyme de "tard", et n apporter strictement rien.
+
+    On compare donc avant et apres A HEURE EGALE : dans chaque tranche
+    horaire, certaines seances ont deja franchi le seuil et d autres non.
+    Si l ecart survit a ce decoupage, le seuil dit quelque chose que
+    l heure ne dit pas. S il s evapore, c est l heure qui parlait."""
+    # On retire l effet horaire par centrage : chaque ticket est ramene a
+    # l ecart entre son P&L et la moyenne de SA tranche horaire. Toute
+    # difference qui subsiste ensuite ne peut plus venir de l heure.
+    # Le decoupage en tranches comparees deux a deux serait plus direct,
+    # mais il n a aucune puissance ici : le seuil tombe presque toujours
+    # a la meme heure, donc chaque tranche est entierement avant ou
+    # entierement apres. Le centrage, lui, garde tous les tickets.
+    lots = {}
+    for t in tickets:
+        lots.setdefault(t["heure"], []).append(t["pnl"])
+    ref = dict((h, moy(v)) for h, v in lots.items())
+
+    av, ap, mixtes = [], [], 0
+    par_h = {}
+    for t in tickets:
+        r = seances.get((t["jour"], t["asset"]))
+        if r is None:
+            continue
+        q = r.get(cle) or ""
+        cote = "apres" if (q and t["hm"] >= q) else "avant"
+        (ap if cote == "apres" else av).append(t["pnl"] - ref.get(t["heure"], 0.0))
+        par_h.setdefault(t["heure"], {"avant": 0, "apres": 0})[cote] += 1
+    mixtes = sum(1 for d in par_h.values() if d["avant"] >= 5 and d["apres"] >= 5)
+    if len(av) < 20 or len(ap) < 20:
+        print("    a heure egale : trop peu de tickets apres centrage.")
+        return
+    e = moy(av) - moy(ap)
+    se = math.sqrt(et(av) ** 2 / len(av) + et(ap) ** 2 / len(ap))
+    p = p_norm(e / se) if se else None
+    print("    a heure egale (P&L centre par tranche horaire) :")
+    print("      ecart %+.2f EUR/tk, p=%s, %d tranches reellement mixtes"
+          % (e, "%.3f" % p if p is not None else "-", mixtes))
+    if mixtes < 2:
+        print("      /!\\ moins de 2 tranches mixtes : le centrage ne separe")
+        print("          presque rien du seuil et de l heure. Non concluant.")
+    elif abs(e) < 2.0:
+        print("      -> l ecart s evapore : c est l heure qui parlait, pas le seuil.")
+    else:
+        print("      -> l ecart SURVIT : le seuil dit quelque chose de plus que l heure.")
 
 
 def comparer(seances, tickets):
@@ -170,16 +229,20 @@ def comparer(seances, tickets):
     if not com:
         print("aucune seance commune -- verifie les dates ou le fuseau.")
         return
-    aa = {}
+    aa, brut = {}, {}
     for t in tickets:
         if t["jour"] not in com:
             continue
         aa[t["asset"]] = aa.get(t["asset"], 0) + 1
-    print("actifs des tickets : %s" % ", ".join("%s=%d" % kv for kv in sorted(aa.items())))
+        brut[t["brut"]] = brut.get(t["brut"], 0) + 1
+    print("actifs churn_trades : %s" % ", ".join("%s=%d" % kv for kv in sorted(brut.items())))
+    print("apres alias MT5    : %s" % ", ".join("%s=%d" % kv for kv in sorted(aa.items())))
     inconnus = [a for a in aa if a not in ACTIFS]
     if inconnus:
-        print("/!\\ actifs sans prix charge : %s -- ils seront ignores"
-              % ", ".join(inconnus))
+        perdus = sum(aa[a] for a in inconnus)
+        print("/!\\ %d tickets sans prix charge (%s) -- ils seront ignores."
+              % (perdus, ", ".join(inconnus)))
+        print("    Complete ALIAS_ACTIF en tete du fichier avant de conclure.")
 
     # controle de fuseau : si l horodatage des tickets et celui des bougies
     # MT5 ne sont pas sur la meme horloge, la comparaison avant/apres est
@@ -228,7 +291,11 @@ def comparer(seances, tickets):
         print("seuil %.2f x range du matin" % X)
         print("  avant : %5d tickets  %+8.2f EUR/tk  total %+10.2f" % (len(av), ma, sum(av)))
         print("  apres : %5d tickets  %+8.2f EUR/tk  total %+10.2f" % (len(ap), mp, sum(ap)))
-        print("  ecart : %+.2f EUR/tk au detriment de l apres" % (ma - mp))
+        # le sens compte : bloquer l apres n aide QUE si l apres est moins bon
+        print("  ecart : %+.2f EUR/tk -- l APRES est %s" %
+              (ma - mp, "MOINS bon (bloquer aiderait)" if ma > mp
+               else "MEILLEUR (bloquer couterait)"))
+        controle_heure(tickets, seances, cle)
         if len(paires) >= 5:
             d = [a - b for a, b in paires]
             m, s = moy(d), et(d)
