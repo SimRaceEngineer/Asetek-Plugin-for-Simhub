@@ -50,26 +50,41 @@ def med(xs):
     return xs[n // 2] if n % 2 else 0.5 * (xs[n // 2 - 1] + xs[n // 2])
 
 
-def lire():
+def lire(debut=None, fin=None):
     if not os.path.isfile(FIC):
         print("introuvable : %s -- lance d abord jambe_stop.py" % FIC)
         sys.exit(1)
     lg = [l.rstrip("\n") for l in io.open(FIC, encoding="utf-8-sig") if l.strip()]
     ent = [c.strip() for c in lg[0].split(";")]
-    out = []
+    if "jour" not in ent:
+        print("/!\\ ce CSV n a pas de colonne 'jour' : il vient d une ancienne")
+        print("    version de jambe_stop.py. Relance-le pour pouvoir decouper")
+        print("    par periode ; sans elle le filtrage est impossible.")
+    out, hors = [], 0
     for l in lg[1:]:
         c = l.split(";")
         if len(c) < len(ent):
             continue
         d = dict(zip(ent, c))
+        j = (d.get("jour") or "").strip()
+        if j and ((debut and j < debut) or (fin and j > fin)):
+            hors += 1
+            continue
         try:
-            out.append({"sym": d["sym"].strip(), "sens": d["sens"].strip(),
+            out.append({"jour": j, "sym": d["sym"].strip(), "sens": d["sens"].strip(),
                         "mfe": float(d["mfe_pts"]), "mae": float(d["mae_pts"]),
                         "mfe_e": float(d["mfe_eur"]), "mae_e": float(d["mae_eur"]),
                         "pnl": float(d["pnl_eur"]), "duree": float(d["duree_min"])})
         except (KeyError, ValueError):
             continue
-    print("%d positions lues dans %s" % (len(out), FIC))
+    if debut or fin:
+        print("filtre %s -> %s : %d positions retenues, %d ecartees"
+              % (debut or "debut", fin or "fin", len(out), hors))
+    js = sorted({r["jour"] for r in out if r["jour"]})
+    if js:
+        print("%d positions, %d seances, %s -> %s" % (len(out), len(js), js[0], js[-1]))
+    else:
+        print("%d positions lues dans %s" % (len(out), FIC))
     return out
 
 
@@ -207,9 +222,16 @@ def courbe_tp(rows):
 
 
 def main():
-    rows = lire()
+    # python mae_mfe.py 2026-08-01 2026-08-09  -> restreint la periode
+    debut = sys.argv[1] if len(sys.argv) >= 2 else None
+    fin = sys.argv[2] if len(sys.argv) >= 3 else None
+    rows = lire(debut, fin)
     if len(rows) < 100:
-        print("trop peu de positions."); return 1
+        print("trop peu de positions (%d) : sur une fenetre courte, la courbe"
+              % len(rows))
+        print("de stop devient tres bruitee. Elargis la periode.")
+        if len(rows) < 40:
+            return 1
     print("%d gagnantes, %d perdantes, resultat total %+.2f EUR"
           % (sum(1 for r in rows if r["pnl"] > 0),
              sum(1 for r in rows if r["pnl"] <= 0),

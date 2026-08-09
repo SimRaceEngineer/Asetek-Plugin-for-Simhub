@@ -43,6 +43,11 @@ import io, os, sys, math, datetime as dt
 DEBUT = dt.datetime(2026, 7, 20)
 FIN = dt.datetime(2026, 8, 9)
 SORTIE = "jambe_stop.csv"
+# python jambe_stop.py 2026-08-01 2026-08-09  -> restreint la fenetre
+if len(sys.argv) >= 3:
+    DEBUT = dt.datetime.strptime(sys.argv[1], "%Y-%m-%d")
+    FIN = dt.datetime.strptime(sys.argv[2], "%Y-%m-%d")
+    SORTIE = "jambe_stop_%s_%s.csv" % (sys.argv[1], sys.argv[2])
 # grille exprimee en multiples du MFE median de l actif : elle s adapte
 # donc automatiquement a l echelle de chaque indice, sans rien coder en dur
 GRILLE = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 3.00]
@@ -216,10 +221,15 @@ def main():
         print("trop peu de positions exploitables (%d)." % len(trades)); return 1
 
     with io.open(SORTIE, "w", encoding="utf-8") as fo:
-        fo.write("id;sym;sens;mfe_pts;mae_pts;mfe_eur;mae_eur;pnl_eur;duree_min\n")
+        # la colonne 'jour' permet de redecouper la periode dans mae_mfe.py
+        # sans jamais recharger le M1 : indispensable pour isoler le regime
+        # sans closer sans refaire tout le rejeu.
+        fo.write("id;jour;sym;sens;mfe_pts;mae_pts;mfe_eur;mae_eur;pnl_eur;duree_min\n")
         for t in trades:
-            fo.write("%s;%s;%s;%.1f;%.1f;%.2f;%.2f;%.2f;%.0f\n"
-                     % (t["id"], t["sym"], "ACHAT" if t["achat"] else "VENTE",
+            fo.write("%s;%s;%s;%s;%.1f;%.1f;%.2f;%.2f;%.2f;%.0f\n"
+                     % (t["id"],
+                        dt.datetime.utcfromtimestamp(t["open"]).strftime("%Y-%m-%d"),
+                        t["sym"], "ACHAT" if t["achat"] else "VENTE",
                         t["mfe"], t["mae"], t["mfe"] * t["coef"],
                         t["mae"] * t["coef"], t["pnl"], t["duree"]))
     print("ecrit %s : %d positions" % (SORTIE, len(trades)))
