@@ -57,9 +57,25 @@ def lire(debut=None, fin=None):
     lg = [l.rstrip("\n") for l in io.open(FIC, encoding="utf-8-sig") if l.strip()]
     ent = [c.strip() for c in lg[0].split(";")]
     if "jour" not in ent:
+        if debut or fin:
+            # PANNE MUETTE EVITEE : sans cette colonne, le filtre laissait
+            # passer toutes les lignes et on lisait le corpus entier en
+            # croyant lire une sous-periode. Les chiffres etaient identiques
+            # a ceux de la fenetre complete, au centime pres, et rien ne le
+            # signalait. On refuse desormais de continuer.
+            print()
+            print("*** REFUS : des dates ont ete demandees mais %s n a pas de" % FIC)
+            print("    colonne 'jour'. Ce fichier vient d une version anterieure")
+            print("    de jambe_stop.py.")
+            print()
+            print("    Sans refus, le filtre laisserait passer TOUTES les lignes")
+            print("    et tu lirais le corpus entier en croyant lire ta fenetre.")
+            print()
+            print("    Relance d abord :  python jambe_stop.py")
+            sys.exit(2)
         print("/!\\ ce CSV n a pas de colonne 'jour' : il vient d une ancienne")
         print("    version de jambe_stop.py. Relance-le pour pouvoir decouper")
-        print("    par periode ; sans elle le filtrage est impossible.")
+        print("    par periode.")
     out, hors = [], 0
     for l in lg[1:]:
         c = l.split(";")
