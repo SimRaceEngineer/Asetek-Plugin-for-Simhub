@@ -97,11 +97,13 @@ from collections import defaultdict
 VERSION = "1.0"
 
 # --------------------------------------------------------------- reconnaissance
-# Le separateur entre le numero et le magic est un tiret long. Transcrit en
-# ASCII il devient "-" ou "--" selon l outil : on accepte donc n importe
-# quelle suite de tirets, y compris aucune.
+# Le separateur entre le numero et le magic est un tiret long. Il survit mal
+# au transport : "-" ou "--" apres translitteration, et surtout "?" quand le
+# pipe de PowerShell 5.1 encode en ASCII -- ni un tiret, ni un espace. On
+# accepte donc n importe quelle petite suite de caracteres qui ne soient ni
+# lettre ni chiffre. Verifie sur la page reelle du 10/08.
 RE_TETE = re.compile(
-    r"#(\d+)\s*[-‐-―]*\s*UNK\(M(\d+)\)\s+(BUY|SELL)\s+(US\d+)\s+@([\d.]+)")
+    r"#(\d+)[^0-9A-Za-z#]{0,8}UNK\(M(\d+)\)\s+(BUY|SELL)\s+(US\d+)\s+@([\d.]+)")
 # Le symbole euro n est PAS ecrit en dur : sous Windows PowerShell 5.1 le
 # pipe encode en ASCII et le transforme en '?'. On accepte donc n importe
 # quel suffixe non blanc apres le nombre -- euro, point d interrogation, ou
@@ -114,14 +116,25 @@ RE_PL_ACTIF = re.compile(
     r"([+-][\d.]+)" + EUR + r"\s*\|\s*\d+min\s*\|\s*MFE:\s*([+-][\d.]+)"
     + EUR + r"\s*MAE:\s*([+-][\d.]+)")
 RE_SCORE = re.compile(r"(?:Entry \(score|Score:)\s*(\d+)/10")
-RE_SIMULT = re.compile(r"(\d+)x\s+(BUY|SELL)\s+(?:simultan\w*\s+)?sur\s+(US\d+)\s+en\s*<\s*5\s*min")
+# "5x BUY simultanes sur US500 en <5min". Le "<5min" final n est PAS exigé :
+# dans la page du monitor ce "<" n est pas echappe, donc tout suppresseur de
+# balises avale "<5min</li>" et la fin de la ligne disparait. Exiger cette
+# fin faisait perdre TOUS les drapeaux de grappe, c est-a-dire la mesure la
+# plus importante du script. Et "simultanes" devient "simultan?s" en ASCII,
+# d ou \S* plutot que \w*.
+RE_SIMULT = re.compile(
+    r"(\d+)x\s+(BUY|SELL)\s+(?:simultan\S*\s+)?sur\s+(US\d+)\s+en\b")
 RE_SL = re.compile(r"^\s*(\d{2}:\d{2})\s+([\d.]+)\s+\((INITIAL|BE|TRAIL)\)")
 RE_SL_ACTIF = re.compile(r"SL:([\d.]+)\s*(?:→|->)\s*([\d.]+)")
 
 
 RE_SCRIPT = re.compile(r"(?is)<(script|style)\b.*?</\1\s*>")
 RE_SAUT = re.compile(r"(?i)<\s*(br|/p|/div|/tr|/li|/h[1-6]|/table|/pre)\b[^>]*>")
-RE_BALISE = re.compile(r"<[^>]*>")
+# Un "<" n ouvre une balise que s il est suivi d une lettre, d un "/" ou d un
+# "!". La page du monitor ecrit "en <5min" sans echapper le "<" : sans cette
+# precaution, "<5min</li>" est avale en entier et le drapeau de grappe
+# disparait sans que rien ne le signale.
+RE_BALISE = re.compile(r"<[a-zA-Z/!][^>]*>")
 
 
 def detag(txt):
