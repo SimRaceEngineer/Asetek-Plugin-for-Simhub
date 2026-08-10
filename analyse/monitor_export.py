@@ -2,9 +2,15 @@
 """
 monitor_export.py -- rend exploitable le Trade Monitor, qui n a pas d export
 
-  python monitor_export.py --champs monitor.txt     # ce qui a ete reconnu
-  python monitor_export.py monitor.txt              # le rapport
-  python monitor_export.py monitor.txt --sortie scalp_monitor_20260810-1758.txt
+  # le plus sur : lire la page a la source, sans presse-papiers
+  (Invoke-WebRequest http://localhost:8081 -UseBasicParsing).Content ^
+      | python monitor_export.py --champs
+  (Invoke-WebRequest http://localhost:8081 -UseBasicParsing).Content ^
+      | python monitor_export.py > scalp_monitor_20260810-1758.txt
+
+  # a defaut : le presse-papiers, ou un fichier
+  Get-Clipboard | python monitor_export.py --champs
+  python monitor_export.py monitor.txt --sortie scalp_monitor.txt
 
 POURQUOI CE SCRIPT EXISTE
     Le Trade Monitor v1.5 affiche, ticket par ticket, quatre choses qu AUCUN
@@ -19,9 +25,15 @@ POURQUOI CE SCRIPT EXISTE
     peut pas casser la stack en production.
 
 COMMENT PRODUIRE L ENTREE
-    Sur le VPS, onglet Live du monitor : Ctrl+A puis Ctrl+C, coller dans
-    monitor.txt. C est tout. Deplier "Closed Trades" avant de copier, sinon
-    seules les positions actives seront lues -- le script le dit.
+    Le mieux est de ne rien produire du tout : le monitor rend sa page cote
+    serveur, donc la lire par son URL donne TOUS les tickets clos, y compris
+    ceux qu une copie manuelle raterait si la section n avait pas ete
+    depliee. Le script reconnait le HTML et le reduit en texte lui-meme.
+
+    A defaut, le presse-papiers marche aussi -- mais il faut avoir copie la
+    page ET RIEN D AUTRE depuis. C est le piege verifie en conditions
+    reelles le 10/08 : quelques commandes git copiees entre-temps, et le
+    script lit zero ticket. Il le dit plutot que de rendre un rapport vide.
 
 CE QU IL MESURE, ET POURQUOI CES QUATRE-LA
 
@@ -107,6 +119,37 @@ RE_SL = re.compile(r"^\s*(\d{2}:\d{2})\s+([\d.]+)\s+\((INITIAL|BE|TRAIL)\)")
 RE_SL_ACTIF = re.compile(r"SL:([\d.]+)\s*(?:→|->)\s*([\d.]+)")
 
 
+RE_SCRIPT = re.compile(r"(?is)<(script|style)\b.*?</\1\s*>")
+RE_SAUT = re.compile(r"(?i)<\s*(br|/p|/div|/tr|/li|/h[1-6]|/table|/pre)\b[^>]*>")
+RE_BALISE = re.compile(r"<[^>]*>")
+
+
+def detag(txt):
+    """Reduit du HTML en texte, si c en est.
+
+    Le monitor rend sa page cote serveur : la lire par son URL donne TOUS
+    les tickets clos, y compris ceux qu une copie manuelle raterait si la
+    section n avait pas ete depliee. C est plus sur que le presse-papiers,
+    et ca se planifie.
+    """
+    if "<" not in txt or not re.search(r"(?i)<(html|div|table|body)\b", txt):
+        return txt
+    t = RE_SCRIPT.sub(" ", txt)
+    t = RE_SAUT.sub("\n", t)
+    t = RE_BALISE.sub("", t)
+    try:
+        import html
+        t = html.unescape(t)
+    except ImportError:                      # python 2, au cas ou
+        for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+                     ("&nbsp;", " "), ("&quot;", '"'), ("&#8212;", "-")):
+            t = t.replace(a, b)
+    # Une balise pouvait couper une ligne en deux ; on recolle les blancs
+    # sans toucher aux sauts de ligne, dont dependent les blocs "SL:".
+    t = re.sub(r"[ \t]+", " ", t)
+    return "\n".join(l.strip() for l in t.split("\n"))
+
+
 def lire(chemin):
     """Decoupe la page en tickets. Un ticket commence a sa ligne de tete.
 
@@ -118,7 +161,8 @@ def lire(chemin):
         txt = sys.stdin.buffer.read().decode("utf-8-sig", "replace")
     else:
         txt = io.open(chemin, encoding="utf-8-sig", errors="replace").read()
-    lignes = txt.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    txt = detag(txt.replace("\r\n", "\n").replace("\r", "\n"))
+    lignes = txt.split("\n")
     tickets, cour = [], None
     for l in lignes:
         m = RE_TETE.search(l)
