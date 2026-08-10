@@ -532,6 +532,64 @@ def champs(ts):
     return 0
 
 
+# ------------------------------------------------------------------- annexes
+BRUIT = ("AI Review", "Events:", "Entry (score", "SL:", "Patterns:")
+
+
+def _notes(t):
+    """Lignes utiles du ticket : les constats d entree, le verdict, le stop.
+
+    On jette les intitules de section et les cases a remplir, on garde tout
+    le reste tel quel. Le but n est pas de resumer -- c est que le fichier
+    depose sur le Drive contienne ce que le panel affiche, pour qu il se
+    lise sans avoir acces au panel.
+    """
+    out = []
+    for l in t["lignes"]:
+        s = l.strip()
+        if not s or any(b in s for b in BRUIT):
+            continue
+        if s.startswith("P/L:") or s.startswith("MFE Efficiency"):
+            continue
+        out.append(s)
+    return out
+
+
+def annexes(ts, avec_notes):
+    bloc("ANNEXE A -- un ticket par ligne",
+         "de quoi refaire n importe quel calcul de ce fichier sans le panel")
+    print()
+    print("%-11s %-8s %-5s %-7s %10s %9s %9s %9s %5s %5s %4s"
+          % ("ticket", "magic", "sens", "actif", "entree", "PnL", "MFE",
+             "MAE", "score", "grap.", "SL"))
+    print("-" * 100)
+    for t in sorted(ts, key=lambda x: x["pnl"]):
+        print("%-11s %-8s %-5s %-7s %10.2f %9.2f %9.2f %9.2f %5s %5s %4d"
+              % (t["ticket"], "M" + t["magic"], t["sens"], t["asset"],
+                 t["entree"], t["pnl"], t["mfe"], t["mae"],
+                 "-" if t["score"] is None else t["score"],
+                 t["simult"] if t["simult"] > 1 else "-", len(t["sl"])))
+    print("-" * 100)
+    print("grap. = rang du ticket dans sa grappe d entree. SL = nombre")
+    print("d ecritures de stop relevees sur ce ticket.")
+
+    if not avec_notes:
+        return
+    bloc("ANNEXE B -- ce que le panel disait de chaque ticket",
+         "constats d entree, verdicts et trajectoire du stop, tels quels")
+    for t in sorted(ts, key=lambda x: x["pnl"]):
+        n = _notes(t)
+        if not n:
+            continue
+        print()
+        print("#%s  M%s %s %s @%.2f  |  P&L %+.2f  MFE %+.2f  MAE %+.2f%s"
+              % (t["ticket"], t["magic"], t["sens"], t["asset"], t["entree"],
+                 t["pnl"], t["mfe"], t["mae"],
+                 "  score %s/10" % t["score"] if t["score"] is not None else ""))
+        for l in n:
+            print("    " + l)
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("fichier", nargs="?", default="-",
@@ -540,6 +598,10 @@ def main():
     p.add_argument("--champs", action="store_true",
                    help="diagnostic : ce qui a ete reconnu, puis on s arrete")
     p.add_argument("--sortie", help="ecrire le rapport dans un fichier")
+    p.add_argument("--sans-annexe", action="store_true",
+                   help="rapport seul, sans la liste des tickets ni les notes")
+    p.add_argument("--sans-notes", action="store_true",
+                   help="garder la liste des tickets, jeter les notes")
     a = p.parse_args()
 
     try:
@@ -591,6 +653,9 @@ def main():
     stops(ts)
     score([t for t in ts if not t["actif"]] or ts)
     jumeaux([t for t in ts if not t["actif"]] or ts)
+
+    if not a.sans_annexe:
+        annexes(ts, not a.sans_notes)
 
     bloc("RESERVES")
     print()
