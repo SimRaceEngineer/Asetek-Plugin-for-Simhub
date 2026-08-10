@@ -85,12 +85,22 @@ from collections import defaultdict
 VERSION = "1.0"
 
 # --------------------------------------------------------------- reconnaissance
+# Le separateur entre le numero et le magic est un tiret long. Transcrit en
+# ASCII il devient "-" ou "--" selon l outil : on accepte donc n importe
+# quelle suite de tirets, y compris aucune.
 RE_TETE = re.compile(
-    r"#(\d+)\s*(?:—|-)?\s*UNK\(M(\d+)\)\s+(BUY|SELL)\s+(US\d+)\s+@([\d.]+)")
+    r"#(\d+)\s*[-‐-―]*\s*UNK\(M(\d+)\)\s+(BUY|SELL)\s+(US\d+)\s+@([\d.]+)")
+# Le symbole euro n est PAS ecrit en dur : sous Windows PowerShell 5.1 le
+# pipe encode en ASCII et le transforme en '?'. On accepte donc n importe
+# quel suffixe non blanc apres le nombre -- euro, point d interrogation, ou
+# rien du tout. Sans cela le script lirait zero ticket sans dire pourquoi.
+EUR = r"[^\s|]*"
 RE_PL = re.compile(
-    r"P/L:\s*([+-][\d.]+)\s*€\s*\|\s*MFE:\s*([+-][\d.]+)\s*€\s*\|\s*MAE:\s*([+-][\d.]+)")
+    r"P/L:\s*([+-][\d.]+)\s*" + EUR + r"\s*\|\s*MFE:\s*([+-][\d.]+)\s*"
+    + EUR + r"\s*\|\s*MAE:\s*([+-][\d.]+)")
 RE_PL_ACTIF = re.compile(
-    r"([+-][\d.]+)€\s*\|\s*\d+min\s*\|\s*MFE:([+-][\d.]+)€\s*MAE:([+-][\d.]+)€")
+    r"([+-][\d.]+)" + EUR + r"\s*\|\s*\d+min\s*\|\s*MFE:\s*([+-][\d.]+)"
+    + EUR + r"\s*MAE:\s*([+-][\d.]+)")
 RE_SCORE = re.compile(r"(?:Entry \(score|Score:)\s*(\d+)/10")
 RE_SIMULT = re.compile(r"(\d+)x\s+(BUY|SELL)\s+(?:simultan\w*\s+)?sur\s+(US\d+)\s+en\s*<\s*5\s*min")
 RE_SL = re.compile(r"^\s*(\d{2}:\d{2})\s+([\d.]+)\s+\((INITIAL|BE|TRAIL)\)")
@@ -98,9 +108,17 @@ RE_SL_ACTIF = re.compile(r"SL:([\d.]+)\s*(?:→|->)\s*([\d.]+)")
 
 
 def lire(chemin):
-    """Decoupe la page en tickets. Un ticket commence a sa ligne de tete."""
-    txt = io.open(chemin, encoding="utf-8-sig", errors="replace").read()
-    lignes = txt.split("\n")
+    """Decoupe la page en tickets. Un ticket commence a sa ligne de tete.
+
+    chemin = "-" : on lit l entree standard. C est le mode normal sous
+    PowerShell, ou Get-Clipboard suffit a alimenter le script sans passer
+    par un fichier intermediaire -- un fichier qu on oublie de creer.
+    """
+    if chemin == "-":
+        txt = sys.stdin.buffer.read().decode("utf-8-sig", "replace")
+    else:
+        txt = io.open(chemin, encoding="utf-8-sig", errors="replace").read()
+    lignes = txt.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     tickets, cour = [], None
     for l in lignes:
         m = RE_TETE.search(l)
@@ -459,17 +477,33 @@ def champs(ts):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("fichier", help="la page du monitor, copiee dans un .txt")
+    p.add_argument("fichier", nargs="?", default="-",
+                   help="la page du monitor dans un .txt, ou '-' pour "
+                        "l entree standard (defaut)")
     p.add_argument("--champs", action="store_true",
                    help="diagnostic : ce qui a ete reconnu, puis on s arrete")
     p.add_argument("--sortie", help="ecrire le rapport dans un fichier")
     a = p.parse_args()
 
-    ts = lire(a.fichier)
+    try:
+        ts = lire(a.fichier)
+    except IOError:
+        print("Fichier introuvable : %s" % a.fichier)
+        print()
+        print("Le plus simple est de ne pas passer par un fichier du tout.")
+        print("Sous PowerShell, apres avoir copie la page (Closed Trades")
+        print("DEPLIE, puis Ctrl+A / Ctrl+C) :")
+        print()
+        print("  Get-Clipboard | python monitor_export.py --champs")
+        return 1
     if not ts:
-        print("Aucun ticket reconnu dans %s." % a.fichier)
+        print("Aucun ticket reconnu (source : %s)."
+              % ("le presse-papiers" if a.fichier == "-" else a.fichier))
         print("Attendu des lignes de la forme :")
         print("  #171921750 - UNK(M206260) BUY US500 @7781.75")
+        print()
+        print("Si la page a bien ete copiee, c est que le presse-papiers etait")
+        print("vide au moment du pipe. Recopie la page, puis relance.")
         return 1
 
     if a.champs:
