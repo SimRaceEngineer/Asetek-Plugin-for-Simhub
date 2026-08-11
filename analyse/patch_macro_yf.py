@@ -62,7 +62,13 @@ NEUF_ETAT = '''# 11/08 : un seul fetch Yahoo vivant a la fois, par symbole.
 # plus aggravait la contention qui faisait expirer les suivants. py-spy a
 # montre des dizaines de ces threads le 11/08, pendant que le moteur
 # restait fige seize minutes avec des positions ouvertes.
-_mf_verrou = threading.Lock()
+#
+# L import est local a ce bloc : macro_feed n a pas d import threading au
+# niveau module -- il en fait un local dans chaque fonction. Ne rien
+# supposer de ce que le module importe deja.
+import threading as _mf_th
+
+_mf_verrou = _mf_th.Lock()
 _mf_en_vol = {}      # symbole -> Thread encore vivant, ou absent
 
 
@@ -114,14 +120,6 @@ def main():
     if MARQUEUR in src:
         print("Garde deja posee -- rien a faire.")
         return 0
-
-    # Le verrou est pose au niveau module : il faut que threading y soit
-    # importe. La fonction, elle, fait "import threading as _th" en local.
-    if not re.search(r'^import threading\b', src, re.M):
-        print("KO : macro_feed.py n a pas d 'import threading' au niveau")
-        print("module -- le verrou pose par ce patch ne compilerait pas.")
-        print("Rien n a ete ecrit.")
-        return 1
 
     if src.count(ANCRE_ETAT) != 1:
         print("KO : %d occurrence(s) de la signature de _fetch_ticker_bounded,"
