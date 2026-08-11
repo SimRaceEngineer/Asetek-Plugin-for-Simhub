@@ -7,3 +7,7 @@ obj/
 CLAUDE.md
 bin/Debug/
 *.pdb
+
+# Caches Python des scripts d analyse (analyse/*.py)
+__pycache__/
+*.pyc
