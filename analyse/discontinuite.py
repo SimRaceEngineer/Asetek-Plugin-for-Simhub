@@ -238,7 +238,7 @@ def main():
             print("  non. Le confondant d amplitude n explique pas tout.")
         elif cd - cg <= 5:
             print("  PAS DE MARCHE. A pic comparable, obtenir son stop ne")
-            print("  change pas la capture. Les 19%% / 56%% / 71%% de")
+            print("  change pas la capture. Les 19% / 56% / 71% de")
             print("  bande_morte.py etaient alors un effet d amplitude, et")
             print("  la bande morte n est qu un autre nom pour les petits")
             print("  trades. NE PAS construire de correctif la-dessus.")
