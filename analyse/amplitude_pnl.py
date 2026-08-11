@@ -69,6 +69,12 @@ FAMILLES = ("206", "207", "208")
 N_PREC = 3          # seances precedentes pour la lecture causale
 
 
+def _jour(ts):
+    """Horodatage MT5 -> 'AAAA-MM-JJ'. Conscient du fuseau : utcfromtimestamp
+    est deprecie en 3.14 et crachait deux avertissements a chaque lancement."""
+    return dt.datetime.fromtimestamp(ts, dt.timezone.utc).date().isoformat()
+
+
 def mediane(v):
     s = sorted(v)
     n = len(s)
@@ -111,7 +117,7 @@ def amplitudes(depuis, jusqu):
             continue
         par = {}
         for b in r:
-            j = dt.datetime.utcfromtimestamp(int(b["time"])).date().isoformat()
+            j = _jour(int(b["time"]))
             e = par.setdefault(j, [-1e18, 1e18])
             e[0] = max(e[0], float(b["high"]))
             e[1] = min(e[1], float(b["low"]))
@@ -195,7 +201,7 @@ def main():
                 continue
         except AttributeError:
             continue
-        k = dt.datetime.utcfromtimestamp(int(x.time)).date().isoformat()
+        k = _jour(int(x.time))
         mt5_j[k] = mt5_j.get(k, 0.0) + float(x.profit) + float(x.swap) + float(x.commission)
     comm = [j for j in js if j in mt5_j][-15:]
     if not comm:
