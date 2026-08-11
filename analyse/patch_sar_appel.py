@@ -46,21 +46,28 @@ IDEMPOTENT.
 import ast
 import io
 import os
+import re
 import shutil
 import sys
 from datetime import datetime
 
 CIBLE = "price_action.py"
+MARQUEUR = "le verrou le plus serre des trois"
 
-ANCRE = """        if sig and _has_position(asset):
-            _update_trailing(asset, sig)"""
+# L ancre est reperee par une expression, pas par un bloc de texte fige :
+# le premier essai a echoue parce que je supposais une indentation de 8
+# espaces la ou le fichier en a 16. On capture donc l indentation reelle et
+# on la reproduit, au lieu de la deviner.
+RE_ANCRE = re.compile(
+    r"^([ \t]*)if sig and _has_position\(asset\):[ \t]*\n"
+    r"([ \t]*)_update_trailing\(asset, sig\)[ \t]*$",
+    re.M)
 
-NEUF = """        # 11/08 : le suivi ne dependait de l existence d un signal actif que
-        # par accident -- _update_trailing lisait signal["direction"]. Elle
-        # lit p.type depuis le 10/08, donc une position se suit qu un signal
-        # soit en cours ou non. C etait le verrou le plus serre des trois.
-        if _has_position(asset):
-            _update_trailing(asset, sig)"""
+COMMENTAIRE = (
+    "# 11/08 : le suivi ne dependait de l existence d un signal actif que\n"
+    "# par accident -- _update_trailing lisait signal[\"direction\"]. Elle\n"
+    "# lit p.type depuis le 10/08, donc une position se suit qu un signal\n"
+    "# soit en cours ou non. C etait le verrou le plus serre des trois.")
 
 
 def lire(chemin):
@@ -85,19 +92,25 @@ def main():
         print("Sans lui _update_trailing lit encore signal[\"direction\"], et")
         print("l appeler sans signal actif ne servirait a rien.")
         return 1
-    if NEUF in src or "le verrou le plus serre des trois" in src:
+    if MARQUEUR in src:
         print("Deja pose -- rien a faire.")
         return 0
 
-    n = src.count(ANCRE)
-    if n != 1:
-        print("KO : %d occurrence(s) de l ancre, il en faut 1 :" % n)
-        print()
-        for l in ANCRE.split("\n"):
-            print("    " + l)
+    trouve = RE_ANCRE.findall(src)
+    if len(trouve) != 1:
+        print("KO : %d occurrence(s) de l ancre, il en faut 1." % len(trouve))
+        print("Attendu deux lignes consecutives, a n importe quelle indentation :")
+        print("    if sig and _has_position(asset):")
+        print("        _update_trailing(asset, sig)")
         return 1
 
-    neuf = src.replace(ANCRE, NEUF, 1)
+    ind_if, ind_appel = trouve[0]
+    bloc = "\n".join(ind_if + l for l in COMMENTAIRE.split("\n"))
+    remplacement = ("%s\n%sif _has_position(asset):\n%s_update_trailing(asset, sig)"
+                    % (bloc, ind_if, ind_appel))
+    neuf = RE_ANCRE.sub(lambda m: remplacement, src, count=1)
+    print("ancre trouvee : indentation %d / %d espaces"
+          % (len(ind_if), len(ind_appel)))
     try:
         ast.parse(neuf)
     except SyntaxError as e:
