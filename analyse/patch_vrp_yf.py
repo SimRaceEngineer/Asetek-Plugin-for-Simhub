@@ -64,10 +64,18 @@ CE QU IL NE FAIT PAS
     et celui-ci arrete l hemorragie ce soir.
 
 IDEMPOTENT. Prend effet au prochain demarrage du moteur.
+
+POURQUOI L ANCRE EST UNE EXPRESSION ET NON UNE CHAINE
+    Premier jet : ancre litterale incluant le commentaire de fin de ligne,
+    que j avais recopie "n a pas fini" alors que le fichier ecrit "n'a pas
+    fini". Zero occurrence, patch refuse. Un commentaire est du texte libre
+    -- il change au fil des relectures et supporte les apostrophes. On
+    ancre sur le CODE, et on laisse la fin de ligne libre.
 """
 import ast
 import io
 import os
+import re
 import shutil
 import sys
 from datetime import datetime
@@ -89,10 +97,16 @@ _yf_dernier = {}     # symbole -> derniere valeur connue
 
 def _yf_fetch(symbol):'''
 
-ANCRE_CORPS = '''    th = threading.Thread(target=_run, daemon=True, name=f"yf_{symbol}")
-    th.start()
-    th.join(8.0)
-    return box["v"]   # None si le thread n a pas fini (hang Yahoo) -> degrade propre'''
+# Ancre par expression : les quatre lignes de code, indentation capturee,
+# et la fin de la derniere ligne laissee libre -- c est la que vit le
+# commentaire, et un commentaire n est pas un point d ancrage fiable.
+RE_CORPS = re.compile(
+    r'^([ \t]*)th = threading\.Thread\(target=_run, daemon=True, '
+    r'name=f"yf_\{symbol\}"\)[ \t]*\n'
+    r'[ \t]*th\.start\(\)[ \t]*\n'
+    r'[ \t]*th\.join\(8\.0\)[ \t]*\n'
+    r'[ \t]*return box\["v"\].*$',
+    re.M)
 
 NEUF_CORPS = '''    # Le precedent tourne-t-il encore ? Si oui, en lancer un second
     # aggraverait exactement ce qu on veut eviter.
@@ -144,18 +158,31 @@ def main():
         print("celui que j attends -- rien n a ete ecrit.")
         return 1
 
-    for lab, a in (("l en-tete de _yf_fetch", ANCRE_ETAT),
-                   ("le corps de _yf_fetch", ANCRE_CORPS)):
-        if src.count(a) != 1:
-            print("KO : %d occurrence(s) de l ancre pour %s, il en faut 1."
-                  % (src.count(a), lab))
-            print("Attendu :")
-            for l in a.split("\n"):
-                print("    " + l)
-            return 1
+    if src.count(ANCRE_ETAT) != 1:
+        print("KO : %d occurrence(s) de 'def _yf_fetch(symbol):', il en faut 1."
+              % src.count(ANCRE_ETAT))
+        return 1
+
+    trouve = RE_CORPS.findall(src)
+    if len(trouve) != 1:
+        print("KO : %d occurrence(s) du corps de _yf_fetch, il en faut 1."
+              % len(trouve))
+        print("Attendu, a n importe quelle indentation, le commentaire de")
+        print("fin de derniere ligne pouvant etre quelconque :")
+        print('    th = threading.Thread(target=_run, daemon=True, '
+              'name=f"yf_{symbol}")')
+        print("    th.start()")
+        print("    th.join(8.0)")
+        print('    return box["v"]')
+        return 1
+
+    ind = trouve[0]
+    print("corps trouve : indentation %d espaces" % len(ind))
+    corps = "\n".join(ind + l[4:] if l.startswith("    ") else (ind + l if l else "")
+                      for l in NEUF_CORPS.split("\n"))
 
     neuf = src.replace(ANCRE_ETAT, NEUF_ETAT, 1)
-    neuf = neuf.replace(ANCRE_CORPS, NEUF_CORPS, 1)
+    neuf = RE_CORPS.sub(lambda m: corps, neuf, count=1)
 
     try:
         ast.parse(neuf)
