@@ -87,7 +87,11 @@ RSIPOS_VALIDES = {"ABOVE": R.DESSUS, "INSIDE": R.DEDANS, "BELOW": R.SOUS,
 SENS_ACHAT = {"BUY", "LONG", "ACHAT", "0", "OP_BUY"}
 SENS_VENTE = {"SELL", "SHORT", "VENTE", "1", "OP_SELL"}
 CHURN_VALIDES = {"CLEAN": "CLEAN", "MIXED": "MIXED", "MIXTE": "MIXED",
-                 "CHURN": "CHURN", "NOISE": "CHURN"}
+                 "CHURN": "CHURN", "NOISE": "CHURN",
+                 # OK apparait dans les donnees et n etait pas prevu.
+                 # Garde distinct de CLEAN : rien ne dit que c est le
+                 # meme etat, et le fichier de regles est gele.
+                 "OK": "OK"}
 
 
 def empreinte(p):
@@ -207,6 +211,16 @@ def _churn(o):
     v = _prem(o, CLEFS_CHURN)
     if v is None:
         return ""
+    # 11/08 : churn_entry vaut {'VERDICT': 'CHURN', 'CONF': ...}, pas une
+    # chaine. str(dict) ne correspond a aucune clef de CHURN_VALIDES, d ou
+    # une couverture a 0 pour cent malgre un champ present sur 100 pour
+    # cent des tickets. On descend d un cran, et on tolere la chaine au cas
+    # ou le format changerait.
+    if isinstance(v, dict):
+        for _k in ("VERDICT", "verdict", "Verdict"):
+            if v.get(_k):
+                v = v[_k]
+                break
     return CHURN_VALIDES.get(str(v).strip().upper(), "")
 
 
