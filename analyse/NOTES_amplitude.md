@@ -141,9 +141,26 @@ A ne pas poser avant que V9 ait rendu son verdict le 01/09.
 - [ ] `N_PREC = 3` conserve tel quel, ou alors les deux valeurs testees
       declarees a l'avance avec le cout du test multiple assume.
 
-## Rappel de contexte, a ne pas perdre
+## Rappel de contexte, corrige le soir meme
 
-`oos_v9 --champs` du 11/08 : `churn_trades*.jsonl` ne contient **aucun
-champ rails**. Le panel 8095 les calcule a l'affichage sans les persister.
-**Le verdict hors echantillon du gel V9 est donc incalculable en l'etat**,
-et c'est prioritaire sur toute nouvelle hypothese d'amplitude.
+Cette note portait, en fin d'apres-midi, l'avertissement suivant :
+`churn_trades*.jsonl` ne contient aucun champ rails, donc le verdict hors
+echantillon du gel V9 serait incalculable.
+
+**C'etait faux, et c'est corrige le 11/08 au soir.** Les rails sont ecrits
+par `churn_trade_logger._write_series()` dans
+`docs/rails_trades/series_DATE.jsonl`, par actif et par pas de temps —
+ailleurs que la ou je les cherchais, pas absents. `rails_join.py` les joint
+a chaque ticket au dernier instantane anterieur a son entree : couverture
+0 % → 93 %, decalage median 17 s. Le gel V9 a ete pose le 11/08 et rendra
+son verdict le 01/09.
+
+L'erreur est laissee ici plutot qu'effacee, comme au journal : elle a coute
+une demi-journee a chercher au mauvais endroit, et c'est le genre de detour
+qu'on refait si on n'en garde pas la trace.
+
+**Ce qui reste prioritaire sur toute nouvelle hypothese d'amplitude** n'est
+donc plus le V9, mais le trou du matin — voir `NOTES_sorties.md`. Il repose
+sur 11 seances et 1 150 tickets, garde le meme signe dans deux regimes
+opposes, et ne demande aucun seuil a calibrer. L'amplitude, elle, tient sur
+seize seances avec un indicateur en retard de trois.
