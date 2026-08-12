@@ -389,8 +389,40 @@ def _css(pid):
         '#%(p)s .br{white-space:pre;overflow-x:auto;font-size:12px;'
         'line-height:1.5;color:%(t)s;background:%(f2)s;padding:12px 14px;'
         'border-radius:6px;margin:6px 0 14px 0}'
+        '#%(p)s .tete{display:flex;align-items:baseline;'
+        'justify-content:space-between;gap:14px}'
+        '#%(p)s .cp{background:%(f2)s;color:%(t)s;'
+        'border:1px solid rgba(255,255,255,.16);border-radius:6px;'
+        'padding:4px 13px;font-size:11.5px;cursor:pointer;'
+        'font-family:inherit;white-space:nowrap;flex:none}'
+        '#%(p)s .cp:hover{border-color:%(b)s;color:%(b)s}'
+        # La source brute, hors ecran : c est ELLE qu on copie. Copier le
+        # rendu HTML rendrait des colonnes collees et des lignes cassees,
+        # donc du texte inutilisable dans un REPL ou un prompt.
+        '#%(p)s .src{position:absolute;left:-9999px;top:0;'
+        'width:1px;height:1px;opacity:0}'
         '</style>'
         % {"p": pid, "t": TEXTE, "g": GRIS, "b": BLEU, "f2": FOND2})
+
+
+def _bouton(pid):
+    """Copie le TEXTE BRUT, pas le rendu. navigator.clipboard d abord ;
+    si le navigateur le refuse -- il l interdit hors HTTPS sur certaines
+    configurations -- on retombe sur la selection + execCommand, qui
+    marche encore partout. Le bouton dit ce qui s est passe : muet, on
+    ne saurait pas si la copie a eu lieu."""
+    return (
+        '<button class="cp" onclick="(function(b){'
+        "var t=document.getElementById('%(p)s_src');"
+        "var ok=function(){b.textContent='copie';"
+        "setTimeout(function(){b.textContent='Copy'},1400)};"
+        "var vieux=function(){t.select();"
+        "try{document.execCommand('copy');ok()}"
+        "catch(e){b.textContent='echec'}};"
+        "if(navigator.clipboard&&navigator.clipboard.writeText)"
+        "{navigator.clipboard.writeText(t.value).then(ok,vieux)}"
+        "else{vieux()}"
+        '})(this)">Copy</button>' % {"p": pid})
 
 
 def rendre(txt, titre, fichier, age, pid=None):
@@ -406,9 +438,14 @@ def rendre(txt, titre, fichier, age, pid=None):
         entete, coul = "exporte il y a %d min" % (age // 60), BLEU
 
     corps = [_css(pid), '<div id="%s">' % pid,
+             '<div class="tete">',
              '<h2 style="color:%s">%s</h2>' % (coul, _e(titre)),
+             _bouton(pid),
+             '</div>',
              '<div class="age">%s &middot; %s</div>'
-             % (_e(entete), _e(str(fichier)))]
+             % (_e(entete), _e(str(fichier))),
+             '<textarea id="%s_src" class="src" readonly>%s</textarea>'
+             % (pid, _e(txt))]
     for genre, charge in _decouper(txt):
         if genre == "titre":
             corps.append("<h3>%s</h3>" % _e(charge))
@@ -431,6 +468,12 @@ def verifier(txt, html):
     ligne de rendu -- </tr> et les balises de bloc redeviennent des
     retours a la ligne, le reste des espaces. Comparer cellule par
     cellule laisserait passer une colonne perdue."""
+    # La zone source cachee du bouton Copy contient le texte ENTIER. La
+    # laisser ici ferait passer le controle a tous les coups, meme si le
+    # rendu perdait une colonne : le verificateur trouverait chaque ligne
+    # dans la copie, pas dans le tableau. On la retire d abord.
+    html = re.sub(r"<textarea\b[^>]*>.*?</textarea>", " ", html,
+                  flags=re.S)
     nu = re.sub(r"</(tr|div|pre|h2|h3|style)>", "\n", html)
     nu = re.sub(r"<[^>]+>", " ", nu)
     nu = _html.unescape(nu)
