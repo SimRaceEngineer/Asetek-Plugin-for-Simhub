@@ -130,10 +130,36 @@ function Proprietaire($port) {
     return 0
 }
 
-function Repond($port) {
+function Repond($port, $delai = 30) {
+    <#
+      Rend  >= 0  taille de la reponse, le service sert
+            -1    LENT : rien n a repondu dans le delai
+            -2    REFUSE : personne n ecoute sur ce port
+
+      LA DISTINCTION EST TOUT. Le 12/08 a 22h10, mon seuil etait a 6
+      secondes et le panneau orderflow met 9,46 s a repondre -- il
+      croise tickets_rails avec les exports NinjaTrader a chaque
+      requete. Je l ai declare MUET pendant une demi-heure alors qu il
+      allait parfaitement bien, et la detection « vivant mais muet »
+      l aurait tue toutes les 40 s en boucle : un correctif qui fabrique
+      la panne qu il devait attraper.
+
+      SEUL UN REFUS DE CONNEXION PROUVE QU UN PORT EST FERME. Un delai
+      depasse ne prouve rien d autre que la lenteur, et on ne tue pas un
+      service parce qu il est lent.
+    #>
     if ($port -le 0) { return $null }
+    $ouvert = $false
     try {
-        $r = Invoke-WebRequest -Uri ("http://localhost:" + $port) -TimeoutSec 6 -UseBasicParsing
+        $t = New-Object Net.Sockets.TcpClient
+        $t.Connect("127.0.0.1", $port)
+        $ouvert = $t.Connected
+        $t.Close()
+    } catch { $ouvert = $false }
+    if (-not $ouvert) { return -2 }
+    try {
+        $r = Invoke-WebRequest -Uri ("http://localhost:" + $port) `
+                               -TimeoutSec $delai -UseBasicParsing
         return $r.RawContentLength
     } catch { return -1 }
 }
@@ -210,13 +236,15 @@ function Passe {
         # suite -> on tue, la passe d apres relance. Deux et pas une :
         # un service qui vient de demarrer a le droit de charger.
         if ($v.Count -eq 1 -and $s.Port -gt 0) {
-            if ((Repond $s.Port) -lt 0) {
+            # -2 seulement : un port qui refuse la connexion est mort.
+            # Un port lent est vivant, et le tuer serait absurde.
+            if ((Repond $s.Port) -eq -2) {
                 $n = 0
                 if ($script:Muets.ContainsKey($s.Nom)) { $n = $script:Muets[$s.Nom] }
                 $n = $n + 1
                 $script:Muets[$s.Nom] = $n
                 if ($n -ge 2) {
-                    Noter ("{0} : vivant (pid {1}) mais port {2} muet deux fois -- on le tue" -f `
+                    Noter ("{0} : vivant (pid {1}) mais port {2} REFUSE deux fois -- on le tue" -f `
                            $s.Nom, $v[0].ProcessId, $s.Port)
                     try { Stop-Process -Id $v[0].ProcessId -Force -ErrorAction Stop } catch { }
                     $script:Muets[$s.Nom] = 0
@@ -270,8 +298,8 @@ function Passe {
             # exactement ce qu on vient de provoquer une fois.
             if ($s.Port -gt 0) {
                 Start-Sleep -Seconds 2
-                if ((Repond $s.Port) -lt 0) {
-                    Noter ("{0} : port {1} MUET apres le menage -- on relance" -f `
+                if ((Repond $s.Port) -eq -2) {
+                    Noter ("{0} : port {1} REFUSE apres le menage -- on relance" -f `
                            $s.Nom, $s.Port)
                     try { Stop-Process -Id $garde -Force -ErrorAction Stop } catch { }
                     $script:Repos.Remove($s.Nom)
@@ -296,7 +324,8 @@ function Sante {
     foreach ($s in $SERVICES) {
         if ($s.Port -le 0) { continue }
         $o = Repond $s.Port
-        if ($o -lt 0) { $lignes += ("{0} MUET" -f $s.Port) }
+        if ($o -eq -2)     { $lignes += ("{0} FERME" -f $s.Port) }
+        elseif ($o -eq -1) { $lignes += ("{0} lent, >30s" -f $s.Port) }
     }
     $age = 99999
     if (Test-Path $COEUR) {
@@ -351,8 +380,9 @@ if ($Etat) {
         $p = ""
         if ($s.Port -gt 0) {
             $o = Repond $s.Port
-            if ($o -lt 0) { $p = "{0} MUET" -f $s.Port }
-            else { $p = "{0} OK ({1} o)" -f $s.Port, $o }
+            if ($o -eq -2)      { $p = "{0} FERME" -f $s.Port }
+            elseif ($o -eq -1)  { $p = "{0} ouvert mais LENT (>30s)" -f $s.Port }
+            else                { $p = "{0} OK ({1} o)" -f $s.Port, $o }
         }
         Write-Host ("  {0,-14} {1,-24} {2,-22} {3}" -f $s.Nom, $s.Script, $libelle, $p)
     }
