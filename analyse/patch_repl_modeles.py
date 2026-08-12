@@ -84,10 +84,15 @@ RE_THS = re.compile(
     r'^([ \t]*)ths = \[threading\.Thread\(target=_run, args=\(m,\)\) for m in '
     r'\("deepseek", "deepseek_reasoner"\)\][ \t]*$', re.M)
 
-RE_FALL = re.compile(
+# Deux ancres separees, pas un bloc : la v1 exigeait que les deux lignes
+# soient adjacentes et a echoue sur le fichier reel. Une ancre ne doit
+# jamais supposer ce qu il y a autour d elle.
+RE_G = re.compile(
     r'^([ \t]*)g = out\.get\("deepseek"\) or '
-    r'\{"text": "\(pas de reponse\)", "elapsed": 0\}[ \t]*\n'
-    r'[ \t]*g1 = out\.get\("deepseek_reasoner"\) or '
+    r'\{"text": "\(pas de reponse\)", "elapsed": 0\}[ \t]*$', re.M)
+
+RE_G1 = re.compile(
+    r'^([ \t]*)g1 = out\.get\("deepseek_reasoner"\) or '
     r'\{"text": "\(pas de reponse\)", "elapsed": 0\}[ \t]*$', re.M)
 
 TETE = '''# 12/08/2026 -- CE QUE LE REPL INTERROGE, ET AVEC QUEL BUDGET
@@ -134,9 +139,12 @@ NEUF_APPEL = '''    _mt = REPL_MAX_TOKENS.get(mk, 3000)
     txt, usage, el, to, err = cs._call_model(mk, messages, _mt)
     txt = _repl_txt(txt, usage, err, to, _mt)'''
 
-NEUF_FALL = '''    _absent = {"text": "(non interroge -- voir REPL_MODELES)", "elapsed": 0}
-    g = out.get("deepseek") or _absent
-    g1 = out.get("deepseek_reasoner") or _absent'''
+NEUF_G = '''    # (non interroge) et non (pas de reponse) : on ne fait pas dire a un
+    # silence volontaire qu il est un echec. Voir REPL_MODELES.
+    _absent = {"text": "(non interroge -- voir REPL_MODELES)", "elapsed": 0}
+    g = out.get("deepseek") or _absent'''
+
+NEUF_G1 = '''    g1 = out.get("deepseek_reasoner") or _absent'''
 
 
 def lire(chemin):
@@ -174,7 +182,8 @@ def main():
     for nom, rx in (("def ask(question):", RE_DEF),
                     ("l appel a _call_model(mk, messages, 3000)", RE_APPEL),
                     ("la liste des threads", RE_THS),
-                    ("les deux replis (pas de reponse)", RE_FALL)):
+                    ("le repli g (pas de reponse)", RE_G),
+                    ("le repli g1 (pas de reponse)", RE_G1)):
         n = len(rx.findall(src))
         if n != 1:
             print("KO : %d occurrence(s) de %s, il en faut 1." % (n, nom))
@@ -187,7 +196,8 @@ def main():
         lambda m: m.group(1) + "ths = [threading.Thread(target=_run, "
                                "args=(m,)) for m in REPL_MODELES]",
         neuf, count=1)
-    neuf = RE_FALL.sub(lambda m: cale(NEUF_FALL, m.group(1)), neuf, count=1)
+    neuf = RE_G.sub(lambda m: cale(NEUF_G, m.group(1)), neuf, count=1)
+    neuf = RE_G1.sub(lambda m: cale(NEUF_G1, m.group(1)), neuf, count=1)
 
     try:
         ast.parse(neuf)
