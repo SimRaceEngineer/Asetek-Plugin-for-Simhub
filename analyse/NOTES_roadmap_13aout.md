@@ -239,3 +239,58 @@ donnee portait -- et les trois fois, une commande a suffi a trancher.
 
 Mesurer avant de conclure. C est moins rapide et c est la seule chose
 qui a marche aujourd hui.
+
+## LE 12/08 AU SOIR -- LA CAUSE DES 22 ORDERFLOW EST TROUVEE
+
+`START_TRADING_STACK_V3.bat`, etape [1/5], tue tous les `python.exe`
+puis les FENETRES wrapper. Mais sa liste ne contient que :
+
+    Administrateur*Trade Monitor*   /  Trade Monitor*
+    Administrateur*Price Action Panel*
+
+Il manque **Orderflow Panel**, **Latent Log** et **Jauge H1** -- et la
+variante sans prefixe de Price Action Panel. Ces wrappers survivent au
+kill ; leur python meurt, leur boucle `:loop` le relance aussitot, et le
+V3 en demarre un nouveau par-dessus. Un wrapper de plus a chaque relance.
+
+Et V3 est relance souvent : `wake_and_check` a 07h45 de facon
+INCONDITIONNELLE (choix assume du 14/07 contre les zombies qui
+repondaient 200), `PeriodicCheck` toutes les 15 min si le heartbeat
+`cross_index_gate.dat` est perime, `stack_watchdog` toutes les 15 min
+s il detecte un gel.
+
+Correctif, a poser a froid, juste apres le taskkill de Price Action :
+
+    taskkill /F /T /FI "WINDOWTITLE eq Price Action Panel*"
+    taskkill /F /T /FI "WINDOWTITLE eq Orderflow Panel*"
+    taskkill /F /T /FI "WINDOWTITLE eq Administrateur*Orderflow Panel*"
+    taskkill /F /T /FI "WINDOWTITLE eq Latent Log*"
+    taskkill /F /T /FI "WINDOWTITLE eq Administrateur*Latent Log*"
+    taskkill /F /T /FI "WINDOWTITLE eq Jauge H1*"
+    taskkill /F /T /FI "WINDOWTITLE eq Administrateur*Jauge H1*"
+
+Verification qui prouve le correctif : compter les fenetres wrapper
+avant et apres une relance de V3. Sans le correctif le compte monte, avec
+il reste stable.
+
+### Ce que j ai fait de travers, et qui doit rester ecrit
+
+J ai ecrit `Gardien-Stack.ps1` -- un lanceur/superviseur -- SANS avoir lu
+les .bat existants. La stack en avait deja un, plus complet. Le mien
+lancait `python price_action.py` sans `PA_ROLE=panel` : pendant les deux
+secondes ou `run_panel_loop` relance son process (arret volontaire toutes
+les 40 min), il aurait demarre un price_action en role MOTEUR, avec ses
+boucles de trading. De l argent reel.
+
+Regle qui en sort : avant d ecrire quoi que ce soit qui LANCE un
+processus dans cette stack, lire les .bat. Ils portent trois mois de
+correctifs -- verrou anti-double-lancement, delai de grace, healthcheck
+par fraicheur du .dat plutot que par HTTP 200 -- et chacun documente
+l incident qui l a rendu necessaire.
+
+### Ce qui reste vrai de la soiree
+
+`panels_auto.py` et `sarkeep_gel.py` ne sont dans AUCUN .bat. C est pour
+ca qu ils etaient arretes. Leur place est dans le V3, a cote des autres
+wrappers, avec la meme garde anti-doublon -- pas dans un gardien
+concurrent.
