@@ -130,6 +130,27 @@ function Proprietaire($port) {
     return 0
 }
 
+function Ouvert($port) {
+    <#
+      Le port accepte-t-il une connexion ? Instantane.
+
+      C est ce qu il faut dans la boucle : une requete HTTP complete peut
+      prendre dix secondes sur le panneau orderflow, et trois ports
+      sondes ainsi feraient durer une passe plus longtemps que
+      l intervalle qui les separe. La taille de la reponse n interesse
+      que -Etat et le bilan de sante, appeles rarement.
+    #>
+    if ($port -le 0) { return $true }
+    try {
+        $t = New-Object Net.Sockets.TcpClient
+        $t.Connect("127.0.0.1", $port)
+        $o = $t.Connected
+        $t.Close()
+        return $o
+    } catch { return $false }
+}
+
+
 function Repond($port, $delai = 30) {
     <#
       Rend  >= 0  taille de la reponse, le service sert
@@ -236,9 +257,9 @@ function Passe {
         # suite -> on tue, la passe d apres relance. Deux et pas une :
         # un service qui vient de demarrer a le droit de charger.
         if ($v.Count -eq 1 -and $s.Port -gt 0) {
-            # -2 seulement : un port qui refuse la connexion est mort.
-            # Un port lent est vivant, et le tuer serait absurde.
-            if ((Repond $s.Port) -eq -2) {
+            # Test TCP seul : instantane, et c est la seule chose qui
+            # prouve la mort. Un port lent est vivant.
+            if (-not (Ouvert $s.Port)) {
                 $n = 0
                 if ($script:Muets.ContainsKey($s.Nom)) { $n = $script:Muets[$s.Nom] }
                 $n = $n + 1
@@ -298,7 +319,7 @@ function Passe {
             # exactement ce qu on vient de provoquer une fois.
             if ($s.Port -gt 0) {
                 Start-Sleep -Seconds 2
-                if ((Repond $s.Port) -eq -2) {
+                if (-not (Ouvert $s.Port)) {
                     Noter ("{0} : port {1} REFUSE apres le menage -- on relance" -f `
                            $s.Nom, $s.Port)
                     try { Stop-Process -Id $garde -Force -ErrorAction Stop } catch { }
