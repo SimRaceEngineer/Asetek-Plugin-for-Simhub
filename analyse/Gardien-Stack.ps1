@@ -57,6 +57,8 @@ $MOI     = $MyInvocation.MyCommand.Path
 $PAUSE   = Join-Path (Split-Path $MOI) "gardien.pause"
 $JOURNAL = Join-Path $STACK "logs\gardien.log"
 $TACHE   = "Gardien-Stack"
+$VERROU  = Join-Path (Split-Path $MOI) "gardien.verrou"
+$VERROU_S = 600   # au-dela, le verrou est considere comme abandonne
 
 # ---------------------------------------------------------------------
 #  Motif  : ce qui reconnait le processus dans sa ligne de commande.
@@ -126,6 +128,45 @@ if ($Desinstaller) {
     exit 0
 }
 
+# ------------------------------------------------------------- verrou
+#
+#  Le 12/08 a 21h34, une passe manuelle et la premiere passe de la tache
+#  planifiee se sont croisees. Les deux ont vu « zero instance » de
+#  panels_auto, les deux ont lance : deux processus ecrivant les memes
+#  fichiers d export en meme temps. Le gardien avait produit le defaut
+#  qu il existe pour empecher.
+#
+#  D ou ce verrou. Il porte le pid et l heure ; au-dela de VERROU_S il
+#  est tenu pour abandonne (une passe tuee ne doit pas bloquer les
+#  suivantes pour toujours).
+
+function Prendre-Verrou {
+    if (Test-Path $VERROU) {
+        try {
+            $age = (Get-Date) - (Get-Item $VERROU).LastWriteTime
+            if ($age.TotalSeconds -lt $VERROU_S) {
+                $qui = (Get-Content $VERROU -ErrorAction SilentlyContinue) -join " "
+                Noter ("passe ignoree : une autre est en cours ({0})" -f $qui)
+                return $false
+            }
+            Noter "verrou abandonne depuis plus de $VERROU_S s -- on le reprend"
+        } catch { }
+    }
+    try {
+        "pid $PID  $(Get-Date -Format 'HH:mm:ss')" |
+            Set-Content -Path $VERROU -Encoding UTF8 -ErrorAction Stop
+        return $true
+    } catch {
+        Noter "impossible d ecrire le verrou -- passe abandonnee par prudence"
+        return $false
+    }
+}
+
+function Rendre-Verrou {
+    try { Remove-Item $VERROU -Force -ErrorAction SilentlyContinue } catch { }
+}
+
+
 # ------------------------------------------------------------- passe
 function Passe {
     if (Test-Path $PAUSE) {
@@ -137,6 +178,9 @@ function Passe {
         return
     }
 
+    if (-not (Prendre-Verrou)) { return }
+
+    try {
     foreach ($s in $SERVICES) {
         $v = @(Lister $s.Motif)
 
@@ -157,7 +201,10 @@ function Passe {
             try {
                 Start-Process -FilePath "python" -ArgumentList $argus `
                               -WorkingDirectory $STACK -WindowStyle Minimized
-                Noter ("{0} : relance -- python {1}" -f $s.Nom, $argus)
+                Start-Sleep -Seconds 2
+                $apres = @(Lister $s.Motif)
+                Noter ("{0} : relance -- python {1} ({2} instance(s) apres)" -f `
+                       $s.Nom, $argus, $apres.Count)
             } catch {
                 Noter ("{0} : ECHEC de relance -- {1}" -f $s.Nom, $_.Exception.Message)
             }
@@ -186,6 +233,9 @@ function Passe {
                 Noter ("  pid {0} non supprime : {1}" -f $p.ProcessId, $_.Exception.Message)
             }
         }
+    }
+    } finally {
+        Rendre-Verrou
     }
 }
 
