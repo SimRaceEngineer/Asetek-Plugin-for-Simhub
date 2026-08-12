@@ -199,17 +199,51 @@ function Passe {
         if ($v.Count -eq 1) { continue }
 
         if ($v.Count -gt 1) {
-            $garde = Proprietaire $s.Port
-            $pourquoi = "detient le port " + $s.Port
-            if ($garde -eq 0 -or -not ($v.ProcessId -contains $garde)) {
+            # QUI GARDER, ET POURQUOI CE N EST PAS CELUI QUE WINDOWS DIT.
+            #
+            # Sous Windows, HTTPServer met allow_reuse_address a 1 :
+            # plusieurs process bindent le MEME port sans erreur, et c est
+            # le DERNIER qui recoit le trafic. run_orderflow_loop.bat le
+            # documente noir sur blanc.
+            #
+            # Get-NetTCPConnection, lui, retourne le PREMIER listener. S y
+            # fier fait garder un dormant et tuer celui qui sert : le
+            # 12/08 a 21h50, orderflow s est retrouve a une seule
+            # instance et 8097 MUET. On garde donc le plus RECENT des
+            # que le service porte un port.
+            #
+            # Sans port, on garde le plus ANCIEN : il est deja au travail,
+            # et pour panels_auto le tuer en plein export tronquerait un
+            # panneau.
+            if ($s.Port -gt 0) {
+                $garde = $v[$v.Count - 1].ProcessId
+                $pourquoi = "le plus recent -- c est lui qui recoit le trafic"
+                $declare = Proprietaire $s.Port
+                if ($declare -ne 0 -and $declare -ne $garde) {
+                    Noter ("{0} : Windows declare {1} proprietaire du port {2}," -f `
+                           $s.Nom, $declare, $s.Port)
+                    Noter "  on garde quand meme le plus recent (SO_REUSEADDR)"
+                }
+            } else {
                 $garde = $v[0].ProcessId
-                $pourquoi = "le plus ancien"
+                $pourquoi = "le plus ancien -- il est deja au travail"
             }
             Noter ("{0} : {1} instances -- on garde {2} ({3})" -f `
                    $s.Nom, $v.Count, $garde, $pourquoi)
             foreach ($p in $v) {
                 if ($p.ProcessId -ne $garde) {
                     try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop } catch { }
+                }
+            }
+            # On VERIFIE apres coup. Un port muet apres un menage est
+            # exactement ce qu on vient de provoquer une fois.
+            if ($s.Port -gt 0) {
+                Start-Sleep -Seconds 2
+                if ((Repond $s.Port) -lt 0) {
+                    Noter ("{0} : port {1} MUET apres le menage -- on relance" -f `
+                           $s.Nom, $s.Port)
+                    try { Stop-Process -Id $garde -Force -ErrorAction Stop } catch { }
+                    $script:Repos.Remove($s.Nom)
                 }
             }
             continue
