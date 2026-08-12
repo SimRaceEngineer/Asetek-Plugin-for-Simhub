@@ -85,7 +85,8 @@ def charger(chemins):
             tk = O._prem(o, O.CLEFS_TICKET)
             if len(ts) < 16 or pnl is None or tk is None or tk in par:
                 continue
-            par[tk] = {"jour": ts[:10], "heure": int(ts[11:13]), "pnl": pnl}
+            par[tk] = {"jour": ts[:10], "heure": int(ts[11:13]), "pnl": pnl,
+                       "ticket": str(tk)}
     if not par:
         print("Aucun enregistrement exploitable sur %d lignes lues." % brut)
         print("Verifie le chemin, ou lance  python oos_v9.py --champs")
