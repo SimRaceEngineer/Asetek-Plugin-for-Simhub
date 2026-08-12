@@ -123,9 +123,15 @@ def bloc(titre, clef, av, dp, ordre=None, largeur=22):
     print("=" * 92)
     print("  " + titre)
     print("=" * 92)
-    print("%-*s %21s %21s" % (largeur, "", "TENDANCE 28/07-04/08", "RANGE depuis 05/08"))
-    print("%-*s %9s %4s %4s   %9s %4s %4s"
-          % (largeur, "", "EUR/tr", "N", "WR", "EUR/tr", "N", "WR"))
+    # Les largeurs sont celles de duo() -- 21 caracteres par regime -- et
+    # non des espaces poses a la main. L entete flottait de 1 puis 2
+    # caracteres contre ses colonnes : invisible a l oeil, mais le rendu
+    # HTML deduit les colonnes de la geometrie du texte et ne pouvait pas
+    # separer N de WR. Meme forme que rails_trois.py.
+    print("%-*s%21s%21s"
+          % (largeur, "", "TENDANCE 28/07-04/08", "RANGE depuis 05/08"))
+    print("%-*s%s" % (largeur, "", 2 * ("%9s %4s %4s%2s"
+                                        % ("EUR/tr", "N", "WR", ""))))
     print("-" * 92)
     ga, gd = {}, {}
     for s in av:

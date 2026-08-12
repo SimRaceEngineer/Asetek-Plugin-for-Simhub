@@ -2,7 +2,7 @@
 """
 rails_range_panel.py -- l onglet RAILS RANGE de la page 8095
 
-Lit le fichier deja exporte et l affiche dans un <pre>.
+Lit le fichier deja exporte et le met en page comme RAILS TRADES.
 
 POURQUOI LIRE LE TXT ET NON RELANCER LE SCRIPT
 
@@ -14,14 +14,17 @@ POURQUOI LIRE LE TXT ET NON RELANCER LE SCRIPT
     le rafraichit toutes les 15 minutes. On lit donc exactement ce que
     lit le REPL -- une seule version des chiffres, pas deux.
 
-POURQUOI SI SIMPLE
+LA MISE EN PAGE EST DANS panel_texte.py
 
-    La sortie console porte deja ses avertissements et ses ? sur les
-    cellules trop petites. La reecrire en HTML, ce serait risquer d en
-    perdre un en chemin -- et un avertissement perdu est pire qu un
-    panneau moche.
+    Elle etait d abord un <pre> brut : juste, mais serre et gris. Le
+    module panel_texte deduit les colonnes de la geometrie du texte et
+    rend de vrais tableaux, sans toucher a un seul chiffre.
 
-    rails_trois_panel.py est ecrit exactement pareil.
+    S il manque, on retombe sur le <pre>. Un panneau moche vaut mieux
+    qu un panneau absent -- et le repli le DIT, il ne se tait pas.
+
+    rails_trois_panel.py est ecrit exactement pareil ; seules changent
+    les deux constantes ci-dessous.
 
 L AGE EST AFFICHE. Un panneau qui ne dit pas quand il a ete produit
 laisse croire qu il est frais.
@@ -31,7 +34,11 @@ import io
 import os
 import time
 
-FICHIER = os.path.join("panels", "panel_rails_post0508.txt")
+# Le chemin est calcule depuis CE fichier : le 8095 ne demarre pas
+# toujours depuis le dossier de la stack, et un chemin relatif y donnait
+# un panneau vide sans dire pourquoi.
+_ICI = os.path.dirname(os.path.abspath(__file__))
+FICHIER = os.path.join(_ICI, "panels", "panel_rails_post0508.txt")
 TITRE = "RAILS RANGE"
 
 
@@ -47,27 +54,28 @@ def _lire():
     return t.strip(), int(time.time() - os.path.getmtime(FICHIER))
 
 
-def render_panel():
-    txt, age = _lire()
-    if age is None:
-        entete, couleur = "fichier absent", "#f28b82"
-    elif age > 3600:
-        entete = "exporte il y a %d min -- PERIME" % (age // 60)
-        couleur = "#f28b82"
-    elif age > 1200:
-        entete, couleur = "exporte il y a %d min" % (age // 60), "#fbbc04"
-    else:
-        entete, couleur = "exporte il y a %d min" % (age // 60), "#8ab4f8"
+def _brut(txt, age, raison):
+    """Le rendu d avant, garde comme repli. Il dit pourquoi il sert."""
     return (
         '<div style="padding:10px 14px">'
-        '<h2 style="color:%s;margin:0 0 4px 0">%s</h2>'
-        '<div style="color:#9aa0a6;font-size:12px;margin-bottom:10px">'
-        '%s &middot; %s</div>'
+        '<h2 style="color:#8ab4f8;margin:0 0 4px 0">%s</h2>'
+        '<div style="color:#fbbc04;font-size:12px;margin-bottom:10px">'
+        'mise en page reduite (%s) &middot; les chiffres sont intacts'
+        '</div>'
         '<pre style="white-space:pre;overflow-x:auto;font-size:12px;'
         'line-height:1.35;color:#e8eaed;background:#1b1b1d;padding:12px;'
         'border-radius:6px">%s</pre></div>'
-        % (couleur, TITRE, entete, FICHIER, _html.escape(txt))
+        % (TITRE, _html.escape(str(raison)), _html.escape(txt))
     )
+
+
+def render_panel():
+    txt, age = _lire()
+    try:
+        import panel_texte
+        return panel_texte.rendre(txt, TITRE, FICHIER, age)
+    except Exception as e:
+        return _brut(txt, age, "%s: %s" % (type(e).__name__, e))
 
 
 render = render_panel
@@ -75,5 +83,5 @@ render = render_panel
 
 if __name__ == "__main__":
     t, a = _lire()
-    print("age : %s s" % a)
-    print(t[:800])
+    print("age : %s s, %d caracteres" % (a, len(t)))
+    print("rendu : %d caracteres" % len(render_panel()))
