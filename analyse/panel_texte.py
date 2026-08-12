@@ -59,8 +59,13 @@ FOND2 = "#232326"
 TEXTE = "#e8eaed"
 GRIS = "#9aa0a6"
 BLEU = "#8ab4f8"
-VERT = "#81c995"
-ROUGE = "#f28b82"
+# Les memes verts et rouges que RAILS TRADES et le panneau orderflow --
+# la palette GitHub sombre que toute la stack utilise deja. Les
+# precedents (#81c995 / #f28b82) etaient les tons pastel de Material :
+# justes, mais delaves a cote des autres onglets, et un panneau fade se
+# lit moins vite qu un panneau contraste.
+VERT = "#3fb950"
+ROUGE = "#f85149"
 AMBRE = "#fbbc04"
 
 RE_FORT = re.compile(r"^\s*={4,}\s*$")
@@ -216,10 +221,13 @@ def _couleur(txt, premiere):
             v = float(base.replace(" ", "").replace(" ", ""))
         except ValueError:
             return TEXTE, False
+        # En gras, comme dans RAILS TRADES : un chiffre signe est le
+        # resultat, il doit se voir avant les effectifs et les taux qui
+        # l entourent.
         if v > 0:
-            return VERT, False
+            return VERT, True
         if v < 0:
-            return ROUGE, False
+            return ROUGE, True
     return TEXTE, False
 
 
