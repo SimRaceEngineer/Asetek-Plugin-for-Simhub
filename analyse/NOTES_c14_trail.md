@@ -163,3 +163,83 @@ disait `[R6] TRAIL: 0 positions (excl XAUUSD + autonomous) / 19 total`.
 
 À trancher avant tout réglage : si US30 est hors du dispositif, la moitié du
 volume l'est aussi.
+
+---
+
+## Vérification en production — 12/08/2026, 14h00
+
+Les deux patchs ont été appliqués le 11/08 à 20h14 et 20h15, le moteur
+redémarré dans la foulée. Première demi-séance sous le nouveau régime.
+
+### Le mécanisme, mesuré et non supposé
+
+Bloc MECANISME de `panel_rails_trois.txt` :
+
+| période | suivis trail | avec stop | part |
+|---|---|---|---|
+| 1 TENDANCE | 183 | 114 | 62 % |
+| 2 RANGE | 158 | 77 | 49 % |
+| 3 RÉPARÉ | **7** | **7** | **100 %** |
+
+Sept tickets, c'est peu. Mais la comparaison porte sur un mécanisme, pas
+sur un P&L : sous l'ancien régime la probabilité qu'un ticket obtienne un
+stop valait 0,49. Sept succès sur sept à ce taux valent 0,49⁷ ≈ **0,7 %**,
+et 3,5 % en prenant le taux le plus favorable de l'ancien monde (0,62).
+
+Et le blocage n'était pas probabiliste : 62 709 refus sur 62 732
+tentatives, soit 99,96 %. Passer de « le cran BE ne passe jamais » à « les
+sept passent » est un changement de règle, pas une série chanceuse.
+
+**« Suivis trail » chute de ~32/séance à 7, et c'est voulu.** En armant à
+0,12 % du prix au lieu de 0,004 %, le module cesse d'essayer là où C14
+allait refuser. Moins de tentatives, mais toutes aboutissent.
+
+### US30 : la question non résolue est résolue
+
+`mfe_trail_events.csv`, journée du 12/08 :
+
+    NAS100   3     retcode 10009
+    SPX500   1     retcode 10009
+    US30     3     retcode 10009
+
+Zéro ligne US30 pendant quinze jours, trois le premier jour après le
+retrait de `set(range(207000, 208000))` des exclus US30. La piste
+« magics autonomes » était donc la bonne, et l'exclusion était bien
+propre à US30 — la même famille 207 était trailée sur NAS100 et SPX500.
+
+### Zéro refus C14
+
+Sept événements, sept `10009`, aucun `C14:BUDDHA_HOLD_pinch` sur aucun
+des trois actifs. C'était le calcul de fond : armer à 0,12 % place le
+stop à 0,084 % du prix, au-delà de la fenêtre de veto la plus large
+(0,069 % sur NAS100). Le cran ne se fait plus refuser parce qu'il ne se
+présente plus au mauvais endroit.
+
+Les trois sources se recoupent : 7 événements dans le CSV, 7 tickets
+suivis dans le panneau, 7 avec stop. Le compte est cohérent.
+
+### Ce que ça ne prouve pas encore
+
+Une demi-séance. Le taux de pose est validé, **le gain ne l'est pas** :
+il faudra des séances complètes pour savoir si les stops posés
+encaissent réellement, et surtout combien de trades ils sortent qui
+seraient remontés — l'aller-retour que le journal ne porte toujours pas.
+Le plafond de 2 149 € reste un plafond.
+
+À rejouer chaque soir après la clôture :
+
+    python rails_join.py
+    python bande_morte.py --depuis 2026-08-12
+
+Trois prédictions à confirmer sur séance entière : disparition complète
+de `C14:BUDDHA_HOLD_pinch`, effondrement des tentatives « 1 BE » depuis
+7 123, et la bande morte sans stop qui tombe de 15/18.
+
+### Un piège de méthode découvert le même jour
+
+`tickets_rails.jsonl` n'est **pas** écrit par le moteur : c'est le produit
+de `rails_join.py`, lancé à la main. Sans jointure, les panneaux lisent un
+corpus figé à la veille — la période 3 restait vide alors que les données
+brutes du jour (`config_*.jsonl`, `series_*.jsonl`) étaient bien écrites à
+la minute. Toute lecture de panneau doit être précédée de la jointure,
+sans quoi on croit mesurer la journée et on relit l'avant-veille.
