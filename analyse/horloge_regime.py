@@ -121,7 +121,17 @@ ACTIFS = ["US30", "US500", "US100"]
 FENETRE = 15          # minutes de verdicts pris en compte a l instant t
 PAS_SUIVI = 30        # secondes entre deux echantillons, en suivi
 PART_CHURN = 0.60     # part de CHURN a partir de laquelle un actif est CHURN
-MINI_CONNUS = 2       # actifs connus exiges pour nommer un regime global
+# Le quorum est ASYMETRIQUE, et c est le 12/08 qui l a impose. Avec le
+# meme seuil des deux cotes, la case INCONNU pesait 34 tickets a -15,84
+# EUR -- presque toutes des periodes « US30 en CHURN, les deux autres
+# muets ». L information rouge etait la et le seuil la jetait.
+#
+#   un faux ROUGE coute un trade manque
+#   un faux VERT coute un trade dans le hachoir
+#
+# On ne paie donc pas le meme prix des deux cotes.
+MINI_ROUGE = 1        # actifs connus exiges pour nommer un etat rouge
+MINI_VERT = 3         # ... et pour PROPICE ou CARNAGE, qui affirment fort
 DEST = os.path.join(_ICI, "panels")
 LARG = 100
 
@@ -249,14 +259,16 @@ def etat_global(par_actif):
     comptees avec leurs tickets et leurs euros dans le tableau suivant,
     ce refus de nommer se mesure au lieu de se cacher."""
     connus = [e for e in par_actif.values() if e != "INCONNU"]
-    if len(connus) < MINI_CONNUS:
+    if len(connus) < MINI_ROUGE:
         return "INCONNU"
     ch = sum(1 for e in connus if e == "CHURN")
-    if ch == len(connus):
+    # CARNAGE et PROPICE affirment quelque chose de fort : ils exigent les
+    # trois actifs. CHURN se contente de ce qu on sait.
+    if len(connus) >= MINI_VERT and ch == len(connus):
         return "CARNAGE"
     if float(ch) / len(connus) >= 2.0 / 3.0:
         return "CHURN"
-    if all(e == "PROPRE" for e in connus):
+    if len(connus) >= MINI_VERT and all(e == "PROPRE" for e in connus):
         return "PROPICE"
     return "DOUTEUX"
 
@@ -409,10 +421,12 @@ def rendre(lot, jour, fenetre, pas_mn=1):
              % (fenetre, pas_mn, len(ech)))
     L.append("etat par actif : au moins %.0f%% de CHURN dans la fenetre ->"
              " CHURN" % (100 * PART_CHURN))
-    L.append("etat global : il faut %d actifs connus, sinon INCONNU ;"
-             % MINI_CONNUS)
-    L.append("              tous CHURN -> CARNAGE, 2 sur 3 -> CHURN,")
-    L.append("              tous PROPRE -> PROPICE, sinon DOUTEUX")
+    L.append("etat global : %d actif connu suffit pour un etat rouge,"
+             % MINI_ROUGE)
+    L.append("              %d sont exiges pour CARNAGE et pour PROPICE ;"
+             % MINI_VERT)
+    L.append("              un faux rouge coute un trade manque, un faux")
+    L.append("              vert coute un trade dans le hachoir")
     L.append("un ~ apres l etat d un actif : c est l etat MAJORITAIRE de")
     L.append("l intervalle, pas un etat tenu de bout en bout")
     L.append("")
