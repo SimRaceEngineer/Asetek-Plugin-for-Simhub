@@ -156,6 +156,16 @@ def part(lot, clef, valeur):
     return 100.0 * sum(1 for s in v if s[clef] == valeur) / len(v)
 
 
+def ligne(nom, lot, mini=MINI):
+    """Une population : N, euros, euros par ticket, WR. ? si trop petit."""
+    n = len(lot)
+    eur = sum(x["pnl"] for x in lot if x["pnl"] is not None)
+    w = sum(1 for x in lot if (x["pnl"] or 0) > 0)
+    return ("%-24s %7d %12.2f %11.2f %6.0f%%%s"
+            % (nom, n, eur, (eur / n if n else 0.0),
+               (100.0 * w / n if n else 0.0), "" if n >= mini else "  ?"))
+
+
 def deux(nom, a, b, f):
     """Une ligne : la mesure pour le setup, puis pour le reste."""
     return "%-34s %16s %16s" % (nom, f(a), f(b))
@@ -313,6 +323,44 @@ def main():
     L.append("-" * LARG)
     L.append("  capture = somme des PnL divisee par la somme des MFE en")
     L.append("  euros. Elle dit ce qu on garde de ce qu on a vu.")
+    L.append("")
+
+    # --- session avant l heure : 177 tickets sur dix heures font des
+    # cases de dix lignes. La coupure EUR/US est celle du panel RAILS
+    # TRADES -- EUR avant 14h, US a partir de 14h, heure de Paris --
+    # reprise telle quelle pour que les deux tableaux se comparent.
+    L.append("=" * LARG)
+    L.append("  SESSION -- y a-t-il des %s rentables le MATIN ?" % a.setup)
+    L.append("=" * LARG)
+    L.append("%-24s %7s %12s %11s %7s"
+             % ("", "N", "EUR total", "EUR/ticket", "WR"))
+    L.append("-" * LARG)
+
+    def _sess(x):
+        try:
+            return "EUR" if int(x["heure"]) < 14 else "US"
+        except ValueError:
+            return "?"
+
+    for nom, cle in (("EUR  (avant 14h)", "EUR"), ("US   (14h et apres)", "US")):
+        va = [x for x in fam if _sess(x) == cle]
+        vb = [x for x in aut if _sess(x) == cle]
+        L.append(ligne("%s  setup %s" % (nom, a.setup), va))
+        L.append(ligne("%s  %s" % (nom, nom_b), vb, 60))
+    L.append("-" * LARG)
+    L.append("  Quatre lignes, et c est la comparaison qui compte : si le")
+    L.append("  setup %s tient le matin PENDANT QUE le reste y perd, alors" % a.setup)
+    L.append("  la session n est pas le facteur -- c est le setup. S il ne")
+    L.append("  gagne que l apres-midi, la question devient : est-ce le")
+    L.append("  setup ou l heure ?")
+    L.append("")
+    L.append("  Detail par actif, session EUR seulement :")
+    L.append("-" * LARG)
+    for act in ("US30", "US500", "US100"):
+        v = [x for x in fam if _sess(x) == "EUR" and x["actif"] == act]
+        if v:
+            L.append(ligne("  %s matin" % act, v))
+    L.append("-" * LARG)
     L.append("")
 
     for titre, clef in (("L HEURE D ENTREE", "heure"),
