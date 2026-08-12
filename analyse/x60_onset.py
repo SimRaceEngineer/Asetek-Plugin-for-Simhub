@@ -337,6 +337,32 @@ def f(x, n=2):
     return "-" if x is None else ("%.*f" % (n, x))
 
 
+def _avec_papier(L):
+    """Ajoute le releve papier x10..x240 a la fin du panneau x60.
+
+    Appele AUX DEUX sorties de rapport(), y compris celle du cas « aucun
+    evenement x60 » : sinon le releve papier disparaitrait les jours ou
+    aucun x60 ne trade, c est-a-dire justement les jours ou il serait le
+    seul contenu du panneau.
+
+    Import doux : si papier_tf est absent ou casse, le panneau x60 reste
+    entier. Perdre ce qui marche a cause d une section optionnelle serait
+    le pire des echanges."""
+    try:
+        import papier_tf
+        L.append("")
+        L.append("")
+        L.extend(papier_tf.rapport())
+    except ImportError:
+        L.append("")
+        L.append("  (papier_tf.py absent : pas de releve papier ici.)")
+    except Exception as _e:
+        L.append("")
+        L.append("  Le releve papier n a pas pu etre lu : %s: %s"
+                 % (type(_e).__name__, _e))
+    return L
+
+
 def rapport():
     ev = charger()
     L = []
@@ -348,7 +374,7 @@ def rapport():
         L.append("Aucun evenement enregistre. Lance d abord :")
         L.append("    python x60_onset.py --loop")
         L.append("Il ne voit que ce qui se passe PENDANT qu il tourne.")
-        return L
+        return _avec_papier(L)
 
     entrees = [e for e in ev if e["quoi"] == "X60_ENTREE"]
     sorties = [e for e in ev if e["quoi"] == "X60_SORTIE"]
@@ -574,25 +600,8 @@ def rapport():
     L.append("  ecart-type, PAR TICKET. Ce n est PAS le Sharpe d une courbe")
     L.append("  de capital : les tickets se chevauchent, une annualisation")
     L.append("  serait fausse -- et fausse dans le sens flatteur.")
+    return _avec_papier(L)
 
-    # Le releve papier x10 x20 x30 x60 x120 x240, dans CE panneau --
-    # demande le 12/08. Import doux : si papier_tf n est pas la, ou s il
-    # echoue, le panneau x60 doit rester lisible. Un panneau qui tombe
-    # entier parce qu une section optionnelle manque, c est perdre ce
-    # qui marchait pour ce qui n existe pas encore.
-    try:
-        import papier_tf
-        L.append("")
-        L.append("")
-        L.extend(papier_tf.rapport())
-    except ImportError:
-        L.append("")
-        L.append("  (papier_tf.py absent : pas de releve papier ici.)")
-    except Exception as e:
-        L.append("")
-        L.append("  Le releve papier n a pas pu etre lu : %s: %s"
-                 % (type(e).__name__, e))
-    return L
 
 
 def main():
