@@ -84,18 +84,22 @@ RE_THS = re.compile(
     r'^([ \t]*)ths = \[threading\.Thread\(target=_run, args=\(m,\)\) for m in '
     r'\("deepseek", "deepseek_reasoner"\)\][ \t]*$', re.M)
 
-# Deux ancres separees, pas un bloc : la v1 exigeait que les deux lignes
-# soient adjacentes. Elles le sont, mais la v2 -- qui ne l exigeait plus
-# -- a quand meme echoue sur g1. Le fichier differe donc de ce que la
-# console affiche par un detail invisible : espace insecable, espace de
-# fin, quelque chose.
+# PAS D ANCRE SUR g1.
 #
-# On cesse de deviner. L ancre ne retient que le DEBUT de la ligne, qui
-# est identifiant a lui seul, et la ligne entiere est remplacee. C est
-# le principe general : une ancre doit tenir au strict necessaire.
-RE_G = re.compile(r'^([ \t]*)g = out\.get\("deepseek"\).*$', re.M)
-
-RE_G1 = re.compile(r'^([ \t]*)g1 = out\.get\("deepseek_reasoner"\).*$', re.M)
+# Trois versions ont echoue a reconnaitre la ligne
+#     g1 = out.get("deepseek_reasoner") or {...}
+# y compris un motif ne retenant que son debut, alors que la console
+# affichait exactement le texte attendu. Le fichier differe de ce qu on
+# voit par quelque chose d invisible, et s acharner ne fait qu ajouter
+# des tentatives.
+#
+# On obtient le meme resultat autrement : au moment ou la liste des
+# threads est construite -- ancre qui, elle, fonctionne -- on pre-remplit
+# le resultat des modeles NON interroges. La ligne g1 d origine trouvera
+# alors une valeur dans out et n utilisera jamais son repli.
+#
+# Lecon : quand une ancre resiste trois fois, ce n est pas le motif
+# qu il faut affiner, c est l endroit qu il faut changer.
 
 TETE = '''# 12/08/2026 -- CE QUE LE REPL INTERROGE, ET AVEC QUEL BUDGET
 #
@@ -141,12 +145,14 @@ NEUF_APPEL = '''    _mt = REPL_MAX_TOKENS.get(mk, 3000)
     txt, usage, el, to, err = cs._call_model(mk, messages, _mt)
     txt = _repl_txt(txt, usage, err, to, _mt)'''
 
-NEUF_G = '''    # (non interroge) et non (pas de reponse) : on ne fait pas dire a un
-    # silence volontaire qu il est un echec. Voir REPL_MODELES.
-    _absent = {"text": "(non interroge -- voir REPL_MODELES)", "elapsed": 0}
-    g = out.get("deepseek") or _absent'''
-
-NEUF_G1 = '''    g1 = out.get("deepseek_reasoner") or _absent'''
+NEUF_THS = '''    ths = [threading.Thread(target=_run, args=(m,)) for m in REPL_MODELES]
+    # Un modele retire de REPL_MODELES n a pas echoue : on ne l a pas
+    # interroge. On le dit, plutot que de laisser le repli d origine
+    # afficher "(pas de reponse)".
+    for _m in ("deepseek", "deepseek_reasoner"):
+        if _m not in REPL_MODELES:
+            out[_m] = {"text": "(non interroge -- voir REPL_MODELES)",
+                       "elapsed": 0}'''
 
 
 def lire(chemin):
@@ -183,9 +189,7 @@ def main():
 
     for nom, rx in (("def ask(question):", RE_DEF),
                     ("l appel a _call_model(mk, messages, 3000)", RE_APPEL),
-                    ("la liste des threads", RE_THS),
-                    ("le repli g (pas de reponse)", RE_G),
-                    ("le repli g1 (pas de reponse)", RE_G1)):
+                    ("la liste des threads", RE_THS)):
         vus = rx.findall(src)
         if len(vus) != 1:
             print("KO : %d occurrence(s) de %s, il en faut 1." % (len(vus), nom))
@@ -198,12 +202,7 @@ def main():
 
     neuf = RE_DEF.sub(lambda m: TETE + m.group(0), src, count=1)
     neuf = RE_APPEL.sub(lambda m: cale(NEUF_APPEL, m.group(1)), neuf, count=1)
-    neuf = RE_THS.sub(
-        lambda m: m.group(1) + "ths = [threading.Thread(target=_run, "
-                               "args=(m,)) for m in REPL_MODELES]",
-        neuf, count=1)
-    neuf = RE_G.sub(lambda m: cale(NEUF_G, m.group(1)), neuf, count=1)
-    neuf = RE_G1.sub(lambda m: cale(NEUF_G1, m.group(1)), neuf, count=1)
+    neuf = RE_THS.sub(lambda m: cale(NEUF_THS, m.group(1)), neuf, count=1)
 
     try:
         ast.parse(neuf)
@@ -212,7 +211,7 @@ def main():
         print("Rien n a ete ecrit.")
         return 1
 
-    print("les cinq ancres sont uniques.")
+    print("les trois ancres sont uniques.")
     print()
     print("Apres patch :")
     print("  REPL_MODELES    = (\"deepseek\", \"deepseek_reasoner\")")
