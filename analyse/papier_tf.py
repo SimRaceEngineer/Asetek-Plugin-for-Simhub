@@ -394,8 +394,9 @@ def boucle(pas):
     print(" PAPIER -- %d cellules, lecture seule, aucun ordre" % len(grille))
     print("=" * LARG)
     print("durees   : %s" % "  ".join(libelle(m) for m in DUREES))
-    print("bras     : 206 hold-until-reverse (fidele)   207 trail %.0f%% "
-          "(DEDUIT)" % (TRAIL * 100))
+    print("bras     : 206 hold-until-reverse   207 memes entrees, %.0f%% du"
+          % (TRAIL_PART * 100))
+    print("           volume coupes au break de la bougie M2 precedente")
     print("signal   : churn_regime._analyze -- le vrai, pas une imitation")
     print("filtre   : RSI(14) M3 > 50 pour un BUY, < 50 pour un SELL")
     print("SL filet : %s (jamais traile)"
