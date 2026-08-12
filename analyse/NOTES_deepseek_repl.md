@@ -102,14 +102,66 @@ orderflow, rails post 05/08, rails 3 periodes. Deposer un fichier la
 suffit desormais a le rendre lisible -- aucun patch a rejouer.
 
 **Le cout est reel** : ces documents partent dans le message systeme a
-**chaque** question. Environ 146 000 caracteres exportes, soit ~37 000
-jetons par question. Plafonds poses a 100 000 caracteres par document et
-200 000 au total ; le processus ecrit au demarrage ce qu il a charge et
-ce qu il a coupe, pour que la facture ne se decouvre pas apres coup.
+**chaque** question. 158 900 caracteres charges, soit ~40 000 jetons par
+question. Plafonds poses a 100 000 caracteres par document et 200 000 au
+total ; le processus ecrit au demarrage ce qu il a charge et ce qu il a
+coupe, pour que la facture ne se decouvre pas apres coup.
 
 Le REPL relit ce dossier **au demarrage du processus 8095**, pas a chaque
 question : un export fait apres coup n est visible qu au redemarrage
 suivant.
+
+Etat verifie au 12/08 13h09, DeepSeek citant lui-meme ses sources :
+
+    panel_orderflow.txt        export 11:18:51
+    panel_rails_post0508.txt   export 11:18:53
+    panel_rails_trades.txt     export 11:18:41
+    panel_rails_trois.txt      export 11:18:55
+    NOTES_c14_trail.md         etat au 11/08 19h30
+    NOTES_gel_v9.md            gel pose le 11/08
+
+`docs\JOURNAL.md` est annonce absent au demarrage -- il n existe pas.
+La periode 3 de `panel_rails_trois.txt` est vide : elle demarre au patch
+trail/BE du 11/08 20h14 et le panneau refuse de la lire sous dix seances.
+Comparaison P2/P3 lisible vers le 27/08.
+
+## Trois plafonds muets, une seule faute
+
+Donner les documents au REPL a demande quatre heures pour une raison
+unique, repetee trois fois : **du code qui jette des donnees sans le
+dire**.
+
+1. **Le dossier du Drive.** `G:\My Drive\ScalpEA\panels` contenait ~60
+   archives orderflow triees avant les `panel_*.txt`. Elles epuisaient le
+   plafond total. Corrige par `patch_repl_docs_v3` : lecture d un
+   `panels\` **local**, et toute source absente est desormais ecrite.
+
+2. **`build_system_message`.** `ai_master_repl.py` coupait a
+   `static_ctx[:25000]` en dur. `panel_orderflow.txt` (20 453) passait,
+   les cinq autres tombaient. Le symptome etait parfait : DeepSeek
+   repondait normalement, sur un seul document, sans que rien n indique
+   qu il en manquait cinq. Corrige par `patch_repl_ctx` -- 175 000, et
+   la coupe s ecrit quand elle mord.
+
+3. **Les print de `_ensure_init`.** Le 8095 lance par `Start-Process`
+   survit a la fermeture de sa fenetre : sa sortie standard devient
+   fermee, et tout `print` leve `I/O operation on closed file`. Ces
+   print-la etaient places AVANT `_inited = True`, donc l initialisation
+   n aboutissait jamais et **toutes** les questions echouaient, pour
+   toujours. Corrige par `patch_repl_print` : un `print` de module,
+   dans `repl_web` seulement, qui ne peut pas lever.
+
+Le troisieme est le plus instructif : mon propre correctif du deuxieme
+(un `print` d avertissement) portait exactement la meme faute et a casse
+la premiere question. Un diagnostic ne doit jamais pouvoir tuer ce qu il
+diagnostique -- d ou `patch_repl_ctx_v2`, ou le message part **dans le
+contexte**, la ou le modele peut le citer, plutot que sur une console
+qu on ne peut meme pas ecrire.
+
+`diag_repl_ask.py` rejoue `ask()` avec la sortie fermee et imprime la
+trace sur stderr. C est lui qui a tranche : les deux passes reussissaient,
+donc le probleme n etait pas `ask()` mais le **moment** de
+`_ensure_init()`.
 
 ## Sauvegardes
 
@@ -117,6 +169,10 @@ suivant.
     council_shadow.py.bak-20260812-102849   avant v3
     council_shadow.py.bak-20260812-104818   avant v4
     repl_web.py.bak-20260812-094009         avant patch_repl_docs_v2
+    repl_web.py.bak-20260812-112007         avant patch_repl_docs_v3
+    ai_master_repl.py.bak-20260812-114016   avant patch_repl_ctx
+    ai_master_repl.py.bak-20260812-115705   avant patch_repl_ctx_v2
+    repl_web.py.bak-20260812-130832         avant patch_repl_print
 
 ## Ce qui reste ouvert
 
