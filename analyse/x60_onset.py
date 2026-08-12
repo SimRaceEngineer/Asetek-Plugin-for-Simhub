@@ -34,6 +34,29 @@ LES QUATRE EVENEMENTS
                  ceux du courtier a la cloture et pas les notres, donc
                  incomparables entre deux tickets.
 
+    VEILLE       toutes les 10 minutes, une ligne qui dit seulement
+                 « je tournais, il y avait n positions ouvertes ».
+
+LES SEANCES, ET POURQUOI LA VEILLE EXISTE
+
+    Les indices cotent 23h/24 chez le courtier. Chaque evenement est
+    donc range dans une seance, en heure locale de la machine :
+
+        ASIE    01:00-09:00       EUROPE  09:00-15:30
+        US      15:30-22:00       NUIT    22:00-01:00
+
+    Sans les VEILLE, une seance vide serait ambigue : « aucun x60 n a
+    trade en Asie » et « l observateur ne tournait pas cette nuit-la »
+    produisent exactement le meme fichier. La colonne « observe » du
+    rapport compte les VEILLE et tranche. Une seance a 0.0h observe ne
+    dit rien du tout, et le rapport l ecrit au lieu de laisser croire a
+    un resultat.
+
+    L HORLOGE DE LA MACHINE FAIT FOI. Si elle derive de huit minutes,
+    les evenements de 15h28 tombent dans EUROPE au lieu de US. Le
+    rapport affiche son heure de generation en tete pour qu on puisse
+    la comparer a une horloge de reference.
+
 LA QUESTION CENTRALE, ET COMMENT ELLE SE TRANCHE
 
     A chaque X60_SORTIE, on connait le P&L latent de chaque position
@@ -83,19 +106,53 @@ from datetime import datetime
 _ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _ICI)
 
+# Seul --loop a besoin de MetaTrader5. --rapport ne fait que relire un
+# fichier : le faire echouer faute de terminal empecherait de depouiller
+# les releves ailleurs que sur le VPS -- et empechait de tester ce
+# rapport du tout.
 try:
     import MetaTrader5 as mt5
 except ImportError:
-    print("KO : MetaTrader5 introuvable dans cet interpreteur.")
-    sys.exit(1)
+    mt5 = None
 
 SETUP = "60"
 PAS = 5
 MINI = 8              # sorties x60 sous lesquelles on ne conclut pas
+VEILLE_MIN = 10       # une preuve de presence toutes les N minutes
 DOSSIER = os.path.join(_ICI, "docs", "x60_onset")
 EVENTS = os.path.join(DOSSIER, "events.jsonl")
 PANNEAU = os.path.join(_ICI, "panels", "panel_x60_onset.txt")
 LARG = 100
+
+# Bornes en minutes depuis minuit, heure LOCALE de la machine. Les
+# indices cotent 23h/24 : il n y a pas de trou, chaque instant tombe
+# dans exactement une seance. NUIT passe minuit, d ou le cas a part.
+SEANCES = (("ASIE",    60, 540),      # 01:00 - 09:00
+           ("EUROPE", 540, 930),      # 09:00 - 15:30
+           ("US",     930, 1320),     # 15:30 - 22:00
+           ("NUIT",  1320, 60))       # 22:00 - 01:00
+
+
+def seance_de(ts):
+    """'YYYY-MM-DDTHH:MM:SS' -> nom de seance. Calcule a la lecture, pas
+    seulement a l ecriture : les evenements enregistres avant l ajout des
+    seances sont donc classes eux aussi, sans retouche du fichier."""
+    try:
+        t = int(ts[11:13]) * 60 + int(ts[14:16])
+    except (ValueError, IndexError, TypeError):
+        return "?"
+    for nom, debut, fin in SEANCES:
+        if debut <= fin:
+            if debut <= t < fin:
+                return nom
+        elif t >= debut or t < fin:
+            return nom
+    return "?"
+
+
+def horaire_de(debut, fin):
+    return "%02d:%02d-%02d:%02d" % (debut // 60, debut % 60,
+                                    fin // 60, fin % 60)
 
 
 def setup_de(magic):
@@ -108,6 +165,11 @@ def est_x60(magic):
 
 
 def ecrire(obj):
+    # La seance est estampillee ici, en un seul endroit : tout ce qui
+    # passe par ecrire() la porte, y compris les evenements ajoutes plus
+    # tard sans qu on y pense.
+    if "ts" in obj and "seance" not in obj:
+        obj["seance"] = seance_de(obj["ts"])
     if not os.path.isdir(DOSSIER):
         os.makedirs(DOSSIER)
     with io.open(EVENTS, "a", encoding="utf-8") as f:
@@ -138,6 +200,10 @@ def plateau(positions, sauf=None):
 # ------------------------------------------------------------ observateur
 
 def boucle(pas):
+    if mt5 is None:
+        print("KO : MetaTrader5 introuvable dans cet interpreteur.")
+        print("     --loop en a besoin ; --rapport, non.")
+        return 1
     if not mt5.initialize():
         print("KO : mt5.initialize() a echoue -- %s" % (mt5.last_error(),))
         return 1
@@ -146,16 +212,31 @@ def boucle(pas):
     print("=" * LARG)
     print("setup surveille : %s   pas : %d s" % (SETUP, pas))
     print("evenements : %s" % EVENTS)
+    print("seances : " + "   ".join("%s %s" % (n, horaire_de(d, f_))
+                                    for n, d, f_ in SEANCES))
+    print("il est %s sur cette machine -- c est CETTE horloge qui range"
+          % maintenant()[11:])
+    print("les evenements par seance.")
     print("Aucun ordre n est envoye. Ctrl+C pour arreter.")
     print()
 
     connus = {}          # ticket -> {magic, actif, pic, creux, ouvert}
+    prochaine_veille = 0.0
     try:
         while True:
             pos = mt5.positions_get()
             if pos is None:
                 pos = ()
             vus = set()
+
+            # La preuve de presence. Sans elle, une seance sans x60 et une
+            # seance non observee donnent le meme fichier vide.
+            if time.time() >= prochaine_veille:
+                prochaine_veille = time.time() + VEILLE_MIN * 60
+                ecrire({"quoi": "VEILLE", "ts": maintenant(),
+                        "ouvertes": len(pos),
+                        "x60_ouverts": len([p for p in pos
+                                            if est_x60(p.magic)])})
 
             for p in pos:
                 t = int(p.ticket)
@@ -275,6 +356,10 @@ def rapport():
     L.append("%d entrees x%s, %d sorties, %d clotures enregistrees"
              % (len(entrees), SETUP, len(sorties), len(clotures)))
     L.append("du %s au %s" % (ev[0]["ts"][:16], ev[-1]["ts"][:16]))
+    L.append("rapport genere le %s -- horloge de la machine, celle qui"
+             % maintenant())
+    L.append("range les evenements par seance. Si elle derive, le classement")
+    L.append("derive avec elle : compare-la a une horloge de reference.")
     L.append("")
 
     # --------------------------------------------- le journal, en clair
@@ -294,6 +379,96 @@ def rapport():
     L.append("-" * LARG)
     L.append("  'tierces' = magics AUTRES que x%s en position a cet"
              " instant." % SETUP)
+    L.append("")
+
+    # ----------------------------------------------------- par seance
+    veilles = [e for e in ev if e["quoi"] == "VEILLE"]
+    x60_fermes = [c for c in clotures.values()
+                  if c.get("x60") and c.get("final") is not None]
+
+    L.append("=" * LARG)
+    L.append("  PAR SEANCE -- ou les x%s travaillent, et ce que ca donne"
+             % SETUP)
+    L.append("=" * LARG)
+    obs, ent_s, pnl_s = defaultdict(int), defaultdict(int), defaultdict(list)
+    for e in veilles:
+        obs[seance_de(e["ts"])] += 1
+    for e in entrees:
+        ent_s[seance_de(e["ts"])] += 1
+    for c in x60_fermes:
+        pnl_s[seance_de(c["ts"])].append(c["final"])
+
+    L.append("%-8s %-13s %8s %8s %8s %10s %9s %6s %7s %7s"
+             % ("seance", "horaire", "observe", "entrees", "fermes",
+                "somme", "moyen", "WR", "PF", "Sharpe"))
+    L.append("-" * LARG)
+    for nom, debut, fin in SEANCES:
+        v = pnl_s.get(nom, [])
+        n, somme, moy, _rr, pf, sh = ratios(v)
+        wr = (100.0 * len([x for x in v if x > 0]) / n) if n else None
+        vu = obs.get(nom, 0) * VEILLE_MIN / 60.0
+        L.append("%-8s %-13s %7.1fh %8d %8d %10s %9s %5s%% %7s %7s"
+                 % (nom, horaire_de(debut, fin), vu, ent_s.get(nom, 0), n,
+                    f(somme), f(moy), f(wr, 0), f(pf), f(sh)))
+    L.append("-" * LARG)
+    if not veilles:
+        L.append("  AUCUNE VEILLE ENREGISTREE -- la colonne 'observe' est a")
+        L.append("  zero partout parce que ce fichier a ete produit par une")
+        L.append("  version anterieure de l observateur. Les seances restent")
+        L.append("  justes ; c est la couverture qui est inconnue. Elle le")
+        L.append("  sera des le prochain redemarrage.")
+    else:
+        L.append("  'observe' = temps pendant lequel l observateur tournait,")
+        L.append("  compte a partir d une trace ecrite toutes les %d minutes."
+                 % VEILLE_MIN)
+        L.append("  UNE SEANCE A 0.0h NE DIT RIEN. Zero entree sur une seance")
+        L.append("  jamais observee n est pas un resultat, c est une absence")
+        L.append("  de mesure -- et les deux se ressemblent beaucoup trop.")
+    L.append("")
+
+    # ------------------------------------------------------ par heure
+    L.append("=" * LARG)
+    L.append("  PAR HEURE -- horloge de cette machine, pas celle du courtier")
+    L.append("=" * LARG)
+    oh, eh, ph = defaultdict(int), defaultdict(int), defaultdict(list)
+    for e in veilles:
+        oh[e["ts"][11:13]] += 1
+    for e in entrees:
+        eh[e["ts"][11:13]] += 1
+    for c in x60_fermes:
+        ph[c["ts"][11:13]].append(c["final"])
+
+    if not (oh or eh or ph):
+        L.append("  Rien a afficher pour l instant.")
+    else:
+        ech = max([abs(sum(v)) for v in ph.values()] or [0.0]) or 1.0
+        L.append("%-7s %8s %8s %8s %10s %9s   %s"
+                 % ("heure", "observe", "entrees", "fermes", "somme",
+                    "moyen", "profil"))
+        L.append("-" * LARG)
+        for h in range(24):
+            k = "%02d" % h
+            v = ph.get(k, [])
+            if not (oh.get(k) or eh.get(k) or v):
+                continue
+            n, somme, moy, _rr, _pf, _sh = ratios(v)
+            # Une heure observee sans cloture n a pas de profil : ni barre,
+            # ni signe, ni zero -- trois facons de faire croire a un
+            # resultat la ou il n y a rien eu a mesurer.
+            if v:
+                profil = ("-" if somme < 0 else "+") + "#" * int(
+                    round(18.0 * abs(somme) / ech))
+                chiffres = "%10s %9s" % (f(somme), f(moy))
+            else:
+                profil = ""
+                chiffres = "%10s %9s" % ("-", "-")
+            L.append("%-7s %7.1fh %8d %8d %s   %s"
+                     % (k + "h", oh.get(k, 0) * VEILLE_MIN / 60.0,
+                        eh.get(k, 0), n, chiffres, profil))
+        L.append("-" * LARG)
+        L.append("  Une heure absente de ce tableau n a jamais ete observee.")
+        L.append("  Les lignes a 0 entree ET plusieurs heures d observation")
+        L.append("  sont les vraies : la, on sait qu il ne s est rien passe.")
     L.append("")
 
     # ------------------------------------------- qui accompagne un x60
