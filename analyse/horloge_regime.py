@@ -57,11 +57,17 @@ L ETAT, PAR PAS DE TEMPS
 
     Puis, entre actifs connus (US30, US500, US100) :
 
-        aucun connu            -> INCONNU
+        moins de 2 connus      -> INCONNU
         tous CHURN             -> CARNAGE
         au moins 2/3 CHURN     -> CHURN
         tous PROPRE            -> PROPICE
         sinon                  -> DOUTEUX
+
+    Le seuil de 2 actifs connus vient du 12/08 : sans lui, un seul actif
+    faisait l unanimite a lui tout seul et on lisait PROPICE -- un feu
+    VERT -- sur la foi d un indice unique, les deux autres muets. Les
+    minutes INCONNU restent comptees avec leurs tickets et leurs euros :
+    le refus de nommer se mesure au lieu de se cacher.
 
     La fenetre glissante EST le lissage. On ne lisse pas une deuxieme
     fois et on ne fusionne pas les intervalles courts : un etat qui
@@ -115,6 +121,7 @@ ACTIFS = ["US30", "US500", "US100"]
 FENETRE = 15          # minutes de verdicts pris en compte a l instant t
 PAS_SUIVI = 30        # secondes entre deux echantillons, en suivi
 PART_CHURN = 0.60     # part de CHURN a partir de laquelle un actif est CHURN
+MINI_CONNUS = 2       # actifs connus exiges pour nommer un regime global
 DEST = os.path.join(_ICI, "panels")
 LARG = 100
 
@@ -228,9 +235,21 @@ def etat_actif(verdicts):
 
 
 def etat_global(par_actif):
-    """La regle est celle de l en-tete du fichier, et rien d autre."""
+    """La regle est celle de l en-tete du fichier, et rien d autre.
+
+    Le 12/08 a montre le defaut de la premiere version : avec « tous les
+    actifs CONNUS sont CHURN », un seul actif connu faisait l unanimite
+    a lui tout seul. On lisait CARNAGE a 08h49 sur le seul US30, et --
+    bien plus grave -- PROPICE a 13h58 sur le seul US100, les deux autres
+    muets. Un feu vert construit sur un indice unique, exactement la ou
+    v10/v11 s en servirait.
+
+    Il faut donc MINI_CONNUS actifs pour nommer un regime global. En
+    dessous, INCONNU : on ne sait pas. Et comme les minutes INCONNU sont
+    comptees avec leurs tickets et leurs euros dans le tableau suivant,
+    ce refus de nommer se mesure au lieu de se cacher."""
     connus = [e for e in par_actif.values() if e != "INCONNU"]
-    if not connus:
+    if len(connus) < MINI_CONNUS:
         return "INCONNU"
     ch = sum(1 for e in connus if e == "CHURN")
     if ch == len(connus):
@@ -334,6 +353,37 @@ def biais(d, clef):
                     for k, v in sorted(g.items(), key=lambda kv: -kv[1])[:3])
 
 
+def par_actif_etat(lot, jour, ech, pas_mn):
+    """{(actif, etat de CET actif): [minutes, tickets, EUR]}.
+
+    C est le tableau qui met le verdict a l epreuve, et il ne depend
+    d aucune regle d agregation : les tickets d US30 sont comptes sous
+    l etat d US30, pas sous l etat global. Si le churn dit quelque chose
+    d utile, un actif doit perdre quand il est en CHURN et pas quand il
+    est PROPRE. Si les trois lignes se ressemblent, le verdict ne trie
+    rien et il faudra le dire."""
+    g = defaultdict(lambda: [0, 0, 0.0])
+    par_mn = defaultdict(list)
+    for s in lot:
+        if s["jour"] != jour:
+            continue
+        m = _mn(s["ts"])
+        if m is not None:
+            par_mn[m].append(s)
+    for m, _e, pa, _n in ech:
+        for a in ACTIFS:
+            e = pa.get(a, "INCONNU")
+            g[(a, e)][0] += pas_mn
+            for k in range(m, m + pas_mn):
+                for s in par_mn.get(k, []):
+                    if s["actif"] != a:
+                        continue
+                    g[(a, e)][1] += 1
+                    if s["pnl"] is not None:
+                        g[(a, e)][2] += s["pnl"]
+    return g
+
+
 def ecrire(lignes, chemin):
     d = os.path.dirname(chemin)
     if d and not os.path.isdir(d):
@@ -359,7 +409,9 @@ def rendre(lot, jour, fenetre, pas_mn=1):
              % (fenetre, pas_mn, len(ech)))
     L.append("etat par actif : au moins %.0f%% de CHURN dans la fenetre ->"
              " CHURN" % (100 * PART_CHURN))
-    L.append("etat global : tous CHURN -> CARNAGE, 2 sur 3 -> CHURN,")
+    L.append("etat global : il faut %d actifs connus, sinon INCONNU ;"
+             % MINI_CONNUS)
+    L.append("              tous CHURN -> CARNAGE, 2 sur 3 -> CHURN,")
     L.append("              tous PROPRE -> PROPICE, sinon DOUTEUX")
     L.append("un ~ apres l etat d un actif : c est l etat MAJORITAIRE de")
     L.append("l intervalle, pas un etat tenu de bout en bout")
@@ -401,6 +453,29 @@ def rendre(lot, jour, fenetre, pas_mn=1):
     L.append("  Une seule journee ne prouve rien : c est un releve, pas un")
     L.append("  test. Il faut le meme tableau sur dix seances avant de")
     L.append("  couper quoi que ce soit dans v10 ou v11.")
+    L.append("")
+
+    L.append("=" * LARG)
+    L.append("  LE VERDICT A L EPREUVE -- chaque actif sous SON propre etat")
+    L.append("=" * LARG)
+    L.append("%-8s %-9s %8s %8s %12s %12s"
+             % ("actif", "etat", "minutes", "tickets", "EUR", "EUR/ticket"))
+    L.append("-" * LARG)
+    ga = par_actif_etat(lot, jour, ech, pas_mn)
+    for a in ACTIFS:
+        for e in ("CHURN", "MIXTE", "PROPRE", "INCONNU"):
+            if (a, e) not in ga:
+                continue
+            mn, tk, eur = ga[(a, e)]
+            L.append("%-8s %-9s %8d %8d %+12.2f %12s"
+                     % (a, e, mn, tk, eur,
+                        ("%+.2f" % (eur / tk)) if tk else "-"))
+    L.append("-" * LARG)
+    L.append("  Aucune regle d agregation ici : les tickets d un actif sont")
+    L.append("  comptes sous l etat de CET actif. Si le verdict trie, la")
+    L.append("  ligne CHURN doit etre nettement plus mauvaise que la ligne")
+    L.append("  PROPRE. Si les deux se ressemblent, le verdict ne trie rien")
+    L.append("  et le reste de ce fichier n a pas de fondation.")
     L.append("")
 
     L.append("=" * LARG)
