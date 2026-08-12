@@ -7,30 +7,36 @@ patch_onglets_rails.py -- les onglets RAILS RANGE et RAILS X3 dans la page
 
 CE QU IL FAIT
 
-    Deux insertions, pas une de plus.
-
     1. Juste apres l onglet RAILS TRADES, deux onglets de plus.
     2. Juste avant le bloc <div class="panel" id="p-railstr">, deux
-       blocs de contenu batis sur le meme moule.
+       blocs de contenu portant chacun un MARQUEUR.
+    3. La ligne qui sert la page passe par _page_rails(), qui remplace
+       les deux marqueurs par le contenu des panneaux.
 
-    Les panneaux sont INLINE, pas en iframe : leur contenu est lu depuis
-    les fichiers texte deja exportes, ce qui est instantane. Pas de route
-    HTTP a ajouter, pas de branche JavaScript -- showTab affiche le div
-    #p-<id> et c est tout.
+COMMENT LE CONTENU ENTRE DANS LA PAGE
 
-POURQUOI IL PEUT REFUSER, ET POURQUOI C EST VOULU
+    HTML_PAGE (ligne 4094) est une chaine ORDINAIRE de 9 766 lignes,
+    sans prefixe f -- verifie avec ast : ('Constant', 4094, 13859). Les
+    accolades n y seraient jamais interpretees.
 
-    L insertion doit tomber DANS une f-string triple, sinon les
-    accolades resteraient du texte et la page afficherait le nom de la
-    fonction entre accolades au lieu du panneau.
+    Elle est servie brute, une seule fois, ligne 23165 :
 
-    Le patch remonte donc le fichier depuis le point d insertion pour
-    verifier qu il est bien dans une f-string ouverte. S il n en trouve
-    pas, il REFUSE et le dit. Mieux vaut un patch qui refuse qu une page
-    qui affiche du code.
+        self.wfile.write(HTML_PAGE.encode("utf-8"))
 
-    Il verifie aussi que rails_range_panel et rails_trois_panel sont
-    importables avant d ecrire quoi que ce soit.
+    D ou les marqueurs, remplaces au moment de servir. Pas de f-string,
+    pas de route HTTP, pas de branche JavaScript -- showTab affiche le
+    div #p-<id> et c est tout.
+
+    Une premiere version tentait l interpolation et a REFUSE de
+    s appliquer, en detectant que la chaine n etait pas une f-string.
+    Elle avait raison : elle aurait affiche du code dans la page.
+
+QUATRE ANCRES, toutes verifiees uniques avant la moindre ecriture :
+l onglet RAILS TRADES, le bloc p-railstr, la ligne de service, et la
+constante elle-meme -- ou se posent les trois fonctions.
+
+Le patch IMPRIME chaque ligne reconnue avant d ecrire : une ancre qui
+attrape la mauvaise ligne est pire qu une ancre qui n attrape rien.
 
 IDEMPOTENT. Sauvegarde horodatee. ast.parse avant ecriture.
 PREND EFFET AU PROCHAIN DEMARRAGE DU 8095.
@@ -54,20 +60,25 @@ RE_ONGLET = re.compile(
 RE_PANNEAU = re.compile(
     r'^([ \t]*)<div class="panel" id="p-railstr"', re.M)
 
+RE_ECRIT = re.compile(
+    r'^([ \t]*)self\.wfile\.write\(HTML_PAGE\.encode\("utf-8"\)\)[ \t]*$',
+    re.M)
+
+# Les trois fonctions se posent juste AVANT la constante : elle est
+# unique, deja verifiee, et au niveau du module. Une regle du genre
+# "avant la premiere def" dependrait de la forme du fichier.
+RE_CONST = re.compile(r'^HTML_PAGE = """', re.M)
+
 ONGLETS = (
     '<div class="tab" onclick="showTab(\'railsrange\')"%s>RAILS RANGE</div>\n'
     '%s<div class="tab" onclick="showTab(\'railsx3\')"%s>RAILS X3</div>')
 
 PANNEAUX = (
-    '<div class="panel" id="p-railsrange">{_rr_panel()}</div>\n'
-    '%s<div class="panel" id="p-railsx3">{_r3_panel()}</div>\n'
+    '<div class="panel" id="p-railsrange"><!--RAILS_RANGE_ICI--></div>\n'
+    '%s<div class="panel" id="p-railsx3"><!--RAILS_X3_ICI--></div>\n'
     '%s')
 
-# Les deux fonctions sont definies au niveau du module : un import qui
-# echoue ne doit pas faire tomber toute la page, seulement ce panneau.
-TETE = '''
-
-# 12/08/2026 -- les deux onglets rails manquants.
+TETE = '''# 12/08/2026 -- les deux onglets rails manquants.
 # Le contenu vient des fichiers texte deja exportes (instantane), pas
 # d un script relance a chaque chargement. Un import qui echoue ne fait
 # tomber que son panneau, jamais la page.
@@ -88,6 +99,20 @@ def _r3_panel():
         return ("<div style='padding:14px;color:#f28b82'>RAILS X3 "
                 "indisponible : %s: %s</div>" % (type(_e).__name__, _e))
 
+
+def _page_rails(page):
+    """Remplace les deux marqueurs au moment de servir la page.
+
+    HTML_PAGE est une chaine ordinaire : rien n y est interpole. On
+    substitue donc ici, une fois par requete. Chaque panneau lit un
+    fichier texte deja exporte -- quelques millisecondes."""
+    try:
+        return (page.replace("<!--RAILS_RANGE_ICI-->", _rr_panel())
+                    .replace("<!--RAILS_X3_ICI-->", _r3_panel()))
+    except Exception:
+        return page          # jamais casser la page pour deux panneaux
+
+
 '''
 
 
@@ -98,22 +123,6 @@ def lire(chemin):
         except (UnicodeDecodeError, ValueError):
             continue
     raise IOError("encodage non reconnu pour %s" % chemin)
-
-
-def dans_fstring(src, pos):
-    """La position est-elle dans une f-string triple ouverte ?
-
-    On compte les ouvertures et fermetures de triples guillemets avant
-    le point d insertion. Impair = on est dedans. Grossier, mais il ne
-    s agit que de refuser un patch douteux, pas d analyser du Python."""
-    avant = src[:pos]
-    triples = re.findall(r'(f?)("""|\'\'\')', avant)
-    if len(triples) % 2 == 0:
-        return False, "pas dans une chaine triple"
-    ouvrante = triples[-1]
-    if ouvrante[0] != "f":
-        return False, "chaine triple ouverte mais SANS le prefixe f"
-    return True, "f-string triple ouverte"
 
 
 def main():
@@ -139,29 +148,20 @@ def main():
         print("Deja applique -- rien a faire.")
         return 0
 
-    for nom, rx in (("l onglet RAILS TRADES", RE_ONGLET),
-                    ("le bloc p-railstr", RE_PANNEAU)):
+    ancres = (("l onglet RAILS TRADES", RE_ONGLET),
+              ("le bloc p-railstr", RE_PANNEAU),
+              ("la ligne de service", RE_ECRIT),
+              ("la constante HTML_PAGE", RE_CONST))
+    for nom, rx in ancres:
         n = len(rx.findall(src))
         if n != 1:
             print("KO : %d occurrence(s) de %s, il en faut 1." % (n, nom))
             print("Rien n a ete ecrit.")
             return 1
+        print("  %-24s : %s" % (nom, rx.search(src).group(0).strip()[:70]))
 
-    mo = RE_ONGLET.search(src)
-    mp = RE_PANNEAU.search(src)
-    print("  ancre onglet  : %s" % mo.group(0).strip()[:82])
-    print("  ancre panneau : %s" % mp.group(0).strip()[:82])
-
-    for nom, pos in (("onglet", mo.start()), ("panneau", mp.start())):
-        ok, pourquoi = dans_fstring(src, pos)
-        print("  contexte %-8s : %s" % (nom, pourquoi))
-        if not ok:
-            print()
-            print("KO : l insertion ne tomberait pas dans une f-string.")
-            print("Les accolades resteraient du texte et la page")
-            print("afficherait le code au lieu du panneau.")
-            print("Rien n a ete ecrit.")
-            return 1
+    mo, mp, me = (RE_ONGLET.search(src), RE_PANNEAU.search(src),
+                  RE_ECRIT.search(src))
 
     ind_o, style = mo.group(1), mo.group(2)
     neuf = RE_ONGLET.sub(
@@ -173,13 +173,18 @@ def main():
         lambda m: ind_p + (PANNEAUX % (ind_p, ind_p)) + m.group(0),
         neuf, count=1)
 
-    # Les deux fonctions vont juste avant la premiere def du module.
-    rd = re.compile(r'^def [A-Za-z_]', re.M)
-    md = rd.search(neuf)
+    ind_e = me.group(1)
+    neuf = RE_ECRIT.sub(
+        lambda m: ind_e + 'self.wfile.write(_page_rails(HTML_PAGE)'
+                          '.encode("utf-8"))',
+        neuf, count=1)
+
+    md = RE_CONST.search(neuf)
     if not md:
-        print("KO : aucune def trouvee pour poser les deux fonctions.")
+        print("KO : la constante HTML_PAGE a disparu en cours de route.")
+        print("Rien n a ete ecrit.")
         return 1
-    neuf = neuf[:md.start()] + TETE.lstrip("\n") + "\n" + neuf[md.start():]
+    neuf = neuf[:md.start()] + TETE + neuf[md.start():]
 
     try:
         ast.parse(neuf)
@@ -195,9 +200,9 @@ def main():
     print()
     print("Contenu lu depuis le texte exporte : instantane, et c est")
     print("exactement ce que lit le REPL. L age est affiche en tete du")
-    print("panneau, en orange au-dela de 20 min, en rouge au-dela d une")
-    print("heure -- un panneau qui ne dit pas son age laisse croire")
-    print("qu il est frais.")
+    print("panneau -- orange au-dela de 20 min, rouge au-dela d une")
+    print("heure. Un panneau qui tait sa date laisse croire qu il est")
+    print("frais.")
 
     if a.essai:
         print()
