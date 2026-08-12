@@ -77,13 +77,20 @@ NEUF = '''
     # Liste explicite : on sait exactement ce que DeepSeek recoit. Elle
     # part dans le message systeme A CHAQUE question, d ou le plafond.
     # Ajouter une source = ajouter une ligne ici, pas balayer un dossier.
+    # L import est local : repl_web n a pas d import os au niveau module.
+    # Ne rien supposer de ce qu un fichier importe deja.
+    import os as _os
+    _ICI = _os.path.dirname(_os.path.abspath(__file__))
     _DOCS_REPL = [
-        os.path.join(_ICI, "notes"),
-        os.path.join(_ICI, "docs", "JOURNAL.md"),
+        _os.path.join(_ICI, "notes"),
+        _os.path.join(_ICI, "docs", "JOURNAL.md"),
         r"G:\\My Drive\\ScalpEA\\panels",
     ]
-    _DOCS_MAX = 60000        # caracteres au total, ~15 000 jetons
-    _DOCS_MAX_UN = 25000     # caracteres pour un seul document
+    # Le panneau rails trades fait a lui seul ~99 000 caracteres. Les
+    # plafonds sont donc larges : environ 50 000 jetons par question au
+    # maximum. C est le prix pour qu il voie les panneaux en entier.
+    _DOCS_MAX = 200000       # caracteres au total
+    _DOCS_MAX_UN = 100000    # caracteres pour un seul document
 
     def _lire_doc(_p):
         for _e in ("utf-8", "utf-8-sig", "cp1252"):
@@ -98,28 +105,28 @@ NEUF = '''
 
     _cibles = []
     for _d in _DOCS_REPL:
-        if os.path.isdir(_d):
-            for _n in sorted(os.listdir(_d)):
+        if _os.path.isdir(_d):
+            for _n in sorted(_os.listdir(_d)):
                 if _n.lower().endswith((".md", ".txt")):
-                    _cibles.append(os.path.join(_d, _n))
-        elif os.path.isfile(_d):
+                    _cibles.append(_os.path.join(_d, _n))
+        elif _os.path.isfile(_d):
             _cibles.append(_d)
 
     _bouts, _total, _charges, _coupes, _absents = [], 0, [], [], []
     for _p in _cibles:
         _t = _lire_doc(_p)
         if _t is None:
-            _absents.append(os.path.basename(_p))
+            _absents.append(_os.path.basename(_p))
             continue
         if len(_t) > _DOCS_MAX_UN:
             _t = _t[:_DOCS_MAX_UN] + "\\n[... tronque ...]"
-            _coupes.append(os.path.basename(_p))
+            _coupes.append(_os.path.basename(_p))
         if _total + len(_t) > _DOCS_MAX:
-            _coupes.append(os.path.basename(_p) + " (plafond total)")
+            _coupes.append(_os.path.basename(_p) + " (plafond total)")
             break
         _total += len(_t)
-        _charges.append(os.path.basename(_p))
-        _bouts.append("\\n\\n===== %s =====\\n%s" % (os.path.basename(_p), _t))
+        _charges.append(_os.path.basename(_p))
+        _bouts.append("\\n\\n===== %s =====\\n%s" % (_os.path.basename(_p), _t))
 
     if _bouts:
         _static_ctx = (_static_ctx or "") + \\
@@ -177,26 +184,16 @@ def main():
         print("Rien n a ete ecrit.")
         return 1
 
-    if "import os" not in src:
-        print("KO : repl_web.py n importe pas os. Le bloc insere s en sert.")
-        print("Rien n a ete ecrit.")
-        return 1
-
     ind = trouve[0][0]
     corps = "\n".join(ind + l[4:] if l.startswith("    ") else (ind + l if l else "")
                       for l in NEUF.split("\n"))
-
-    # _ICI : le dossier du fichier, pose juste avant le bloc s il manque.
-    tete = ""
-    if "_ICI" not in src:
-        tete = ("\n%s_ICI = os.path.dirname(os.path.abspath(__file__))" % ind)
 
     def remplace(m):
         g = m.group(0)
         coupe = g.rstrip()
         fin = "\n" + trouve[0][1] + "_inited = True"
         avant = coupe[:coupe.rfind("_inited = True")].rstrip("\n \t")
-        return avant + tete + corps + fin
+        return avant + corps + fin
 
     neuf = RE_INIT.sub(remplace, src, count=1)
 
@@ -214,9 +211,10 @@ def main():
               "G:\\My Drive\\ScalpEA\\panels\\  -- tous les .md et .txt"):
         print("    %s" % c)
     print()
-    print("Plafonds : 25 000 caracteres par document, 60 000 au total.")
+    print("Plafonds : 100 000 caracteres par document, 200 000 au total.")
     print("Ce contenu part dans le message systeme A CHAQUE question :")
-    print("60 000 caracteres font environ 15 000 jetons par echange.")
+    print("Le seul panneau rails trades pese ~99 000 caracteres,")
+    print("soit ~25 000 jetons. Regarde le compte au demarrage.")
     print("Le processus ecrira au demarrage ce qu il a charge et coupe.")
 
     for c in ("notes", os.path.join("docs", "JOURNAL.md")):

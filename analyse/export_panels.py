@@ -130,7 +130,17 @@ def main():
     p.add_argument("--dest", default=DEST)
     p.add_argument("--seulement", nargs="*",
                    help="n exporter que ces fichiers de sortie")
+    p.add_argument("--plus", nargs="*", default=[],
+                   help="panneaux supplementaires, forme module=sortie.txt")
     a = p.parse_args()
+
+    travaux = list(TRAVAUX)
+    for _e in a.plus:
+        if "=" not in _e:
+            print("KO : --plus attend module=sortie.txt, recu %r" % _e)
+            return 1
+        _m, _s = _e.split("=", 1)
+        travaux.append((_s.strip(), "module", _m.strip()))
 
     try:
         os.makedirs(a.dest, exist_ok=True)
@@ -145,7 +155,7 @@ def main():
     print("-" * 92)
 
     ok = rate = 0
-    for sortie, genre, cible in TRAVAUX:
+    for sortie, genre, cible in travaux:
         if a.seulement and sortie not in a.seulement:
             continue
         texte, note = (par_module(cible) if genre == "module"
