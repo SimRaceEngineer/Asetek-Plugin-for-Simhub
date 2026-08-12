@@ -574,6 +574,24 @@ def rapport():
     L.append("  ecart-type, PAR TICKET. Ce n est PAS le Sharpe d une courbe")
     L.append("  de capital : les tickets se chevauchent, une annualisation")
     L.append("  serait fausse -- et fausse dans le sens flatteur.")
+
+    # Le releve papier x10 x20 x30 x60 x120 x240, dans CE panneau --
+    # demande le 12/08. Import doux : si papier_tf n est pas la, ou s il
+    # echoue, le panneau x60 doit rester lisible. Un panneau qui tombe
+    # entier parce qu une section optionnelle manque, c est perdre ce
+    # qui marchait pour ce qui n existe pas encore.
+    try:
+        import papier_tf
+        L.append("")
+        L.append("")
+        L.extend(papier_tf.rapport())
+    except ImportError:
+        L.append("")
+        L.append("  (papier_tf.py absent : pas de releve papier ici.)")
+    except Exception as e:
+        L.append("")
+        L.append("  Le releve papier n a pas pu etre lu : %s: %s"
+                 % (type(e).__name__, e))
     return L
 
 
