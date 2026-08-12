@@ -85,15 +85,17 @@ RE_THS = re.compile(
     r'\("deepseek", "deepseek_reasoner"\)\][ \t]*$', re.M)
 
 # Deux ancres separees, pas un bloc : la v1 exigeait que les deux lignes
-# soient adjacentes et a echoue sur le fichier reel. Une ancre ne doit
-# jamais supposer ce qu il y a autour d elle.
-RE_G = re.compile(
-    r'^([ \t]*)g = out\.get\("deepseek"\) or '
-    r'\{"text": "\(pas de reponse\)", "elapsed": 0\}[ \t]*$', re.M)
+# soient adjacentes. Elles le sont, mais la v2 -- qui ne l exigeait plus
+# -- a quand meme echoue sur g1. Le fichier differe donc de ce que la
+# console affiche par un detail invisible : espace insecable, espace de
+# fin, quelque chose.
+#
+# On cesse de deviner. L ancre ne retient que le DEBUT de la ligne, qui
+# est identifiant a lui seul, et la ligne entiere est remplacee. C est
+# le principe general : une ancre doit tenir au strict necessaire.
+RE_G = re.compile(r'^([ \t]*)g = out\.get\("deepseek"\).*$', re.M)
 
-RE_G1 = re.compile(
-    r'^([ \t]*)g1 = out\.get\("deepseek_reasoner"\) or '
-    r'\{"text": "\(pas de reponse\)", "elapsed": 0\}[ \t]*$', re.M)
+RE_G1 = re.compile(r'^([ \t]*)g1 = out\.get\("deepseek_reasoner"\).*$', re.M)
 
 TETE = '''# 12/08/2026 -- CE QUE LE REPL INTERROGE, ET AVEC QUEL BUDGET
 #
@@ -184,11 +186,15 @@ def main():
                     ("la liste des threads", RE_THS),
                     ("le repli g (pas de reponse)", RE_G),
                     ("le repli g1 (pas de reponse)", RE_G1)):
-        n = len(rx.findall(src))
-        if n != 1:
-            print("KO : %d occurrence(s) de %s, il en faut 1." % (n, nom))
+        vus = rx.findall(src)
+        if len(vus) != 1:
+            print("KO : %d occurrence(s) de %s, il en faut 1." % (len(vus), nom))
             print("Rien n a ete ecrit.")
             return 1
+        # On montre ce qu on a reconnu : une ancre qui matche la mauvaise
+        # ligne est pire qu une ancre qui ne matche rien.
+        m = rx.search(src)
+        print("  ancre OK : %s" % m.group(0).strip()[:88])
 
     neuf = RE_DEF.sub(lambda m: TETE + m.group(0), src, count=1)
     neuf = RE_APPEL.sub(lambda m: cale(NEUF_APPEL, m.group(1)), neuf, count=1)
@@ -206,7 +212,7 @@ def main():
         print("Rien n a ete ecrit.")
         return 1
 
-    print("les quatre ancres sont uniques.")
+    print("les cinq ancres sont uniques.")
     print()
     print("Apres patch :")
     print("  REPL_MODELES    = (\"deepseek\", \"deepseek_reasoner\")")
