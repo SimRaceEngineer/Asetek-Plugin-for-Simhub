@@ -2,77 +2,78 @@
 """
 rails_trois_panel.py -- l onglet RAILS X3 de la page 8095
 
-Rend la sortie de rails_trois.py telle quelle, dans un <pre>.
+Lit le fichier deja exporte et l affiche dans un <pre>.
+
+POURQUOI LIRE LE TXT ET NON RELANCER LE SCRIPT
+
+    rails_trois.py met plusieurs secondes a tourner. Le rendre a chaque
+    chargement de page rendrait toute la page lente, pour un panneau
+    qu on ne regarde pas a chaque fois.
+
+    Le fichier est deja produit par export_panels.py, et panels_auto.py
+    le rafraichit toutes les 15 minutes. On lit donc exactement ce que
+    lit le REPL -- une seule version des chiffres, pas deux.
 
 POURQUOI SI SIMPLE
 
-    On aurait pu reecrire le panneau en HTML, avec des tableaux et des
-    couleurs. On ne l a pas fait, pour deux raisons.
-
-    La sortie console est deja lisible et deja relue : c est elle qui a
-    servi toute la journee, elle porte ses avertissements et ses ? sur
-    les cellules trop petites. La reecrire, ce serait risquer d en perdre
-    un morceau en chemin -- et un avertissement perdu est pire qu un
+    La sortie console porte deja ses avertissements et ses ? sur les
+    cellules trop petites. La reecrire en HTML, ce serait risquer d en
+    perdre un en chemin -- et un avertissement perdu est pire qu un
     panneau moche.
 
-    Et surtout, il n existe alors qu UNE version des chiffres. Si le
-    panneau web et la console divergeaient un jour, personne ne saurait
-    lequel croire.
+    rails_range_panel.py est ecrit exactement pareil.
 
-    rails_range_panel.py est ecrit exactement pareil. Deux fichiers
-    jumeaux, ca se relit d un coup d oeil.
+L AGE EST AFFICHE. Un panneau qui ne dit pas quand il a ete produit
+laisse croire qu il est frais.
 """
 import html as _html
+import io
 import os
-import subprocess
-import sys
+import time
 
-SCRIPT = "rails_trois.py"
-TICKETS = os.path.join("docs", "rails_trades", "tickets_rails.jsonl")
+FICHIER = os.path.join("panels", "panel_rails_trois.txt")
 TITRE = "RAILS X3"
-DELAI = 120
 
 
-def _sortie():
-    """(texte, ok). En cas d echec on rend l erreur, jamais du vide."""
-    if not os.path.isfile(SCRIPT):
-        return "%s introuvable dans %s" % (SCRIPT, os.getcwd()), False
-    argv = [sys.executable, SCRIPT, "--fichier", TICKETS]
+def _lire():
+    """(texte, age_en_secondes). age None si le fichier manque."""
+    if not os.path.isfile(FICHIER):
+        return ("%s introuvable.\n\nIl est produit par export_panels.py "
+                "et rafraichi par panels_auto.py." % FICHIER), None
     try:
-        r = subprocess.run(argv, capture_output=True, text=True, timeout=DELAI)
-    except subprocess.TimeoutExpired:
-        return "%s n a pas repondu en %d s." % (SCRIPT, DELAI), False
+        t = io.open(FICHIER, encoding="utf-8", errors="replace").read()
     except Exception as e:
-        return "%s: %s" % (type(e).__name__, e), False
-    if r.returncode != 0:
-        court = (r.stderr or r.stdout or "").strip()
-        return "%s a rendu le code %d :\n\n%s" % (SCRIPT, r.returncode,
-                                                  court[-2000:]), False
-    return (r.stdout or "").strip(), True
+        return "%s illisible : %s" % (FICHIER, e), None
+    return t.strip(), int(time.time() - os.path.getmtime(FICHIER))
 
 
 def render_panel():
-    txt, ok = _sortie()
-    if not txt:
-        txt = "%s n a rien ecrit." % SCRIPT
-        ok = False
-    couleur = "#8ab4f8" if ok else "#f28b82"
+    txt, age = _lire()
+    if age is None:
+        entete, couleur = "fichier absent", "#f28b82"
+    elif age > 3600:
+        entete = "exporte il y a %d min -- PERIME" % (age // 60)
+        couleur = "#f28b82"
+    elif age > 1200:
+        entete, couleur = "exporte il y a %d min" % (age // 60), "#fbbc04"
+    else:
+        entete, couleur = "exporte il y a %d min" % (age // 60), "#8ab4f8"
     return (
         '<div style="padding:10px 14px">'
         '<h2 style="color:%s;margin:0 0 4px 0">%s</h2>'
         '<div style="color:#9aa0a6;font-size:12px;margin-bottom:10px">'
-        'sortie de %s sur %s -- memes chiffres que la console, '
-        'aucune reecriture</div>'
+        '%s &middot; %s</div>'
         '<pre style="white-space:pre;overflow-x:auto;font-size:12px;'
         'line-height:1.35;color:#e8eaed;background:#1b1b1d;padding:12px;'
         'border-radius:6px">%s</pre></div>'
-        % (couleur, TITRE, SCRIPT, TICKETS, _html.escape(txt))
+        % (couleur, TITRE, entete, FICHIER, _html.escape(txt))
     )
 
 
-render = render_panel          # les deux noms, comme les autres panneaux
+render = render_panel
 
 
 if __name__ == "__main__":
-    t, ok = _sortie()
-    print(t if ok else "ECHEC : " + t)
+    t, a = _lire()
+    print("age : %s s" % a)
+    print(t[:800])
