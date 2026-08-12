@@ -39,6 +39,85 @@ actifs, minute par minute, entre 15h25 et 16h45 le 12/08.
 
 ### Si malgre tout on veut une regle horaire
 
+### CE QUE L HORLOGE A REPONDU LE SOIR MEME
+
+`horloge_regime.py` a ete ecrit et lance le 12/08 au soir. La question
+posee plus haut -- « cet apres-midi etait-il detectable en temps reel
+par quelque chose qu on calcule deja ? » -- a une reponse partielle, et
+elle est meilleure que ce qu on esperait :
+
+| etat | minutes | tickets | EUR | EUR/ticket |
+|---|---|---|---|---|
+| CHURN | 225 | 109 | -1775.49 | **-16.29** |
+| DOUTEUX | 428 | 166 | -872.77 | -5.26 |
+| CARNAGE | 14 | 4 | -3.50 | - |
+| INCONNU | 22 | 0 | 0 | - |
+
+**39 % des tickets portent 67 % de la perte**, a un cout par ticket 3,1
+fois plus lourd. La fenetre **16h24-17h06 pese -1081 EUR en 42 minutes**,
+soit 41 % de la perte de la journee. L information etait donc la, en
+temps reel, dans un verdict que la stack calcule deja.
+
+**PROPICE : zero minute.** Pas une seule minute du 12/08 n a eu les
+trois indices propres en meme temps. Le « aucun n etait tradable cet
+apres-midi » n etait pas une impression.
+
+### LA CONTRADICTION A TRANCHER EN PREMIER
+
+Le bloc LE VERDICT A L EPREUVE, lui, ne soutient PAS le verdict pris
+actif par actif :
+
+| actif | CHURN | MIXTE | PROPRE |
+|---|---|---|---|
+| US30 | -8.87 (103 tk) | -13.15 (23) | -24.41 (2 tk) |
+| US500 | -13.55 (40 tk) | -2.12 (28) | **-27.80 (16 tk)** |
+| US100 | -18.48 (2 tk) | -13.28 (41) | **+10.05 (24 tk)** |
+
+Sur US500, PROPRE est la PIRE ligne, sur 16 tickets. Un actif sur trois
+va dans le sens attendu.
+
+Or l etat global CHURN est presque toujours porte par US30. Les deux
+resultats ne se concilient que d une facon : pendant ces minutes, ce ne
+sont pas les tickets d US30 qui perdent, ce sont ceux des DEUX AUTRES.
+
+    HYPOTHESE : le churn d US30 est un indicateur CROISE sur US500 et
+    US100, et le verdict propre a chaque actif est un mauvais guide sur
+    lui-meme.
+
+Le test tient en un tableau : P&L de chaque actif conditionne a l etat
+d US30, pas au sien. C est la meme famille d idee que l onglet
+LEADER/LAGGARD, qui existe deja. **A faire en premier demain** -- avant
+toute idee de brancher v10/v11, qui serait aujourd hui construit sur la
+seule chose que la mesure contredit.
+
+### LA DENSITE, ET POURQUOI IL FAUT UNE SOURCE CONTINUE
+
+CARNAGE ne pese que 14 minutes et PROPICE zero, parce qu exiger les
+trois actifs connus en meme temps n arrive presque jamais : sur 689
+minutes, US100 est INCONNU 281 minutes, US500 213, US30 101. Un verdict
+n existe qu au moment d un trade, et trois colonnes ne se remplissent
+pas a ce rythme.
+
+`--sources` a trouve neuf fichiers d etat ecrits en continu, la plupart
+ages de 0 a 2 secondes :
+
+    vix_accel_state.json, vix_crab_state.json, vix_norm_state.json,
+    squeeze_momentum_state.json, pattern_sequence_state.json,
+    rails_continuation_state.json, band_angle_state.json,
+    micah_state.json
+
+Si l un d eux publie un regime a la minute, on y branche l horloge : ca
+reglerait D UN COUP le retard de cloture et les trous. Il manque leurs
+clefs.
+
+    python oos_v9.py --champs
+    python -c "import json,io;[print(f, list(json.load(io.open(f,encoding='utf-8')).keys())[:12]) for f in ['rails_continuation_state.json','pattern_sequence_state.json','squeeze_momentum_state.json','band_angle_state.json','vix_accel_state.json']]"
+
+Le meme `--champs` dira aussi sous quel nom le biais des rails est
+ecrit : les colonnes `biais M1` et `biais M5` de l horloge affichent
+`? 100%`, donc la comparaison M1 contre M5 -- celle qu on voulait depuis
+le depart -- n existe pas encore.
+
 ### Le piege a eviter
 
 Une journee est **une** observation. Le 12/08 peut etre la regle ou
