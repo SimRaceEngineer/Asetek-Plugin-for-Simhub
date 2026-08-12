@@ -1,14 +1,43 @@
 # Feuille de route du 13/08 -- ecrite le 12/08 a 16h40
 
-## L observation du jour, a verifier avant d en faire une regle
+## L observation du jour -- et sa correction, une heure plus tard
 
-Le 12/08, **US30 perd pendant que US100 et US500 gagnent**. L hypothese
-proposee : US30 serait le laggard de la session de l apres-midi, ou en
-churn, ou autre chose -- il lui faut une **etiquette**.
+Premiere lecture : le 12/08, **US30 perd pendant que US100 et US500
+gagnent**. Hypothese proposee : US30 serait le laggard de
+l apres-midi, il lui faut une **etiquette**, et on ne le traderait pas
+avant 16h30.
 
-L idee a tester : **ne pas trader US30 au moins jusqu a la premiere
-heure de la session US**, soit jusqu a 16h30 Paris (ouverture du cash a
-15h30).
+**Les graphiques M1 des trois indices ont refute cette lecture le jour
+meme.** Montee reguliere jusqu a 15h28, une bougie de chute violente a
+15h30 -- l ouverture du cash US -- puis une heure de hachoir. US100
+entre 29 740 et 29 840, US30 entre 53 740 et 53 870, US500 entre 7 736
+et 7 758. Trois amplitudes, **un seul comportement**, a la meme minute.
+
+Ce n est donc pas une propriete d US30 : c est un REGIME, synchronise
+sur les trois. Si US30 a perdu davantage, c est vraisemblablement parce
+qu il est le plus large en points et qu un hachoir coute a proportion de
+l amplitude.
+
+### La question devient donc autre, et meilleure
+
+**Cet apres-midi etait-il detectable en temps reel par quelque chose
+qu on calcule deja ?** On dispose des verdicts churn (CHURN / MIXED /
+CLEAN), du VIX, de `range_pos`, de l alignement HLC. Le panneau
+annoncait d ailleurs « US30 reste en CHURN » vers 13h30 pendant que
+US100 passait OK.
+
+    Si les detecteurs ont dit CHURN entre 15h30 et 16h40
+        -> l information existait et personne ne s en est servi.
+           C est un correctif de BRANCHEMENT, pas de recherche.
+
+    S ils ont dit CLEAN
+        -> ils sont aveugles a ce motif. C est un vrai sujet.
+
+A faire en premier demain, c est une lecture de journal, pas une etude :
+relever ce que les verdicts churn et le regime ont dit sur les trois
+actifs, minute par minute, entre 15h25 et 16h45 le 12/08.
+
+### Si malgre tout on veut une regle horaire
 
 ### Le piege a eviter
 
@@ -35,11 +64,15 @@ Le meme traitement s impose donc ici, et dans cet ordre :
 
 ### L etiquette
 
-Si le fait tient, il faudra le NOMMER avant de le coder : laggard,
-churn, ou autre. Une regle « pas d US30 avant 16h30 » sans mecanisme
-derriere est une regle qui ne survivra pas au premier mois ou elle se
-trompe. On a vu aujourd hui ce que vaut une explication plausible mais
-non testee -- trois fois.
+Si le fait tient, il faudra le NOMMER avant de le coder. Et le nom
+compte : « US30 est le laggard » et « l apres-midi post-ouverture est un
+hachoir » ne donnent pas le meme correctif. Le premier coupe un actif,
+le second coupe une fenetre pour tout le monde -- et seul le second
+colle a ce que montrent les graphiques du 12/08.
+
+Une regle sans mecanisme derriere ne survivra pas au premier mois ou
+elle se trompe. On a vu aujourd hui ce que vaut une explication
+plausible mais non testee -- trois fois, dont celle-ci.
 
 ## Ce qui reste a faire, par ordre
 
