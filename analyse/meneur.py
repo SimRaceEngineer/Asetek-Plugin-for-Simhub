@@ -97,12 +97,21 @@ DEST = os.path.join(_ICI, "panels")
 LARG = 100
 
 
+# La stack nomme ses indices US30 / US500 / US100 ; MT5 les appelle
+# US30 / SPX500 / NAS100. Douze seances ont ete calculees sur US30 seul
+# avant que diag_bougies ne le montre -- en silence.
+SYMBOLES = {"US100": "NAS100", "US500": "SPX500", "US30": "US30"}
+
+
 def bougies(actif, jour):
-    """[(minute, close)] du jour, en heure serveur."""
+    """[(minute, close)] du jour, en heure serveur. Parle si c est vide."""
+    sym = SYMBOLES.get(actif, actif)
     d0 = datetime.strptime(jour, "%Y-%m-%d")
-    r = mt5.copy_rates_range(actif, mt5.TIMEFRAME_M1, d0,
+    r = mt5.copy_rates_range(sym, mt5.TIMEFRAME_M1, d0,
                              d0 + timedelta(days=1))
     if r is None or len(r) < 60:
+        sys.stderr.write("BOUGIES ABSENTES : %s (%s) le %s\n"
+                         % (actif, sym, jour))
         return []
     out = []
     for b in r:
