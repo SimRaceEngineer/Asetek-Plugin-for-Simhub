@@ -111,7 +111,7 @@ NEUF = '''
                   " presente en meme temps : aucune cle chargee."
                   " La vraie cle est dans ce processus, donc ai_master"
                   " est arme. Retire DEEPSEEK_API_KEY de cet"
-                  " environnement.", file=sys.stderr)
+                  " environnement.")
             return ""
         _pr = os.path.join(_HERE, "%s")
         if os.path.exists(_pr):
@@ -166,8 +166,8 @@ def main():
         print("Rien n a ete ecrit.")
         return 1
 
-    # _HERE et sys doivent exister : le bloc insere les utilise.
-    manque = [n for n in ("_HERE", "import sys", "import os") if n not in src]
+    # _HERE et os doivent exister : le bloc insere les utilise.
+    manque = [n for n in ("_HERE", "import os") if n not in src]
     if manque:
         print("KO : %s absent de %s. Le bloc insere s en sert."
               % (", ".join(manque), a.fichier))
