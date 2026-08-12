@@ -278,7 +278,7 @@ if ($Etat) {
     Write-Host "  -----------------------------------------------------------------"
     foreach ($s in $SERVICES) {
         $v = @(Lister $s.Script)
-        $etat = switch ($v.Count) {
+        $libelle = switch ($v.Count) {
             0       { "ARRETE" }
             1       { "en cours (" + $v[0].ProcessId + ")" }
             default { ("{0} INSTANCES" -f $v.Count) }
@@ -289,7 +289,7 @@ if ($Etat) {
             if ($o -lt 0) { $p = "{0} MUET" -f $s.Port }
             else { $p = "{0} OK ({1} o)" -f $s.Port, $o }
         }
-        Write-Host ("  {0,-14} {1,-24} {2,-22} {3}" -f $s.Nom, $s.Script, $etat, $p)
+        Write-Host ("  {0,-14} {1,-24} {2,-22} {3}" -f $s.Nom, $s.Script, $libelle, $p)
     }
     $age = 99999
     if (Test-Path $COEUR) {
