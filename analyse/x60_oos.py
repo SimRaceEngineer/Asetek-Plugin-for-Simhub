@@ -346,6 +346,10 @@ def main():
     L.append("  fausse -- ca la rend intransposable a la prochaine seance.")
     L.append("  Une part vide signifie un total nul ou negatif : une part")
     L.append("  de rien n aurait rien mesure.")
+    L.append("  Une part AU-DESSUS DE 100 %% n est pas une anomalie : elle")
+    L.append("  veut dire que le reste est negatif, donc que les trois")
+    L.append("  premiers portent plus que le total et que les autres en")
+    L.append("  reprennent une partie.")
     L.append("")
 
     # ------------------------------------------- 4. les six cellules
