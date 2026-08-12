@@ -191,10 +191,41 @@ function Arreter-Tout {
 
 # ------------------------------------------------------------ une passe
 $script:Repos = @{}
+$script:Muets = @{}
 
 function Passe {
     foreach ($s in $SERVICES) {
         $v = @(Lister $s.Script)
+
+        # VIVANT MAIS MUET est une panne a part entiere.
+        #
+        # Le 12/08 a 21h55 : orderflow_panel tournait (pid 9744) et 8097
+        # ne repondait pas, une minute apres son lancement. Lance au
+        # premier plan il ouvre son port en une seconde -- il etait donc
+        # bloque AVANT serve_forever, pas casse. run_monitor_loop.bat
+        # connait ce piege et le neutralise avec « < nul » : sur erreur,
+        # le __main__ appelle input(), et sans stdin la fenetre fige.
+        #
+        # Compter la presence ne suffit donc pas. Deux passes muettes de
+        # suite -> on tue, la passe d apres relance. Deux et pas une :
+        # un service qui vient de demarrer a le droit de charger.
+        if ($v.Count -eq 1 -and $s.Port -gt 0) {
+            if ((Repond $s.Port) -lt 0) {
+                $n = 0
+                if ($script:Muets.ContainsKey($s.Nom)) { $n = $script:Muets[$s.Nom] }
+                $n = $n + 1
+                $script:Muets[$s.Nom] = $n
+                if ($n -ge 2) {
+                    Noter ("{0} : vivant (pid {1}) mais port {2} muet deux fois -- on le tue" -f `
+                           $s.Nom, $v[0].ProcessId, $s.Port)
+                    try { Stop-Process -Id $v[0].ProcessId -Force -ErrorAction Stop } catch { }
+                    $script:Muets[$s.Nom] = 0
+                    $script:Repos.Remove($s.Nom)
+                }
+                continue
+            }
+            $script:Muets[$s.Nom] = 0
+        }
 
         if ($v.Count -eq 1) { continue }
 
