@@ -35,12 +35,12 @@ POURQUOI CES NOMS DE VARIABLES
     DEEPSEEK_BASE_URL. deepseek-v4-pro est donc route sans rien
     d autre a changer.
 
-MESURE AVANT / APRES, la meme question « Reponds juste OK »
+MESURE AVANT / APRES, la meme question "Reponds juste OK"
 
     deepseek-reasoner   'OK'    9.4 / 10.1 / 11.9 / 12.3 s
     deepseek-v4-pro     'OK.'  21.2 / 17.2 s
 
-    Le texte change -- « OK. » avec un point -- et la latence double.
+    Le texte change -- "OK." avec un point -- et la latence double.
     Deux signes concordants que la bascule prend effet, la ou les
     essais precedents ne changeaient rien.
 
@@ -79,7 +79,7 @@ QUAND CA PREND EFFET -- PAS TOUT SEUL. LIRE CECI.
     rien ne le signale -- il continue de parler a deepseek-reasoner.
 
     (Cette note corrige ce que ce fichier affirmait le 13/08 au matin :
-    « les variables seront prises au prochain cycle, sans rien faire ».
+    "les variables seront prises au prochain cycle, sans rien faire".
     C etait faux, et le genre de faux qui ne se voit pas : le panneau
     repond, le REPL repond, seule l identite du modele est autre.)
 
