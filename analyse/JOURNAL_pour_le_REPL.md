@@ -30,7 +30,7 @@ matin, et un conseil donné sans elles arrivera à côté :
 0ter. **Sur le x60, le bras 206 bat le 207 de +16,76 par ticket** sur
    les trois actifs, à entrées identiques — environ 1 590 €
    (section 4). Le 207 coupe 70 % tôt *et* remonte son stop.
-0bis. **« Le x60 entraîne la fenêtre » ne tient plus** : 91 % de
+0quater. **« Le x60 entraîne la fenêtre » ne tient plus** : 91 % de
    l'effet vient de trois fenêtres, toutes antérieures au 05/08
    (section 4). Le gradient x60, lui, tient encore.
 1. **M10, M20 et M30 sont en live** depuis 13:10 (section 5). Le
