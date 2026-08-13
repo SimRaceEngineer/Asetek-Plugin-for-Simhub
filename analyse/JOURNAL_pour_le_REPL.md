@@ -92,10 +92,19 @@ instable, c'est une hypothèse réfutée.
 
 **Instabilité observée le 13/08** : deux lectures du même panel
 orderflow à quelques minutes d'intervalle ont donné des verdicts
-**opposés** sur ALIGNE_HAUSSE (+18,09 avec 83 % de WR, puis −7,67), et
-des écarts sur EXHAUSTION_SELL (+46,97 n=9 puis +40,34 n=10). Quand
-deux lectures du même tableau se contredisent en quelques minutes, les
-cellules sont du bruit.
+**opposés** sur ALIGNE_HAUSSE — +18,09 avec 83 % de WR dans la
+première, −7,67 et « méfiance » dans la seconde. Une cellule dont le
+signe s'inverse entre deux lectures du même tableau est du bruit.
+
+À ne pas confondre avec de l'instabilité : EXHAUSTION_SELL passe de
++46,97 (n=9) à +40,34 (n=10) entre les deux lectures. C'est un ticket
+de plus, pas une contradiction — mais un seul ticket qui déplace la
+moyenne de 6,63 EUR dit assez à quel point la cellule est fragile.
+
+**Et un accord, qui vaut mieux qu'un désaccord** : la règle anti
+contre-flux a été mesurée trois fois indépendamment — Δ −0,02, −0,15
+(gel V9), +0,03 sur 128 signaux (lecture du 13/08). Trois valeurs qui
+encadrent zéro. Cette règle ne vaut rien, et ce n'est pas une opinion.
 
 ## 4. Ce qui tient
 
