@@ -60,6 +60,28 @@ comparaison.
 **5. Ne jamais agir sur un processus qui n'est pas dans une liste
 explicite.** Pas de « je nettoie ce qui traîne ».
 
+Corollaire découvert le 13/08 : **tous les modules n'ont pas de
+processus.** `ignition_trader.py` et `ignition_trader_trail.py` — les
+deux bras qui envoient les ordres — n'apparaissent dans aucune liste
+de processus. Ils sont **importés par `trading_engine.py`** :
+
+```
+PID 7124  python trading_engine.py --stop-hour 20
+PID  368  stall_sniper.py 7124        <- il surveille 7124
+```
+
+Donc « redémarrer le moteur d'ignition » veut dire redémarrer le
+processus qui envoie **tous** les ordres de la stack, qui héberge les
+ports 8090, 8091, 8093, 8094 et 8096, et qui a un `stall_sniper`
+accroché à son PID. Pendant la coupure, les positions ouvertes ne sont
+plus gérées : pas de trail, pas de détection de reverse, pas de mise à
+plat de séance. Elles restent ouvertes chez le courtier, sans personne
+au volant.
+
+Avant de proposer de redémarrer quoi que ce soit, chercher le
+processus par sa **ligne de commande**, pas par le nom du fichier
+qu'on croit relancer.
+
 ---
 
 ## Ce qui tourne, et sur quels ports
