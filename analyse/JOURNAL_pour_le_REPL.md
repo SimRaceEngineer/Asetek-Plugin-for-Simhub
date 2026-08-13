@@ -17,7 +17,7 @@ montrera le panel. Avec, il peut chercher ce qu'on ne sait pas encore.
 Format : ce qui est **mesuré**, avec son N et sa couverture. Pas
 d'opinion. Une ligne datée par fait.
 
-**Version 4 — 13/08, 15:30.** Quatre choses ont changé depuis la v2 du
+**Version 5 — 13/08, 15:45.** Quatre choses ont changé depuis la v2 du
 matin, et un conseil donné sans elles arrivera à côté :
 1. **M10, M20 et M30 sont en live** depuis 13:10 (section 5). Le
    moteur ne tourne plus sur neuf magics par bras.
@@ -25,9 +25,10 @@ matin, et un conseil donné sans elles arrivera à côté :
    question tranchée, section 7.
 3. **L'archive orderflow a été rognée puis restaurée** ; la fenêtre
    réellement utilisable est 12 juin → 13 août (sections 5 et 6).
-4. **Les barres orderflow ne portent aucun prix** — relevé de leurs
-   champs en section 5. Toute mesure prix-de-barre contre prix-d'entrée
-   est impossible avant d'avoir modifié l'export.
+4. **Les barres orderflow portent les prix depuis 15:37** (section 5),
+   après avoir passé des mois sans. Mais ce sont ceux du *future*, pas
+   du CFD : les soustraire d'un prix d'entrée MT5 donnerait la base
+   entre deux instruments, pas un coût de retard.
 
 ---
 
@@ -248,25 +249,40 @@ les tailles de fichier. **US100 (MNQ) n'est pas dans le flux** :
 package de service. Les ticks sont rechargeables sur ~186 jours en
 arrière, donc rien n'oblige à décider maintenant.
 
-**Ce que contient une barre, et ce qu'elle ne contient pas.** Relevé
-le 13/08 sur `of_US30_2026-08-13.jsonl` :
+**Ce que contient une barre — corrigé le 13/08 à 15:37.** Jusque-là,
+l'enregistrement ne portait **aucun prix absolu** :
 
 ```
 ts, epoch_utc, asset, src, delta, cum_delta, vol,
 range_ticks, close_pos, er, net, gross, events
 ```
 
-**Aucun prix absolu.** Ni `close`, ni `open`, ni `high`/`low`. Il y a
-`range_ticks` (l'amplitude) et `close_pos` (la position de la clôture
-dans cette amplitude, 0 = bas, 1 = haut), mais sans point d'ancrage on
-ne reconstitue aucun niveau. Conséquence directe : **toute mesure qui
-compare un prix de la barre au prix d'entrée du trade est impossible
-en l'état** — dont le coût du retard de la règle (b) de la section 7.
-`_close_barre` existe et vaut None ; c'était voulu, la mesure manque
-au lieu de planter. Pour la débloquer il faut ajouter le prix à
-l'export `scid_orderflow`, ce qui **se rattrape rétroactivement** :
-l'export relit les ticks `.scid`, donc un passage large régénère
-l'historique avec le nouveau champ.
+Ni `close`, ni `high`/`low`. Or `read_bars` les tenait depuis toujours
+(`b["c"]` mis à jour à chaque tick, `b["h"]`, `b["l"]`) et `_detect`
+les recevait : ils étaient calculés, utilisés, puis **jetés trois
+lignes avant l'écriture**. `patch_scid_prix.py` les écrit —
+`close`, `high`, `low`, treize champs d'origine intacts.
+
+Contrôle d'intégrité sur une barre réelle (15:27) : `high` − `low` =
+54045 − 54018 = **27,0**, soit exactement `range_ticks` ; et
+(`close` − `low`) / amplitude = 10/27 = **0,370**, soit exactement
+`close_pos`. Les nouveaux champs reconstituent les anciens au chiffre
+près — ce sont bien les prix d'origine, pas du remplissage plausible.
+
+**Couverture au 13/08 au soir** : aujourd'hui et hier portent les prix
+(874/874 sur US30), parce que la boucle appelle `--days 1` et que
+depuis le calage à minuit ça réécrit ces deux jours en entier. Le
+**12 juin → 11 août attend un rattrapage à froid** (`--days 65`,
+boucle arrêtée pendant l'opération).
+
+**Ce que ça ne débloque pas.** Les prix écrits sont ceux du **future**
+(YM, MES) ; les tickets sont des **CFD** (US30, US500). Entre les deux
+il y a une base et des tailles de tick différentes. Soustraire
+`_close_barre` d'un prix d'entrée MT5 donnerait **la base entre deux
+instruments**, pas le coût du retard — un chiffre stable, plausible,
+et sans rapport avec la question posée. Le coût du retard reste
+mesurable en **différence interne au future**, ou après estimation de
+la base.
 
 Le but de l'attente : croiser un mois et plus d'orderflow avec
 l'historique d'ignition et d'ignition x60, pour voir si l'orderflow
@@ -372,7 +388,8 @@ trop net, **chercher l'artefact avant de chercher l'explication**.
   prix d'un retard de 0 à 60 s. `patch_orderflow_er_decale_v2.py`
   ajoute `_er_prec`, `_er_band_prec` et `_close_barre` ; **appliqué le
   13/08 à 15:25**. (a) est donc mesurable dès maintenant. (b) ne
-  l'est pas : les barres ne portent aucun prix — voir section 5.
+  l'est pas encore : les prix existent depuis 15:37, mais ce sont ceux
+  du future — voir section 5.
 - **Le flux SierraChart est DIFFÉRÉ de 10 min 10 s** (`DD: 00:10:10`
   dans l'en-tête du graphique). Ce n'est pas un réglage : c'est
   l'abonnement bourse. Tant qu'il n'est pas levé, *aucun* filtre
