@@ -17,14 +17,17 @@ montrera le panel. Avec, il peut chercher ce qu'on ne sait pas encore.
 Format : ce qui est **mesuré**, avec son N et sa couverture. Pas
 d'opinion. Une ligne datée par fait.
 
-**Version 3 — 13/08 au soir.** Trois choses ont changé depuis la v1 et
-un conseil donné sans elles arrivera à côté :
+**Version 4 — 13/08, 15:30.** Quatre choses ont changé depuis la v2 du
+matin, et un conseil donné sans elles arrivera à côté :
 1. **M10, M20 et M30 sont en live** depuis 13:10 (section 5). Le
    moteur ne tourne plus sur neuf magics par bras.
 2. **L'ER est postérieur, et le flux est différé de 10 min** —
    question tranchée, section 7.
 3. **L'archive orderflow a été rognée puis restaurée** ; la fenêtre
    réellement utilisable est 12 juin → 13 août (sections 5 et 6).
+4. **Les barres orderflow ne portent aucun prix** — relevé de leurs
+   champs en section 5. Toute mesure prix-de-barre contre prix-d'entrée
+   est impossible avant d'avoir modifié l'export.
 
 ---
 
@@ -245,6 +248,26 @@ les tailles de fichier. **US100 (MNQ) n'est pas dans le flux** :
 package de service. Les ticks sont rechargeables sur ~186 jours en
 arrière, donc rien n'oblige à décider maintenant.
 
+**Ce que contient une barre, et ce qu'elle ne contient pas.** Relevé
+le 13/08 sur `of_US30_2026-08-13.jsonl` :
+
+```
+ts, epoch_utc, asset, src, delta, cum_delta, vol,
+range_ticks, close_pos, er, net, gross, events
+```
+
+**Aucun prix absolu.** Ni `close`, ni `open`, ni `high`/`low`. Il y a
+`range_ticks` (l'amplitude) et `close_pos` (la position de la clôture
+dans cette amplitude, 0 = bas, 1 = haut), mais sans point d'ancrage on
+ne reconstitue aucun niveau. Conséquence directe : **toute mesure qui
+compare un prix de la barre au prix d'entrée du trade est impossible
+en l'état** — dont le coût du retard de la règle (b) de la section 7.
+`_close_barre` existe et vaut None ; c'était voulu, la mesure manque
+au lieu de planter. Pour la débloquer il faut ajouter le prix à
+l'export `scid_orderflow`, ce qui **se rattrape rétroactivement** :
+l'export relit les ticks `.scid`, donc un passage large régénère
+l'historique avec le nouveau champ.
+
 Le but de l'attente : croiser un mois et plus d'orderflow avec
 l'historique d'ignition et d'ignition x60, pour voir si l'orderflow
 peut se mettre en correspondance avec l'allumage. Tant que ce
@@ -346,9 +369,10 @@ trop net, **chercher l'artefact avant de chercher l'explication**.
   Ce qui reste ouvert, et c'est mesurable : (a) l'ER de la barre
   **précédente**, connu à l'instant t ; (b) **attendre la clôture** de
   la barre en cours puis entrer — c'est l'ER de la bonne barre, au
-  prix d'un retard de 0 à 60 s. `patch_orderflow_er_decale.py` ajoute
-  `_er_prec`, `_er_band_prec` et `_close_barre` pour chiffrer les
-  deux ; **écrit, pas encore appliqué**.
+  prix d'un retard de 0 à 60 s. `patch_orderflow_er_decale_v2.py`
+  ajoute `_er_prec`, `_er_band_prec` et `_close_barre` ; **appliqué le
+  13/08 à 15:25**. (a) est donc mesurable dès maintenant. (b) ne
+  l'est pas : les barres ne portent aucun prix — voir section 5.
 - **Le flux SierraChart est DIFFÉRÉ de 10 min 10 s** (`DD: 00:10:10`
   dans l'en-tête du graphique). Ce n'est pas un réglage : c'est
   l'abonnement bourse. Tant qu'il n'est pas levé, *aucun* filtre
