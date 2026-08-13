@@ -206,6 +206,28 @@ que quand l'étape précédente échoue. `ast.parse` ne l'aurait jamais vu.
 Ces trois-là n'envoient aucun ordre et ne touchent aucun fichier du
 moteur. Ils peuvent être arrêtés et relancés sans risque.
 
+**Mais `START_TRADING_STACK_V3.bat` les tue tous.** Constaté le 13/08 :
+après un redémarrage du moteur, `papier_tf`, `x60_onset`,
+`rafraichir_x60` et `panels_auto` avaient disparu — emportés par le
+« Previous windows killed » de l'étape 0, alors qu'aucun d'eux
+n'écoute de port et qu'aucun n'est dans les `.bat` de V3.
+
+Aucun ordre en jeu, mais **plus aucune mesure ne s'écrit** tant qu'on
+ne les relance pas, et rien ne le signale. Après tout redémarrage de
+la stack, les relancer explicitement :
+
+```powershell
+$PY = "C:\Users\Administrator\AppData\Local\Python\pythoncore-3.14-64\python.exe"
+Start-Process -WindowStyle Hidden $PY -ArgumentList '-u','papier_tf.py','--loop'
+Start-Process -WindowStyle Hidden $PY -ArgumentList '-u','x60_onset.py','--loop'
+Start-Process -WindowStyle Hidden $PY -ArgumentList '-u','rafraichir_x60.py'
+Start-Process -WindowStyle Hidden $PY -ArgumentList '-u','panels_auto.py','--dest','panels'
+```
+
+`papier_tf` redémarre sans danger : son amorçage arme les 36 cellules
+sans en ouvrir aucune — c'est le correctif du 12/08, écrit après les
+huit positions ouvertes à la même seconde.
+
 ---
 
 ## La règle qui résume les autres
