@@ -113,16 +113,34 @@ from datetime import datetime
 NOUVELLES = (("M10", "10"), ("M20", "20"), ("M30", "30"))
 MARQUEUR = '"M10"'
 
-A_TFS = '''TFS_TRADED = ("M2", "M5", "H1")'''
-N_TFS = '''TFS_TRADED = ("M2", "M5", "H1", "M10", "M20", "M30")'''
+# Les deux bras n ont PAS la meme liste : le 207 porte M1 en plus,
+# desactive sur US500 et US100 (DISABLED_CELLS), pour comparer
+# M1-trail a M2-trail. Chaque ancre a donc ses deux formes, et le
+# patch exige qu UNE SEULE corresponde, exactement une fois.
+V_TFS = (
+    ('''TFS_TRADED = ("M2", "M5", "H1")''',
+     '''TFS_TRADED = ("M2", "M5", "H1", "M10", "M20", "M30")'''),
+    ('''TFS_TRADED = ("M1", "M2", "M5", "H1")''',
+     '''TFS_TRADED = ("M1", "M2", "M5", "H1", "M10", "M20", "M30")'''),
+)
 
-A_TT = '''_TT = {"M2": "02", "M5": "05", "H1": "60"}'''
-N_TT = ('''_TT = {"M2": "02", "M5": "05", "H1": "60",\n'''
-        '''       "M10": "10", "M20": "20", "M30": "30"}''')
+V_TT = (
+    ('''_TT = {"M2": "02", "M5": "05", "H1": "60"}''',
+     '''_TT = {"M2": "02", "M5": "05", "H1": "60",\n'''
+     '''       "M10": "10", "M20": "20", "M30": "30"}'''),
+    ('''_TT = {"M1": "01", "M2": "02", "M5": "05", "H1": "60"}''',
+     '''_TT = {"M1": "01", "M2": "02", "M5": "05", "H1": "60",\n'''
+     '''       "M10": "10", "M20": "20", "M30": "30"}'''),
+)
 
-A_TT2 = '''_TT2TF = {"02": "M2", "05": "M5", "60": "H1"}'''
-N_TT2 = ('''_TT2TF = {"02": "M2", "05": "M5", "60": "H1",\n'''
-         '''          "10": "M10", "20": "M20", "30": "M30"}''')
+V_TT2 = (
+    ('''_TT2TF = {"02": "M2", "05": "M5", "60": "H1"}''',
+     '''_TT2TF = {"02": "M2", "05": "M5", "60": "H1",\n'''
+     '''          "10": "M10", "20": "M20", "30": "M30"}'''),
+    ('''_TT2TF = {"01": "M1", "02": "M2", "05": "M5", "60": "H1"}''',
+     '''_TT2TF = {"01": "M1", "02": "M2", "05": "M5", "60": "H1",\n'''
+     '''          "10": "M10", "20": "M20", "30": "M30"}'''),
+)
 
 A_CELL = '''    if tf != "M2":
         return churn_r.get(tf) if churn_r else None
@@ -166,8 +184,26 @@ RE_MAGICS = re.compile(
     r'all_magics = \[int\("(20\d)%d%s" % \(a, tt\)\) for a in \(1, 2, 3\)'
     r' for tt in \("02", "05", "60"\)\]')
 
-A_GRILLE = '''        for tf in ("M2", "M5", "H1"):'''
-N_GRILLE = '''        for tf in ("M2", "M5", "H1", "M10", "M20", "M30"):'''
+V_GRILLE = (
+    ('''        for tf in ("M2", "M5", "H1"):''',
+     '''        for tf in ("M2", "M5", "H1", "M10", "M20", "M30"):'''),
+    ('''        for tf in ("M1", "M2", "M5", "H1"):''',
+     '''        for tf in ("M1", "M2", "M5", "H1", "M10", "M20", "M30"):'''),
+)
+
+
+def _variante(src, nom, paires):
+    """Rend la seule paire (ancien, neuf) qui corresponde exactement une
+    fois. Deux formes qui correspondraient a la fois, ou aucune, sont un
+    refus : on ne devine pas dans un fichier qui envoie des ordres."""
+    trouves = [(a, n) for a, n in paires if src.count(a) == 1]
+    if len(trouves) == 1:
+        return trouves[0], None
+    if not trouves:
+        detail = " / ".join("%d fois" % src.count(a) for a, _ in paires)
+        return None, "aucune forme connue de %s (%s)" % (nom, detail)
+    return None, "%d formes de %s correspondent a la fois" % (
+        len(trouves), nom)
 
 
 def _dico(arbre, nom):
@@ -210,18 +246,23 @@ def main():
         print("Rien n a ete ecrit.")
         return 1
 
-    obligatoires = (("TFS_TRADED", A_TFS, N_TFS),
-                    ("_TT", A_TT, N_TT),
-                    ("_TT2TF", A_TT2, N_TT2),
-                    ("le corps de _cell_for_tf", A_CELL, N_CELL),
-                    ("l en-tete de _cell_for_tf", A_DEF, N_DEF))
-    for nom, anc, _n in obligatoires:
-        c = src.count(anc)
-        if c != 1:
-            print("KO : %d occurrence(s) de %s, il en faut 1." % (c, nom))
+    obligatoires = []
+    for nom, paires in (("TFS_TRADED", V_TFS), ("_TT", V_TT),
+                        ("_TT2TF", V_TT2),
+                        ("le corps de _cell_for_tf", ((A_CELL, N_CELL),)),
+                        ("l en-tete de _cell_for_tf", ((A_DEF, N_DEF),))):
+        paire, err = _variante(src, nom, paires)
+        if err:
+            print("KO : %s." % err)
+            print("     Colle-moi les lignes autour, je regarde la forme")
+            print("     exacte plutot que de deviner -- ce fichier envoie")
+            print("     des ordres.")
             print("Rien n a ete ecrit.")
             return 1
+        obligatoires.append((nom, paire[0], paire[1]))
     print("Cinq ancres obligatoires, chacune unique.")
+    if any('"M1"' in a for _n, a, _x in obligatoires):
+        print("Ce bras porte M1 en plus -- forme reconnue, M1 conserve.")
 
     neuf = src
     for _nom, anc, nou in obligatoires:
@@ -238,9 +279,11 @@ def main():
                    ' "10", "20", "30")]' % m.group(1))
                 + neuf[m.end():])
         opt.append("la liste de magics du panneau")
-    if neuf.count(A_GRILLE) == 1:
-        neuf = neuf.replace(A_GRILLE, N_GRILLE, 1)
-        opt.append("la grille du panneau")
+    for _a, _n in V_GRILLE:
+        if neuf.count(_a) == 1:
+            neuf = neuf.replace(_a, _n, 1)
+            opt.append("la grille du panneau")
+            break
 
     try:
         arbre = ast.parse(neuf)
@@ -293,11 +336,31 @@ def main():
     print("Les %d magics sont a six chiffres et relus correctement."
           % (len(acodes) * len(tt)))
 
+    # L exposition se CALCULE : le 206 et le 207 n avaient pas le meme
+    # nombre d unites, et le 207 desactive deux cellules M1. L ecrire en
+    # dur donnerait un chiffre faux sur l un des deux.
+    anc_tfs = [x for _n, x, _y in obligatoires if x.startswith("TFS_TRADED")]
+    av = len(re.findall(r'"(\w+)"', anc_tfs[0])) if anc_tfs else 0
+    ap = len(tt)
+    des = 0
+    for nd in ast.walk(arbre):
+        if not (isinstance(nd, ast.Assign)
+                and isinstance(nd.value, (ast.Set, ast.Call))):
+            continue
+        if "DISABLED_CELLS" in [t.id for t in nd.targets
+                                if isinstance(t, ast.Name)]:
+            des = len(nd.value.elts) if isinstance(nd.value, ast.Set) else 0
     print()
-    print("EXPOSITION : %d unites au lieu de 3, donc %d cellules au lieu"
-          % (len(tt), len(tt) * 3))
-    print("de 9 pour ce bras. Avec les deux bras, 36 au lieu de 18 : ca")
-    print("DOUBLE. Lot inchange a balance/20000.")
+    print("EXPOSITION DE CE BRAS : %d unites au lieu de %d, donc %d cellules"
+          % (ap, av, ap * 3 - des))
+    print("au lieu de %d." % (av * 3 - des), end=" ")
+    if des:
+        print("(%d cellule(s) desactivee(s) deduites des deux)" % des)
+    else:
+        print("(aucune cellule desactivee)")
+    print("Les nouvelles unites ajoutent %d cellules ici. Lot inchange a"
+          % ((ap - av) * 3))
+    print("balance/20000 : l exposition croit du meme facteur.")
     print()
     print("H2 et H4 ne sont PAS ajoutes : sept chiffres, actif et unite")
     print("mal relus sur quatre cellules sur six. Ils restent en papier.")
