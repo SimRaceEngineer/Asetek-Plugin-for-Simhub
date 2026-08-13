@@ -45,7 +45,7 @@ CE QUE LE PATCH FAIT
     Aucune valeur n est recalculee. Les EUR, WR, PF ne bougent pas :
     on ajoute ce qui manquait pour les lire.
 
-QUATRE ANCRES, verifiees uniques. IDEMPOTENT. Sauvegarde horodatee.
+SIX ANCRES, verifiees uniques. IDEMPOTENT. Sauvegarde horodatee.
 ast.parse avant ecriture. C est une lecture : rien a redemarrer.
 
 EXIGE patch_papier_jambes -- l ancre du 3 en vient. S il n est pas
