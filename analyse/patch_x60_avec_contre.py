@@ -77,10 +77,13 @@ from datetime import datetime
 CIBLE = "x60_onset.py"
 MARQUEUR = "AVEC OU CONTRE LA DIRECTION"
 
-ANCRE = '''    # --------------------------------- garder ou fermer avec le x60
+ANCRE = '''    # ------------------------------------------- qui accompagne un x60
 '''
 
 NEUF = '''    # ------------------------------- avec ou contre la direction du x60
+    # Placee HAUT, juste apres le journal : c est la question qui decide
+    # si les regles V10/V11 doivent respecter la priorite des x60. Elle
+    # se lit sans derouler le reste.
     L.append("=" * LARG)
     L.append("  AVEC OU CONTRE LA DIRECTION DU x%s" % SETUP)
     L.append("=" * LARG)
@@ -109,6 +112,26 @@ NEUF = '''    # ------------------------------- avec ou contre la direction du x
     if not ac:
         L.append("  Aucune tierce enregistree a l entree d un x%s." % SETUP)
     else:
+        # La synthese AVANT le tableau : c est elle qu on lit d un coup
+        # d oeil, le tableau est la pour la verifier.
+        def _resume(k):
+            c = ac.get(k)
+            if not c:
+                return "aucune presence"
+            nf, _s1, mf, _a1, _b1, _d1 = ratios(c["fin"])
+            return ("%2d presences, issue moyenne %s"
+                    % (c["n"], ("%+.2f EUR" % mf) if nf else "inconnue"))
+        L.append("  D UN COUP D OEIL, sur le MEME actif :")
+        L.append("    tierces AVEC   le x%s : %s"
+                 % (SETUP, _resume(("meme actif", "AVEC"))))
+        L.append("    tierces CONTRE le x%s : %s"
+                 % (SETUP, _resume(("meme actif", "CONTRE"))))
+        L.append("  Si CONTRE perd la ou AVEC passe, les regles V10/V11")
+        L.append("  doivent respecter la priorite du x%s. Si les deux se"
+                 % SETUP)
+        L.append("  valent, la direction du x%s n est pas une consigne."
+                 % SETUP)
+        L.append("")
         L.append("%-13s %-8s %10s %14s %8s %13s"
                  % ("actif", "sens", "presences", "latent moyen",
                     "connus", "final moyen"))
@@ -141,7 +164,7 @@ NEUF = '''    # ------------------------------- avec ou contre la direction du x
         L.append("  tickets et se contredisent, une des deux est fausse.")
     L.append("")
 
-    # --------------------------------- garder ou fermer avec le x60
+    # ------------------------------------------- qui accompagne un x60
 '''
 
 
@@ -180,23 +203,25 @@ def main():
     # ast.parse ne verrait pas la section posee dans une fonction voisine,
     # ou apres le `return` de rapport() : les deux compilent. On verifie
     # donc sur l arbre qu elle est bien DANS rapport(), et qu elle vient
-    # AVANT la section "GARDER, OU TOUT FERMER".
-    dedans = apres = False
+    # AVANT "QUI EST LA QUAND UN x" -- elle doit se lire sans derouler.
+    dedans = avant = False
     for f in ast.walk(arbre):
         if not (isinstance(f, ast.FunctionDef) and f.name == "rapport"):
             continue
         d = ast.dump(f)
         dedans = MARQUEUR in d
         if dedans:
-            apres = (d.index(MARQUEUR) < d.index("GARDER, OU TOUT FERMER"))
+            avant = (d.index(MARQUEUR) < d.index("QUI EST LA QUAND UN x"))
     if not dedans:
         print("KO : la section n est pas dans rapport(). Rien n a ete ecrit.")
         return 1
-    if not apres:
-        print("KO : la section est posee APRES 'GARDER OU TOUT FERMER'.")
-        print("     Rien n a ete ecrit.")
+    if not avant:
+        print("KO : la section est posee APRES 'QUI EST LA QUAND UN x60'.")
+        print("     Elle doit venir juste apres le journal, sinon elle ne")
+        print("     se lit qu en deroulant. Rien n a ete ecrit.")
         return 1
-    print("Section verifiee sur l arbre : dans rapport(), au bon endroit.")
+    print("Section verifiee sur l arbre : dans rapport(), juste apres le")
+    print("journal, avant 'QUI EST LA QUAND UN x%s'." % "60")
 
     print()
     print("Nouvelle section : AVEC OU CONTRE LA DIRECTION DU x60.")
