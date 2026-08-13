@@ -82,6 +82,28 @@ Avant de proposer de redémarrer quoi que ce soit, chercher le
 processus par sa **ligne de commande**, pas par le nom du fichier
 qu'on croit relancer.
 
+**Et le moteur ne se redémarre pas à la main.** Il porte son propre
+mécanisme, documenté dans les `.bat` :
+
+```
+START_TRADING_STACK_V3.bat:335   start "Trading Engine" /MIN cmd /c
+                                 %PY% trading_engine.py --stop-hour %STOP_HOUR%
+stack_watchdog.bat:16-19  REM Planifie : \TradingStack\FreshnessWatchdog,
+                          REM toutes les 15 min. Relance = start V3.
+                          REM V3 self-kill python + garde 8095/fraicheur
+                          REM neutralise un survivant. Pas de double engine.
+```
+
+Donc : le moteur **s'arrête seul à 20:00** (`--stop-hour 20`), et une
+tâche planifiée relance V3 dans le quart d'heure. Un `Stop-Process` à
+la main court-circuite le garde-fou anti-double-moteur de V3 et risque
+d'en laisser tourner deux. La relance manuelle, si elle est vraiment
+nécessaire, passe par `START_TRADING_STACK_V3.bat` — pas autrement.
+
+Conséquence pratique : **un patch sur un module importé par le moteur
+prend effet tout seul, hors séance, le soir même.** C'est la meilleure
+fenêtre possible, et elle ne demande aucune action.
+
 ---
 
 ## Ce qui tourne, et sur quels ports
