@@ -159,10 +159,27 @@ def main():
             av = [_horo(e.get("ts")) for _i, (_b, e) in enumerate(lignes)
                   if e and _horo(e.get("ts")) and _horo(e.get("ts")) < t0]
             silence = (t0 - max(av)).total_seconds() / 60.0 if av else 999.0
-            suspect = silence >= SILENCE_MIN
-            print("  %s  %d entree(s)  silence avant : %.0f min  -> %s"
-                  % (t0.strftime("%Y-%m-%d %H:%M:%S"), len(g), silence,
-                     "SUSPECT" if suspect else "plausible"))
+            # LE BON DISCRIMINANT EST LE NOMBRE, PAS LE SILENCE.
+            # Corrige le 13/08 sur le cas reel : la rafale de 13:19:21
+            # portait cinq entrees et n avait que 10 minutes de silence
+            # devant elle -- le seuil de silence l a donc classee
+            # "plausible", a tort.
+            # Une PAIRE 206/207 de la meme cellule a quelques secondes
+            # d ecart est normale : les deux bras entrent sur le meme
+            # signal. Au-dela de deux, ou des que plusieurs ACTIFS
+            # s allument dans la meme seconde, c est un demarrage : les
+            # cellules H1 de trois indices ne basculent pas ensemble.
+            actifs = set(e.get("actif") for _i, e, _t in g)
+            secondes = set(t.strftime("%H:%M:%S") for _i, _e, t in g)
+            suspect = (len(g) > 2
+                       or (len(actifs) > 1 and len(secondes) == 1))
+            raison = ("%d entrees" % len(g) if len(g) > 2
+                      else "%d actifs dans la meme seconde" % len(actifs))
+            print("  %s  %d entree(s)  %d actif(s)  silence avant :"
+                  " %.0f min  -> %s"
+                  % (t0.strftime("%Y-%m-%d %H:%M:%S"), len(g), len(actifs),
+                     silence, ("SUSPECT (%s)" % raison) if suspect
+                     else "plausible"))
             for _i, e, t in g:
                 print("      %s  M%s  %s"
                       % (t.strftime("%H:%M:%S"), e.get("magic"),
