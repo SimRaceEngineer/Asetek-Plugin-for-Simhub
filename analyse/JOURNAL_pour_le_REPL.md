@@ -44,6 +44,33 @@ Les bras :
 « x60 » = les cellules H1. Ce n'est pas une famille à part : c'est la
 **même logique d'allumage sur une unité plus longue**.
 
+**Le schéma tient en six chiffres, et c'est une contrainte dure.**
+Deux décodeurs le lisent, et tous deux supposent une unité sur
+**deux** caractères :
+
+```
+_asset_of_magic(m) = (m // 100) % 10        -> le code actif
+_tf_of_magic(m)    = _TT2TF[str(m)[-2:]]    -> l'unité de temps
+```
+
+M10, M20, M30 donnent `10`, `20`, `30` : six chiffres, tout se relit.
+Mais **H2 = 120 minutes et H4 = 240 donnent trois caractères**, donc
+sept chiffres, et les deux décodeurs se trompent alors :
+
+```
+_asset_of_magic(2062120) = 1   -> US30,  alors que c'est US500
+_tf_of_magic(2061120)    = "20" -> M20,  alors que c'est H2
+```
+
+Quatre cellules H2/H4 sur six lisent le mauvais actif. Comme le SL
+filet est choisi **par actif** — 4000 / 200 / 1600 — une US100 qui
+reçoit le stop de l'US500 est coupée immédiatement, et une US500 qui
+reçoit celui de l'US30 court avec un stop vingt fois trop large.
+
+**H2 et H4 ne peuvent donc pas passer en live** sans élargir le schéma
+de magic, ce qui suppose de toucher les deux décodeurs dans le moteur,
+dans les panneaux et dans les gels. Ils restent en papier.
+
 ## 2. Les règles de production, lues dans le code
 
 - **Entrée** : allumage FRAIS de `churn_regime._analyze` — direction
@@ -128,6 +155,22 @@ encadrent zéro. Cette règle ne vaut rien, et ce n'est pas une opinion.
 et 207, 24h/24, **lecture seule, aucun ordre**. Ni spread, ni
 slippage, ni commission : les chiffres sont optimistes, et d'autant
 plus que l'unité est courte.
+
+**Décision du 13/08 — M10, M20, M30 passent en LIVE pendant la
+séance.** Le moteur est déjà borné à 08:00–19:30 avec mise à plat
+au-delà, donc l'ajout des cellules suffit : live en séance, papier en
+dehors. `TFS_TRADED` passe de trois à six unités, soit **36 cellules
+au lieu de 18 — l'exposition double**, lot inchangé à balance/20000.
+H2 et H4 restent en papier pour la raison arithmétique de la
+section 1. L'allumage des nouvelles unités passe par le calcul
+**local** de `_cell_for_tf`, comme le M2 : le churn ne publie que
+M1/M5/H1.
+
+Conséquence à ne pas oublier en lisant les tableaux : à partir de ce
+changement, M10/M20/M30 sont **à la fois** live en séance et suivies
+en papier. Le papier reste donc un témoin utile — il dit ce que la
+cellule aurait fait sans spread ni slippage — mais ce n'est plus une
+observation indépendante du live.
 
 **`x60_onset.py`** — observe les cellules H1 et photographie qui est en
 position quand elles entrent et sortent.
