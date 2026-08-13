@@ -17,12 +17,19 @@ montrera le panel. Avec, il peut chercher ce qu'on ne sait pas encore.
 Format : ce qui est **mesuré**, avec son N et sa couverture. Pas
 d'opinion. Une ligne datée par fait.
 
-**Version 7 — 13/08, 16:20.** Six choses ont changé depuis la v2 du
+**Version 8 — 13/08, 16:35.** Sept choses ont changé depuis la v2 du
 matin, et un conseil donné sans elles arrivera à côté :
-0. **Sur le x60, le bras 206 bat le 207 de +16,76 par ticket** sur les
-   trois actifs, à entrées identiques — environ 1 590 € (section 4).
-   Le mécanisme est identifié : le 207 remonte son stop *et* coupe
-   70 % tôt (section 2). C'est la piste la plus actionnable du jour.
+0. **Le filet fixe engage 17,6 % du compte sur un seul ticket US30**,
+   contre 7,0 % sur US100 (section 2). Rapporté au risque, le
+   classement des actifs sur le setup 60 **s'inverse**. Toute
+   comparaison entre actifs non normalisée compare des paris de
+   tailles différentes.
+0bis. **Les stops se déplacent en profit, sur les DEUX bras** — seuil
+   entre +10 et +39 € (section 2). « Filet fixe, jamais suivi » était
+   faux. Le hold-until-reverse du 206 n'est donc pas intact.
+0ter. **Sur le x60, le bras 206 bat le 207 de +16,76 par ticket** sur
+   les trois actifs, à entrées identiques — environ 1 590 €
+   (section 4). Le 207 coupe 70 % tôt *et* remonte son stop.
 0bis. **« Le x60 entraîne la fenêtre » ne tient plus** : 91 % de
    l'effet vient de trois fenêtres, toutes antérieures au 05/08
    (section 4). Le gradient x60, lui, tient encore.
@@ -103,29 +110,68 @@ y compris pour les nouvelles unités 10/20/30.
   même si `ignition` n'est jamais repassé à False (correctif 17/07).
 - **Filtre** : RSI(14) M3 > 50 pour un achat, < 50 pour une vente
   (ENFORCE 20/07, fail-open : si le RSI manque, on passe).
-- **Stop, bras 206** : filet fixe, jamais suivi — 4000 / 200 / 1600
-  points selon l'actif. **Vérifié le 13/08 sur le book vivant** :
-  toutes les positions 206 portaient exactement le filet (us30
-  53973,60 → 49973,60 ; us30 sell → +4000 ; nas100 sell 29774,10 →
-  31374,10). Aucune n'avait de stop déplacé.
-- **Stop, bras 207** : **il bouge**, et ce n'est pas dans la
-  description d'origine. Trois positions 207 portaient un SL
-  *au-dessus* de leur prix d'entrée sur un achat — nas100 29847,95 →
-  29915,33 · nas100 29852,20 → 29923,08 · spx500 7779,40 → 7787,60 —
-  volume intact, donc **avant** toute sortie partielle. La quatrième
-  (207220, +17,71 seulement) avait encore le filet : il y a un seuil.
-- **Ce n'est PAS un daemon global.** `trading_engine.py` importe
-  `auto_be_after_mfe` (l.3031) et `candle_trail` (l.3153), et
-  `auto_be_after_mfe` fait bien du BE + lock-half — 53 à 295
-  déplacements par jour d'après son propre commentaire. Mais son
-  `_is_in_scope()` ne couvre que 93000-97999, 5000-5009, 6000-6009,
-  7000-7099, 8000-8009, 99500-99502, 100100-100300, 53000-53999 et
-  1100-1399 à suffixe 27/28/32/33. **206xxx et 207xxx ne tombent dans
-  aucune de ces plages** : le module les ignore. Le déplacement vient
-  donc du bras 207 lui-même. Conséquence importante : le
-  hold-until-reverse du **206 est intact**, et le gradient x60 mesuré
-  sur ce bras n'est pas contaminé par des sorties au BE.
+- **Stop** : un **filet fixe** — 4000 / 200 / 1600 points selon
+  l'actif — **plus un déplacement en profit, sur les DEUX bras.**
+  L'ancienne formule « jamais suivi » est fausse.
+  Le déclencheur est le PROFIT, pas le bras. Book du 13/08 16:05 :
+
+  | magic | profit | stop |
+  |---|---|---|
+  | 207210 M10 US500 | +208,21 | déplacé |
+  | 207220 M20 US500 | +190,67 | déplacé |
+  | 207302 M2 US100 | +83,80 | déplacé |
+  | **206302 M2 US100** | **+79,88** | **déplacé** |
+  | 207102 M2 US30 | +50,49 | déplacé |
+  | 207101 M1 US30 | +38,95 | déplacé |
+  | 207105 M5 US30 | +9,61 | filet |
+  | 207360 H1 US100 | +8,56 | filet |
+  | 206360 H1 US100 | +7,83 | filet |
+  | 207120 M20 US30 | −110,75 | filet |
+
+  Seuil entre +10 et +39 €. **Preuve directe** : le ticket 172133611
+  (207220) portait encore le filet à 15:42 avec +17,71, et un stop
+  déplacé à 16:05 avec +190,67. Même position, deux observations.
+- **Ce n'est PAS `auto_be_after_mfe`.** `trading_engine.py` l'importe
+  (l.3031) avec `candle_trail` (l.3153), et il fait bien du BE +
+  lock-half — 53 à 295 déplacements/jour selon son propre commentaire.
+  Mais son `_is_in_scope()` ne couvre que 93000-97999, 5000-5009,
+  6000-6009, 7000-7099, 8000-8009, 99500-99502, 100100-100300,
+  53000-53999 et 1100-1399 à suffixe 27/28/32/33. **206xxx et 207xxx
+  n'y sont pas.** Le déplacement vient d'ailleurs — `candle_trail`
+  probablement. Non tranché.
+- **Conséquence sur le x60, et elle n'est pas rassurante** : le
+  hold-until-reverse du bras 206 n'est **pas** intact. Une cellule 206
+  suffisamment en profit voit son stop remonter, donc peut sortir
+  autrement qu'au reverse. Le +39,03 par ticket du 206 sur le setup 60
+  décrit donc « entrée à l'allumage, sortie au reverse **ou** au stop
+  remonté », pas la règle écrite. Aucune cellule H1 n'a encore été
+  observée avec un stop déplacé, mais les deux vues n'ont montré que
+  des H1 sous le seuil : **l'absence vient de l'échantillon, pas du
+  mécanisme.** Erreur commise ici même une heure plus tôt — voir
+  section 6, sixième cas.
 - **Lot** : balance / 20000, minimum 0.10.
+- **⚠ LE FILET N'EST PAS ÉQUIVALENT D'UN ACTIF À L'AUTRE.** Converti
+  en euros au lot courant (0,95), à partir du book vivant :
+
+  | actif | filet | EUR/pt/lot | risque | % du compte |
+  |---|---|---|---|---|
+  | US30 | 4000 | 0,867 | **3 295 €** | **17,6 %** |
+  | US500 | 200 | 8,670 | 1 647 € | 8,8 % |
+  | US100 | 1600 | 0,867 | 1 318 € | 7,0 % |
+
+  Balance 18 763 €. **Un seul ticket US30 engage 17,6 % du compte**,
+  soit 2,5 fois le risque d'un ticket US100 — et il y avait quatre
+  positions US30 ouvertes simultanément. Ce n'est pas un stop, c'est
+  un plafond de catastrophe : il ne se déclenche quasiment jamais, et
+  quand il le fera, ce sera pour un montant qu'aucune moyenne du
+  dossier n'anticipe.
+  **Effet sur toutes les comparaisons entre actifs** : rapporté à son
+  propre filet, le classement du setup 60 s'inverse — US30 +43,04 =
+  **1,31 %** du filet, US500 +38,99 = **2,37 %**, US100 +34,30 =
+  **2,60 %**. Le « meilleur » actif en euros par ticket est le
+  **dernier** par unité de risque. Toute lecture de `familles.py` qui
+  compare US30, US500 et US100 sans cette normalisation compare des
+  paris de tailles différentes.
 - **Session** : 08:00–19:30 Paris, jours ouvrés, flat au-delà.
 - **Sortie 207** : 70 % du VOLUME coupés au premier break de la bougie
   **M2 précédente**, en profit seulement, une fois par position. Les
@@ -457,6 +503,17 @@ construction. Un camp « AVEC » observé à l'instant du basculement est
 vide par construction. Un fichier réécrit depuis l'heure courante perd
 sa matinée par construction. Quand un résultat semble trop beau ou
 trop net, **chercher l'artefact avant de chercher l'explication**.
+
+**Le sixième, et il est de moi, une heure avant d'écrire ces lignes.**
+À 15:42 j'ai lu le book et conclu que **le bras 206 ne déplace jamais
+ses stops** — les trois positions 206 portaient exactement le filet.
+Vrai, et sans valeur : **les trois étaient en perte**, et le
+déplacement est conditionné au profit. Ma conclusion était garantie
+par l'échantillon, pas par le mécanisme. Vingt minutes plus tard,
+`206302` à +79,88 avait un stop remonté. J'avais même écrit dans ce
+journal que « le gradient x60 du 206 n'est pas contaminé » — c'était
+faux, et ça rassurait dans la mauvaise direction. Le motif de cette
+section vaut aussi pour qui l'écrit.
 
 **Le cinquième, et il n'a pas eu lieu — parce qu'on ne l'a pas fait.**
 Le 13/08 vers 15h45, le conseil a été donné de couper à la main le
