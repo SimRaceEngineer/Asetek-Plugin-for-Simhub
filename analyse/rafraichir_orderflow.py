@@ -38,7 +38,7 @@ POURQUOI SURVEILLER LE RETARD PLUTOT QUE DE LE SUPPOSER
     Le retard est aujourd hui de ~10 minutes, et c est une donnee
     differee. Trois choses peuvent le changer sans prevenir :
 
-      - un abonnement bourse activé  -> il tombe a quelques secondes,
+      - un abonnement bourse active  -> il tombe a quelques secondes,
         et il faut le SAVOIR, parce que tout ce qui etait inexploitable
         devient exploitable ce jour-la ;
       - SierraChart ferme ou deconnecte -> il grandit sans fin, et le
