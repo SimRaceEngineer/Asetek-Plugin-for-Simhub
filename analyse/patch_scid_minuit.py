@@ -121,9 +121,9 @@ def main():
     # Si un jour il passait en "a", le calage resterait inoffensif mais le
     # raisonnement de ce patch serait perime -- autant le verifier.
     if 'open(fp, "w"' not in src:
-        print("NOTE : l ecriture n est plus en mode \"w\". Le correctif")
-        print("       reste valable, mais la raison d etre de ce patch")
-        print("       est a relire.")
+        print("NOTE : l ecriture du fichier de jour n est plus en mode")
+        print("       ecrasement. Le correctif reste valable, mais la")
+        print("       raison d etre de ce patch est a relire.")
 
     neuf = src.replace(ANCRE, NEUF, 1)
 
