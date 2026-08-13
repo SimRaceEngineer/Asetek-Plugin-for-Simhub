@@ -17,8 +17,11 @@ montrera le panel. Avec, il peut chercher ce qu'on ne sait pas encore.
 Format : ce qui est **mesuré**, avec son N et sa couverture. Pas
 d'opinion. Une ligne datée par fait.
 
-**Version 5 — 13/08, 15:45.** Quatre choses ont changé depuis la v2 du
+**Version 6 — 13/08, 16:10.** Cinq choses ont changé depuis la v2 du
 matin, et un conseil donné sans elles arrivera à côté :
+0. **« Le x60 entraîne la fenêtre » ne tient plus** : 91 % de l'effet
+   vient de trois fenêtres, toutes antérieures au 05/08 (section 4).
+   Le gradient x60, lui, tient encore.
 1. **M10, M20 et M30 sont en live** depuis 13:10 (section 5). Le
    moteur ne tourne plus sur neuf magics par bras.
 2. **L'ER est postérieur, et le flux est différé de 10 min** —
@@ -156,6 +159,29 @@ encadrent zéro. Cette règle ne vaut rien, et ce n'est pas une opinion.
   une **marche, pas une pente** — un Spearman répond à la mauvaise
   question. H1 a aussi un WR plus haut (56-73 % contre 40-47 %) *et*
   un EUR/ticket plus haut, ce qui écarte un pur effet de taille.
+  Confirmé par `familles.py` le 13/08 sur 3311 tickets (21/07 →
+  13/08) : **setup 60 = +30,47 par ticket sur 186, WR 63 %**, contre
+  **−2,66 sur les 3125 autres**. Les six cellules sont positives, sans
+  exception — US30 206 +43,04 · US500 206 +38,99 · US100 206 +34,30 ·
+  US30 207 +30,09 · US500 207 +23,69 · US100 207 +11,57.
+  **Depuis le 05/08 l'avantage est divisé par deux** (+15,52 sur 83,
+  WR 67 %) mais reste le seul setup positif du corpus (−8,69 sur
+  1851). Aucune des six cellules n'atteint 20 tickets sur cette
+  fenêtre : on décrit, on ne conclut pas.
+- **⚠ Ce qui NE tient pas : « le x60 entraîne la fenêtre ».**
+  `familles.py` montre ALLUME +473,79 par fenêtre contre PRESENT
+  −34,24 et ABSENT −37,45, et en tire que le rang ajoute quelque
+  chose. Mais le détail des 16 fenêtres dit autre chose : **trois
+  d'entre elles portent 6 931 € des 7 580 €, soit 91 %** — 04/08
+  +2 960, 31/07 +2 396, 29/07 +1 575. **Les trois sont antérieures
+  au 05/08.** Depuis, les 5 fenêtres d'allumage totalisent
+  **−267,40**, et le script refuse lui-même de conclure (5 allumages
+  pour un minimum de 8). L'effet « il mène » est donc un phénomène de
+  fin juillet / début août qui **ne s'est pas reproduit une seule
+  fois** depuis le passage en régime range. Huit jours seulement, donc
+  ce n'est pas une réfutation — c'est un avertissement : le chiffre le
+  plus spectaculaire du dossier x60 repose sur trois séances. À ne pas
+  confondre avec le gradient x60 ci-dessus, qui, lui, tient encore.
 - **Le contre-cycle M1** (`regles_gelees_v2.py` v10, « la trouvaille
   la mieux étayée ») : M1 BEAR vente AVEC 193 → −20,89 · M1 BEAR achat
   CONTRE 120 → +11,31 · M1 BULL achat AVEC 254 → +3,39 · M1 BULL vente
@@ -207,6 +233,16 @@ Conséquence directe pour toute recommandation : un conseil du type
 unités tournent en argent réel depuis 13:10. La question utile n'est
 plus s'il faut les activer, mais ce qu'on mesure maintenant qu'elles
 le sont, et à quel seuil on les retirerait.
+
+**Premiers tickets fermés, et ils ne prouvent rien** (`familles.py`,
+13/08 en fin d'après-midi) : setup 10 → **9 tickets** +16,68 · setup
+20 → **3 tickets** −52,78 · setup 30 → **1 ticket** +45,91. Le script
+marque les trois d'un « ? » : sous 20 tickets, il refuse de conclure,
+et il a raison. Piège immédiat à ne pas manquer : au même moment, les
+positions M10/M20 **encore ouvertes** flottaient à +287 € et
+portaient à elles seules tout le positif du book. Fermées négatives,
+ouvertes positives — lire l'un ou l'autre comme un verdict est la
+même erreur, et c'est celle de la section 6.
 
 Conséquence à ne pas oublier en lisant les tableaux : à partir de ce
 changement, M10/M20/M30 sont **à la fois** live en séance et suivies
@@ -396,7 +432,19 @@ trop net, **chercher l'artefact avant de chercher l'explication**.
   orderflow n'est jouable en live, quelle que soit la barre choisie —
   le blocage n'est plus l'appariement, c'est le tuyau.
   `rafraichir_orderflow.py` surveille ce retard et le dira s'il tombe.
-- Le gradient x60 tient-il **hors échantillon** ?
+- Le gradient x60 tient-il **hors échantillon** ? Élément nouveau du
+  13/08 : il tient sur 21/07 → 13/08 (+30,47 sur 186) *et* sur la
+  sous-fenêtre 05/08 → 13/08 (+15,52 sur 83), donc il survit à un
+  changement de régime — mais amputé de moitié. Ce qui ne survit pas,
+  c'est l'effet « il mène la fenêtre » : voir section 4.
+- **Une hypothèse testée et RÉFUTÉE le 13/08** : « 206360 (H1 US100)
+  est le membre faible de la famille x60 ». Elle venait de son absence
+  d'une liste de cellules gagnantes citée par le REPL. `familles.py`
+  la contredit : **+34,30 par ticket sur 26, WR 69 %** — troisième des
+  six sur l'historique complet. Depuis le 05/08 elle est **plate**
+  (−1,79 € au total sur 12 tickets, WR 58 %), ce qui explique son
+  absence d'une liste de positifs sans rien dire de plus. Une cellule
+  à zéro n'est pas une cellule cassée.
 - **Le H1 papier et le H1 de production ne sont pas le même signal.**
   `papier_tf.py` le dit lui-même (l.77-82) : en production le H1 lit
   la cellule de `churn.get_churn(asset)`, alors que le papier fait
