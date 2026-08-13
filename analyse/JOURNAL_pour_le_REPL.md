@@ -159,7 +159,17 @@ plus que l'unité est courte.
 **Décision du 13/08 — M10, M20, M30 passent en LIVE pendant la
 séance.** Le moteur est déjà borné à 08:00–19:30 avec mise à plat
 au-delà, donc l'ajout des cellules suffit : live en séance, papier en
-dehors. `TFS_TRADED` passe de trois à six unités, soit **36 cellules
+dehors.
+
+**État au 13/08 13:10 : patchs appliqués sur le disque, PAS encore
+actifs.** `ignition_trader.py` et `ignition_trader_trail.py` sont
+modifiés et sauvegardés, mais `trading_engine.py` — qui les importe —
+tourne depuis le 12/08 avec l'ancien code en mémoire. Un
+`START_TRADING_STACK_V3.bat` lancé en séance n'y change rien : V3 ne
+tue pas un moteur sain, il le rafraîchit. Le changement prendra effet
+au **prochain démarrage du moteur**, après son arrêt automatique de
+20:00. Tant qu'on lit `207101` et pas `207110` dans le journal des
+décisions, l'ancien code tourne encore. `TFS_TRADED` passe de trois à six unités, soit **36 cellules
 au lieu de 18 — l'exposition double**, lot inchangé à balance/20000.
 H2 et H4 restent en papier pour la raison arithmétique de la
 section 1. L'allumage des nouvelles unités passe par le calcul
