@@ -75,6 +75,40 @@ def maintenant():
     return datetime.now().strftime("%H:%M:%S")
 
 
+def _autres_exemplaires(moi):
+    """PID des autres rafraichir_orderflow.py, via WMI.
+
+    On lit la LIGNE DE COMMANDE, jamais le nom du processus : filtrer
+    sur python.exe attraperait les dix-neuf scripts de la stack, dont
+    le moteur. C est la premiere regle de cette machine.
+
+    En cas de doute -- WMI indisponible, sortie illisible -- on rend une
+    liste vide et on demarre. Un garde-fou qui bloque sur son propre
+    echec est pire que pas de garde-fou : il empeche le rafraichissement
+    pour une raison sans rapport.
+    """
+    if os.name != "nt":
+        return []
+    try:
+        s = subprocess.run(
+            ["wmic", "process", "where", "name='python.exe'",
+             "get", "ProcessId,CommandLine", "/format:csv"],
+            capture_output=True, text=True, timeout=20).stdout
+    except Exception:
+        return []
+    out = []
+    for ligne in s.splitlines():
+        if "rafraichir_orderflow" not in ligne:
+            continue
+        for bout in reversed(ligne.strip().split(",")):
+            if bout.strip().isdigit():
+                pid = int(bout.strip())
+                if pid != moi:
+                    out.append(pid)
+                break
+    return out
+
+
 def dernier_retard(dossier, actif):
     """(retard en secondes, horodatage de la barre) ou (None, raison).
 
@@ -116,12 +150,31 @@ def main():
     p.add_argument("--jours", type=int, default=JOURS)
     p.add_argument("--dossier", default=OUT)
     p.add_argument("--actif", default=ACTIF)
+    p.add_argument("--sans-controle", action="store_true",
+                   help="demarrer meme si un autre exemplaire tourne")
     a = p.parse_args()
 
     cible = os.path.join(_ICI, "scid_orderflow.py")
     if not os.path.isfile(cible):
         print("KO : scid_orderflow.py introuvable a cote de ce script.")
         return 1
+
+    # Garde-fou anti-doublon, meme motif que les .bat de la stack.
+    # Le 13/08, un collage dedouble a lance DEUX exemplaires : ils
+    # appellent scid_orderflow toutes les 30 s sur les MEMES fichiers,
+    # et scid_orderflow n ecrit pas de facon atomique. Deux passes qui
+    # se croisent laissent un .jsonl tronque -- et un .jsonl tronque
+    # ressemble a un .jsonl.
+    if not a.sans_controle:
+        moi = os.getpid()
+        autres = _autres_exemplaires(moi)
+        if autres:
+            print("KO : rafraichir_orderflow tourne deja (PID %s)."
+                  % ", ".join(str(p) for p in autres))
+            print("     Deux exemplaires ecrivent les memes fichiers sans")
+            print("     ecriture atomique : un .jsonl peut finir tronque.")
+            print("     (--sans-controle force le demarrage.)")
+            return 1
 
     print("=" * 72)
     print(" RAFRAICHISSEMENT DE L EXPORT ORDERFLOW")
