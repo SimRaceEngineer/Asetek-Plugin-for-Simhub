@@ -571,6 +571,19 @@ journal que « le gradient x60 du 206 n'est pas contaminé » — c'était
 faux, et ça rassurait dans la mauvaise direction. Le motif de cette
 section vaut aussi pour qui l'écrit.
 
+**Et l'après-midi a fourni l'expérience naturelle.** À 16:05, `207120`
+(M20 US30, vente à 53905,15) était **la seule position en perte du
+book, à −110,75** — celle que toute lecture désignait comme le point
+noir. À 17:35, après le décrochage de l'US30 (54074 → 53723), elle
+valait **+124**. Une coupe manuelle à 16:05 aurait figé −110 au lieu
+de +124 : **235 € d'écart sur un seul ticket**, dans le sens contraire
+de l'intuition.
+Même chose pour `206360` : la vente H1 US100 à −141 n'a pas été
+coupée, elle a été **fermée par son propre reverse** vers 16:50, et le
+bras est reparti à l'achat. Le mécanisme a fait son travail, à sa
+date, sans intervention. Ce n'est pas une preuve — c'est un épisode —
+mais il va dans le même sens que les trois mesures de la section 4.
+
 **Le cinquième, et il n'a pas eu lieu — parce qu'on ne l'a pas fait.**
 Le 13/08 vers 15h45, le conseil a été donné de couper à la main le
 short H1 US100 (`206360`, −141 € de flottant) « sur tout rebond qui
