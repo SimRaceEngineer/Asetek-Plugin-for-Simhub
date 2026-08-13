@@ -17,6 +17,15 @@ montrera le panel. Avec, il peut chercher ce qu'on ne sait pas encore.
 Format : ce qui est **mesuré**, avec son N et sa couverture. Pas
 d'opinion. Une ligne datée par fait.
 
+**Version 3 — 13/08 au soir.** Trois choses ont changé depuis la v1 et
+un conseil donné sans elles arrivera à côté :
+1. **M10, M20 et M30 sont en live** depuis 13:10 (section 5). Le
+   moteur ne tourne plus sur neuf magics par bras.
+2. **L'ER est postérieur, et le flux est différé de 10 min** —
+   question tranchée, section 7.
+3. **L'archive orderflow a été rognée puis restaurée** ; la fenêtre
+   réellement utilisable est 12 juin → 13 août (sections 5 et 6).
+
 ---
 
 ## 1. Ce qu'est la stack
@@ -161,20 +170,39 @@ séance.** Le moteur est déjà borné à 08:00–19:30 avec mise à plat
 au-delà, donc l'ajout des cellules suffit : live en séance, papier en
 dehors.
 
-**État au 13/08 13:10 : patchs appliqués sur le disque, PAS encore
-actifs.** `ignition_trader.py` et `ignition_trader_trail.py` sont
-modifiés et sauvegardés, mais `trading_engine.py` — qui les importe —
-tourne depuis le 12/08 avec l'ancien code en mémoire. Un
-`START_TRADING_STACK_V3.bat` lancé en séance n'y change rien : V3 ne
-tue pas un moteur sain, il le rafraîchit. Le changement prendra effet
-au **prochain démarrage du moteur**, après son arrêt automatique de
-20:00. Tant qu'on lit `207101` et pas `207110` dans le journal des
-décisions, l'ancien code tourne encore. `TFS_TRADED` passe de trois à six unités, soit **36 cellules
-au lieu de 18 — l'exposition double**, lot inchangé à balance/20000.
-H2 et H4 restent en papier pour la raison arithmétique de la
-section 1. L'allumage des nouvelles unités passe par le calcul
-**local** de `_cell_for_tf`, comme le M2 : le churn ne publie que
-M1/M5/H1.
+**FAIT — 13/08 13:10 : le moteur a été redémarré, les nouvelles
+cellules sont EN LIVE.** Les patchs sur `ignition_trader.py` et
+`ignition_trader_trail.py` ne suffisaient pas : `trading_engine.py`
+les *importe*, il tournait depuis le 12/08 avec l'ancien code en
+mémoire, et `START_TRADING_STACK_V3.bat` ne tue pas un moteur sain —
+il le rafraîchit. Il a donc fallu arrêter le moteur et relancer V3.
+Moteur **PID 9140**. Première entrée sur une cellule neuve :
+**`207230` (M30 US500) à 13:12:23**, sans rafale au démarrage.
+
+Le compte exact, bras par bras — il ne se déduit pas d'un simple
+« ×2 », les deux bras n'ont pas la même liste :
+
+| bras | `TFS_TRADED` avant | après | cellules avant → après |
+|---|---|---|---|
+| 206 | M2, M5, H1 | + M10, M20, M30 | 9 → **18** |
+| 207 | M1, M2, M5, H1 | + M10, M20, M30 | 10 → **19** |
+
+Le 207 compte une cellule de moins que 3×7=21 parce que **M1 reste
+désactivé sur US500 et US100** (`DISABLED_CELLS`, inchangé). Total
+**19 → 37 cellules live**, lot inchangé à balance/20000 :
+**l'exposition double**.
+
+H2 et H4 **restent en papier**, et pas par prudence : c'est
+arithmétique, voir section 1 — sept chiffres de magic, deux décodeurs
+qui se trompent d'actif, donc de SL. L'allumage des nouvelles unités
+passe par le calcul **local** de `_cell_for_tf`, comme le M2 : le
+churn ne publie que M1/M5/H1.
+
+Conséquence directe pour toute recommandation : un conseil du type
+« ne code pas M10/M20/M30 avant d'avoir N » arrive **après** — ces
+unités tournent en argent réel depuis 13:10. La question utile n'est
+plus s'il faut les activer, mais ce qu'on mesure maintenant qu'elles
+le sont, et à quel seuil on les retirerait.
 
 Conséquence à ne pas oublier en lisant les tableaux : à partir de ce
 changement, M10/M20/M30 sont **à la fois** live en séance et suivies
@@ -203,7 +231,27 @@ n'a d'effectif pour conclure :
   coupés en profit, les 30 % courent. Elles reviendront à leur
   clôture, avec leur résultat complet.
 
-## 6. Trois chiffres qui se mesuraient eux-mêmes — 13/08
+**L'acquisition orderflow — l'objectif est un croisement en septembre.**
+La chaîne : ticks SierraChart (`.scid`) → `scid_orderflow.py` →
+`C:\OrderflowExport\of_<actif>_<date>.jsonl` → `orderflow_join.py` →
+panneau 8097. `rafraichir_orderflow.py` rappelle l'export toutes les
+30 s — sans quoi la donnée du panneau avait jusqu'à dix minutes de
+gigue en plus du différé du flux.
+
+Ce qui est réellement exploitable, après audit : **12 juin → 13 août**
+sur US30 et US500, soit ~45 jours — et non les 3,5 mois que suggèrent
+les tailles de fichier. **US100 (MNQ) n'est pas dans le flux** :
+`_Free_Trial_Symbols` ne contient que MES, YM et TICK-NYSE, il faut un
+package de service. Les ticks sont rechargeables sur ~186 jours en
+arrière, donc rien n'oblige à décider maintenant.
+
+Le but de l'attente : croiser un mois et plus d'orderflow avec
+l'historique d'ignition et d'ignition x60, pour voir si l'orderflow
+peut se mettre en correspondance avec l'allumage. Tant que ce
+croisement n'est pas fait, l'orderflow reste une **mesure**, pas une
+règle — voir section 3.
+
+## 6. Quatre chiffres qui se mesuraient eux-mêmes — 13/08
 
 **Le compteur PARTIEL70.** Le regroupement des jambes considérait une
 entrée comme close dès qu'une jambe existait. Une position 207 dont
@@ -221,11 +269,6 @@ huit cellules ouvertes à la même seconde, sur aucun signal. Elles
 portaient à elles seules la quasi-totalité des pertes attribuées à
 trois unités de temps. Journal réinitialisé au 13/08 00:00, les lignes
 archivées à côté.
-
-**Le motif commun, et c'est le plus important :** dans les deux cas,
-un chiffre était **garanti par sa méthode de calcul**, pas par le
-marché. Quand un résultat semble trop beau, chercher l'artefact avant
-de chercher l'explication.
 
 **Le troisième cas, et il n'est pas résolu.** Question posée : les
 positions qui vont *contre* la direction d'un x60 perdent-elles ?
@@ -256,12 +299,74 @@ cellules courtes ont eu le temps de basculer. Non fait à ce jour.
 x60 se retourne, les positions à contre-sens sur les *autres* indices
 s'en sortent bien.
 
+**Le quatrième cas — l'archive qui se rognait elle-même.** Trois
+lignes de `scid_orderflow.py` prises ensemble effaçaient de
+l'historique : `since = time.time() - a.days * 86400` (fenêtre partant
+de l'heure courante), `if ep < since_epoch: continue` (barres
+antérieures sautées), et `open(fp, "w")` (le fichier du jour réécrit
+**en entier**). Un `--days 1` lancé à 14h39 réécrivait donc le fichier
+de la veille avec les seules barres postérieures à 14h39. Constaté en
+direct : le 10 août est passé de **1312 barres à 501**, le 12 de
+**1299 à 499**, entre deux audits espacés de neuf minutes — pendant
+qu'une boucle appelait `--days 1` toutes les 30 secondes et rognait
+l'archive en continu, le point de coupe avançant avec l'horloge.
+Restauré par `--days 20`, corrigé par `patch_scid_minuit.py` : `since`
+se cale sur **minuit local**, donc un fichier de jour est soit réécrit
+en entier, soit pas touché.
+
+C'est le même motif que les trois autres, sous sa pire forme : **un
+jour tronqué a exactement la forme d'un jour complet** — mêmes champs,
+mêmes valeurs plausibles, moins de lignes. Croisé tel quel en
+septembre, il aurait produit des moyennes calculées sur une
+demi-séance en les croyant calculées sur une journée.
+`couverture_orderflow.py` existe pour que ça se voie avant l'étude et
+pas pendant. Sa liste de jours utilisables **fait partie de l'étude**,
+ce n'est pas de l'intendance.
+
+**Le motif commun aux quatre, et c'est le plus important :** un chiffre
+**garanti par sa méthode de calcul**, pas par le marché — et à chaque
+fois, le fichier avait l'air parfaitement normal. Un gain partiel qui
+ne se déclenche qu'en profit est positif par construction. Un
+observateur qui démarre avec un état vide invente des entrées par
+construction. Un camp « AVEC » observé à l'instant du basculement est
+vide par construction. Un fichier réécrit depuis l'heure courante perd
+sa matinée par construction. Quand un résultat semble trop beau ou
+trop net, **chercher l'artefact avant de chercher l'explication**.
+
 ## 7. Ce qu'on ne sait pas
 
-- **L'ER est-il connu à l'entrée, ou calculé après coup ?** Si la
-  barre Ninja utilisée est celle qui *contient* l'entrée, aucun filtre
-  ER n'est implémentable, y compris la piste US30. Non tranché.
+- **TRANCHÉ le 13/08 : l'ER est postérieur.** `orderflow_join.py`
+  apparie par `minute = int(e // BAR_SEC) * BAR_SEC` — l'arrondi va
+  vers le **bas**, donc la barre retenue est celle qui *contient*
+  l'entrée, et elle se referme après. Les chiffres du gel V9, y
+  compris la piste US30 (+1,57 / −14,59 / +11,97 / +20,43), décrivent
+  ce qui s'est passé **pendant** le trade ; ils n'étaient pas lisibles
+  au moment de décider. Aucune règle live ne les reproduit telle
+  quelle.
+  Ce qui reste ouvert, et c'est mesurable : (a) l'ER de la barre
+  **précédente**, connu à l'instant t ; (b) **attendre la clôture** de
+  la barre en cours puis entrer — c'est l'ER de la bonne barre, au
+  prix d'un retard de 0 à 60 s. `patch_orderflow_er_decale.py` ajoute
+  `_er_prec`, `_er_band_prec` et `_close_barre` pour chiffrer les
+  deux ; **écrit, pas encore appliqué**.
+- **Le flux SierraChart est DIFFÉRÉ de 10 min 10 s** (`DD: 00:10:10`
+  dans l'en-tête du graphique). Ce n'est pas un réglage : c'est
+  l'abonnement bourse. Tant qu'il n'est pas levé, *aucun* filtre
+  orderflow n'est jouable en live, quelle que soit la barre choisie —
+  le blocage n'est plus l'appariement, c'est le tuyau.
+  `rafraichir_orderflow.py` surveille ce retard et le dira s'il tombe.
 - Le gradient x60 tient-il **hors échantillon** ?
+- **Le H1 papier et le H1 de production ne sont pas le même signal.**
+  `papier_tf.py` le dit lui-même (l.77-82) : en production le H1 lit
+  la cellule de `churn.get_churn(asset)`, alors que le papier fait
+  passer les six durées par `_analyze` sur des barres locales — sinon
+  H1 serait calculé autrement que ses cinq voisins et la comparaison
+  entre durées, qui est tout l'objet du module, ne voudrait plus rien
+  dire. Conséquence à ne pas rater : un écart entre H1 papier et H1
+  live **n'est pas** forcément un effet de taille d'échantillon ou de
+  spread. Ce peut être un constat sur le **churn** lui-même —
+  c'est-à-dire sur le calcul qui porte la production. Deux signaux
+  différents, pas deux échantillons d'un même signal.
 - Le x60 est-il vraiment « premier entré » ? Une observation directe
   le 13/08 08:00:17 : entrée US30 avec **0 tierce**, sortie 09:16:09
   avec 10 tierces présentes, +38,12 sur 2 tickets. n = 1 épisode.
