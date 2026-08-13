@@ -123,17 +123,23 @@ plus que l'unité est courte.
 **`x60_onset.py`** — observe les cellules H1 et photographie qui est en
 position quand elles entrent et sortent.
 
-Au 13/08 12:00, 11,7 h d'observation seulement. Rien de ce qui suit
+Au 13/08 12:04, 11,8 h d'observation seulement. Rien de ce qui suit
 n'a d'effectif pour conclure :
 
-- M10 est la seule durée avec un N utilisable (7 par bras). Le **206 y
-  passe devant le 207** (+13,42 contre +9,32).
+- M10 est la seule durée avec un N utilisable (8 par bras). Le **206 y
+  passe devant le 207** (+13,17 contre +11,56), les deux à 50 % de WR.
+  H2 et H4 n'ont encore **aucune** entrée fermée.
 - Le papier n'a **aucune entrée fermée entre 05h et 07h**, mais dix
   cellules s'y sont ouvertes et courent encore. Une heure à zéro
   fermée n'est pas une heure sans signal.
-- SÉANCE 2 trades −3,20 · HORS SÉANCE 12 trades +13,80. Couverture
-  SÉANCE 3,7 h contre HORS 8,0 h, et 26 positions encore ouvertes ne
-  figurent dans aucune des deux colonnes.
+- M10 SÉANCE 4 trades +8,06 · HORS SÉANCE 12 trades +13,80, les deux à
+  50 % de WR. L'écart s'est **beaucoup resserré** en deux heures : à
+  11:40 la séance était à −3,20 sur 2 trades. Couverture SÉANCE 3,8 h
+  contre HORS 8,0 h, et 26 positions encore ouvertes ne figurent dans
+  aucune des deux colonnes.
+- 8 entrées du bras 207 sont écartées du compte : leurs 70 % ont été
+  coupés en profit, les 30 % courent. Elles reviendront à leur
+  clôture, avec leur résultat complet.
 
 ## 6. Deux artefacts trouvés le 13/08 — le motif à retenir
 
@@ -159,13 +165,34 @@ un chiffre était **garanti par sa méthode de calcul**, pas par le
 marché. Quand un résultat semble trop beau, chercher l'artefact avant
 de chercher l'explication.
 
-Le même piège guette la lecture AVEC/CONTRE du 13/08 : sur le même
-actif, aucune tierce ne va jamais dans le sens du x60 (0 sur 12), et
-les 12 opposées finissent à −8,55. Mais l'échantillon est dominé par
-un **reverse** — et dans un reverse, être contre le x60 et être en
-perte ont la **même cause**. La section sépare désormais les x60
-premier entrés des x60 en reverse ; seuls les premiers portent une
-information.
+**Le troisième cas, et il n'est pas résolu.** Question posée : les
+positions qui vont *contre* la direction d'un x60 perdent-elles ?
+Première lecture, sur le même actif : aucune tierce n'est jamais dans
+le sens du x60 (0 sur 12), et les 12 opposées finissent à −8,55.
+
+Deux corrections successives :
+
+1. L'échantillon était dominé par un **reverse** — sortie et
+   ré-entrée du même magic à la même seconde. Dans un reverse, être
+   contre le x60 et être en perte ont la **même cause** : le marché
+   vient de se retourner. En ne gardant que les x60 premier entrés,
+   le −8,55 devient **−4,90 sur 8 présences**. La moitié de l'effet
+   était le miroir du reverse.
+2. Il reste que **« même actif / AVEC » compte zéro présence dans les
+   deux catégories**. Ce n'est pas un échantillon maigre, c'est une
+   impossibilité : on photographie à l'instant où le x60 vient de
+   basculer sur un allumage frais, donc les cellules courtes du même
+   actif tiennent encore la direction d'avant. Elles sont « contre »
+   **par définition de l'instant choisi**.
+
+**Le −4,90 n'a donc aucun groupe témoin, et ne conclut rien.** La
+comparaison n'existera qu'en mesurant à la **sortie** du x60, où les
+cellules courtes ont eu le temps de basculer. Non fait à ce jour.
+
+À noter, sans conclure : « REVERSE / autre actif / CONTRE » sort à
+**+33,22 sur 10 présences**, la meilleure cellule du tableau. Quand un
+x60 se retourne, les positions à contre-sens sur les *autres* indices
+s'en sortent bien.
 
 ## 7. Ce qu'on ne sait pas
 
@@ -178,6 +205,10 @@ information.
   avec 10 tierces présentes, +38,12 sur 2 tickets. n = 1 épisode.
 - Pourquoi M10 et M20 n'ont produit aucun allumage certaines heures :
   muettes, ou bloquées par un filtre ?
+- Les positions alignées sur la direction d'un x60 s'en sortent-elles
+  mieux ? **Indécidable en l'état** — voir section 6 : à l'instant de
+  l'entrée d'un x60, il n'existe aucune position alignée sur le même
+  actif. Il faut mesurer à la sortie.
 
 ## 8. Méthode — les trois règles de lecture
 
