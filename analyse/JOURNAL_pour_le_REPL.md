@@ -17,13 +17,16 @@ montrera le panel. Avec, il peut chercher ce qu'on ne sait pas encore.
 Format : ce qui est **mesuré**, avec son N et sa couverture. Pas
 d'opinion. Une ligne datée par fait.
 
-**Version 8 — 13/08, 16:35.** Sept choses ont changé depuis la v2 du
-matin, et un conseil donné sans elles arrivera à côté :
+**Version 9 — 13/08, 16:50.** Le résultat le mieux étayé du jour tient
+en une phrase : **ne pas tronquer les gagnantes.** Trois mesures
+indépendantes le disent (section 4), et il commande tout le reste.
+
 0. **Le filet fixe engage 17,6 % du compte sur un seul ticket US30**,
-   contre 7,0 % sur US100 (section 2). Rapporté au risque, le
-   classement des actifs sur le setup 60 **s'inverse**. Toute
-   comparaison entre actifs non normalisée compare des paris de
-   tailles différentes.
+   contre 7,0 % sur US100 (section 2) — 183 fois la MAE médiane, là où
+   les deux autres sont à 62-68 fois. **Mais il ne se déclenche jamais
+   et le resserrer coûterait de l'argent** : `mae_mfe.py` donne un
+   stop seul négatif à tous les niveaux, sur les trois actifs. Le
+   risque se règle par le **lot**, pas par la distance du stop.
 0bis. **Les stops se déplacent en profit, sur les DEUX bras** — seuil
    entre +10 et +39 € (section 2). « Filet fixe, jamais suivi » était
    faux. Le hold-until-reverse du 206 n'est donc pas intact.
@@ -172,6 +175,38 @@ y compris pour les nouvelles unités 10/20/30.
   **dernier** par unité de risque. Toute lecture de `familles.py` qui
   compare US30, US500 et US100 sans cette normalisation compare des
   paris de tailles différentes.
+
+  **Confirmé sans passer par les euros** (`mae_mfe.py`, 3008 positions,
+  20/07 → 07/08) : rapporté à la dispersion réelle des pertes
+  latentes, US30 est encore l'aberration.
+
+  | actif | filet | MAE médiane | ×médiane | ×q75 |
+  |---|---|---|---|---|
+  | US30 | 4000 | 21,8 pts | **183×** | **103×** |
+  | US100 | 1600 | 23,5 pts | 68× | 40× |
+  | US500 | 200 | 3,2 pts | 62× | 34× |
+
+  Deux méthodes indépendantes — conversion en euros et normalisation
+  par la MAE — désignent le même coupable. Ce n'est pas un artefact de
+  conversion.
+- **MAIS LE FILET NE SE DÉCLENCHE JAMAIS, ET LE RESSERRER COÛTERAIT.**
+  C'est le point contre-intuitif, et il est mesuré exactement (pas
+  simulé) par `mae_mfe.py` section 3 : un stop seul donne un « vs
+  réel » **négatif à tous les niveaux testés**, sur les trois actifs.
+  Les deux seules valeurs positives — US30 +31,42 à 54,5 pts, NAS100
+  +27,29 à 94,0 — sont des maxima **isolés entre des valeurs
+  négatives**, exactement ce que le script désigne comme du
+  surajustement. Un objectif seul (section 4) est pire encore :
+  négatif partout, sur les trois actifs, à tous les niveaux.
+  **La raison est structurelle** : l'edge est asymétrique. Une
+  gagnante voit 57 à 92 € au meilleur moment ; une perdante n'en voit
+  que 9 à 15 avant de rendre. Couper tôt sacrifie la queue droite qui
+  paie tout. Un stop à la MAE médiane des gagnantes couperait 50 %
+  des gagnantes pour 92 % des perdantes — rapport 1,85, favorable en
+  comptage, **perdant en euros**.
+  Conclusion opérationnelle : **le risque se règle par le LOT, pas par
+  la distance du stop.** Le filet à 4000 est choquant comme chiffre de
+  risque et correct comme choix de conception.
 - **Session** : 08:00–19:30 Paris, jours ouvrés, flat au-delà.
 - **Sortie 207** : 70 % du VOLUME coupés au premier break de la bougie
   **M2 précédente**, en profit seulement, une fois par position. Les
@@ -264,6 +299,27 @@ encadrent zéro. Cette règle ne vaut rien, et ce n'est pas une opinion.
   ne font pas un grand échantillon de comparaisons, et les deux
   fenêtres se recouvrent. Mais la direction, la taille et le mécanisme
   concordent — c'est la piste la plus actionnable du 13/08.
+- **NE PAS TRONQUER LES GAGNANTES — trois mesures indépendantes, même
+  verdict.** C'est le résultat le mieux étayé du 13/08.
+  1. `mae_mfe.py` §4 : un objectif fixe est **négatif à tous les
+     niveaux, sur les trois actifs**. Aucune exception.
+  2. `mae_mfe.py` §3 : un stop seul est négatif partout aussi, sauf
+     deux maxima isolés qui sont du bruit.
+  3. `familles.py` : sur le setup 60, le bras **206 bat le 207 de
+     +16,76 par ticket** — et le 207 est précisément celui qui coupe
+     70 % tôt.
+  La cause est la même dans les trois cas : médiane MFE des gagnantes
+  57 à 92 €, médiane MFE des **perdantes** seulement 9 à 15 €. Les
+  perdantes ne montrent presque jamais de profit — donc **aucune mise
+  à zéro ne peut les sauver**, et tout mécanisme qui se déclenche en
+  profit ne peut toucher que les gagnantes, pour les raccourcir.
+  **Corollaire à vérifier, et il est important** : le déplacement de
+  stop décrit en section 2 se déclenche entre +10 et +39 €, alors que
+  la MFE médiane d'une perdante vaut 9 à 15 €. Il ne protège donc
+  presque jamais une perdante et ne peut agir que sur des gagnantes.
+  Tout indique que **c'est un coût, pas une protection**. Mesure
+  directe à faire : comparer les trades où il s'est déclenché à ceux
+  où il ne s'est pas déclenché.
 - **⚠ Ce qui NE tient pas : « le x60 entraîne la fenêtre ».**
   `familles.py` montre ALLUME +473,79 par fenêtre contre PRESENT
   −34,24 et ABSENT −37,45, et en tire que le rang ajoute quelque
