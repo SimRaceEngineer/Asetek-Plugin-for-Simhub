@@ -141,7 +141,7 @@ n'a d'effectif pour conclure :
   coupés en profit, les 30 % courent. Elles reviendront à leur
   clôture, avec leur résultat complet.
 
-## 6. Deux artefacts trouvés le 13/08 — le motif à retenir
+## 6. Trois chiffres qui se mesuraient eux-mêmes — 13/08
 
 **Le compteur PARTIEL70.** Le regroupement des jambes considérait une
 entrée comme close dès qu'une jambe existait. Une position 207 dont
