@@ -87,6 +87,11 @@ reçoit celui de l'US30 court avec un stop vingt fois trop large.
 de magic, ce qui suppose de toucher les deux décodeurs dans le moteur,
 dans les panneaux et dans les gels. Ils restent en papier.
 
+Vérification indirecte le 13/08 : `familles.py` lit 3087 tickets à six
+chiffres et rapporte **« aucun conflit — le chiffre d'actif colle au
+ticket »**. Le schéma se relit donc sans exception sur l'historique,
+y compris pour les nouvelles unités 10/20/30.
+
 ## 2. Les règles de production, lues dans le code
 
 - **Entrée** : allumage FRAIS de `churn_regime._analyze` — direction
@@ -95,7 +100,13 @@ dans les panneaux et dans les gels. Ils restent en papier.
 - **Filtre** : RSI(14) M3 > 50 pour un achat, < 50 pour une vente
   (ENFORCE 20/07, fail-open : si le RSI manque, on passe).
 - **Stop** : filet fixe, jamais suivi — 4000 / 200 / 1600 points selon
-  l'actif.
+  l'actif. **Réserve du 13/08, non résolue** : trois positions du bras
+  207 portaient un SL *au-dessus* de leur prix d'entrée sur un achat
+  (nas100 29847,95 → SL 29915,33 ; nas100 29852,20 → 29923,08 ;
+  spx500 7779,40 → 7787,60), volume intact, donc sans sortie partielle.
+  Quelque chose déplace des stops en profit, et ce n'est pas décrit
+  ici. Soit cette ligne est incomplète, soit un module agit hors du
+  moteur. À trancher.
 - **Lot** : balance / 20000, minimum 0.10.
 - **Session** : 08:00–19:30 Paris, jours ouvrés, flat au-delà.
 - **Sortie 207** : 70 % du VOLUME coupés au premier break de la bougie
@@ -408,6 +419,16 @@ vide par construction. Un fichier réécrit depuis l'heure courante perd
 sa matinée par construction. Quand un résultat semble trop beau ou
 trop net, **chercher l'artefact avant de chercher l'explication**.
 
+**Le cinquième, et il n'a pas eu lieu — parce qu'on ne l'a pas fait.**
+Le 13/08 vers 15h45, le conseil a été donné de couper à la main le
+short H1 US100 (`206360`, −141 € de flottant) « sur tout rebond qui
+échoue ». Le bras 206 est *hold-until-reverse* : le gradient x60
+mesuré plus haut vient de trades allés **jusqu'à leur reverse**,
+pertes comprises. Couper sélectivement les queues perdantes rendrait
+le chiffre garanti par l'intervention, pas par le marché — et la série
+live cesserait d'être comparable à la mesure gelée. Une cellule se
+retire **sur N, par règle**, jamais sur un mouvement en cours.
+
 ## 7. Ce qu'on ne sait pas
 
 - **TRANCHÉ le 13/08 : l'ER est postérieur.** `orderflow_join.py`
@@ -445,6 +466,11 @@ trop net, **chercher l'artefact avant de chercher l'explication**.
   (−1,79 € au total sur 12 tickets, WR 58 %), ce qui explique son
   absence d'une liste de positifs sans rien dire de plus. Une cellule
   à zéro n'est pas une cellule cassée.
+- **224 tickets « hors format »** (magics à quatre chiffres : 2423,
+  2403, 2411, 2413, 2422, 2412, 2402) pèsent **−1 314,70 à −5,87 par
+  ticket, WR 23 %**. Ils ne sont décrits nulle part dans ce journal et
+  n'appartiennent à aucun des bras documentés. D'où viennent-ils, et
+  qui les passe ?
 - **Le H1 papier et le H1 de production ne sont pas le même signal.**
   `papier_tf.py` le dit lui-même (l.77-82) : en production le H1 lit
   la cellule de `churn.get_churn(asset)`, alors que le papier fait
