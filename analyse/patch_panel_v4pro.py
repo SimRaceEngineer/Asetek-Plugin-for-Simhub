@@ -57,12 +57,31 @@ POURQUOI CHANGER AUSSI LA VOIE "chat"
     documente dans llm_client.py ligne 35, ou un modele inexistant a
     renvoye du vide pendant deux semaines.
 
-QUAND CA PREND EFFET
+QUAND CA PREND EFFET -- PAS TOUT SEUL. LIRE CECI.
 
-    Le wrapper relance price_action toutes les ~40 minutes (il se
-    termine proprement pour eviter l accumulation GIL). Les variables
-    seront donc prises au prochain cycle, sans rien faire. Pour aller
-    plus vite : tuer le python du panneau, sa boucle le relance.
+    Le `.bat` est structure ainsi :
+
+        set PA_ROLE=panel        <- les deux lignes se posent ici
+        set PY_PANEL=...
+        :loop
+          "%PY_PANEL%" price_action.py
+          timeout /t 2
+        goto loop
+
+    Les `set` sont AVANT `:loop`. Le cmd.exe qui tourne les a executes
+    une fois, au demarrage ; sa boucle ne repasse jamais dessus. Le
+    wrapper relance bien price_action toutes les ~40 minutes, mais
+    avec SON PROPRE environnement, fige a son lancement.
+
+    Donc : tuer le python du panneau ne suffit PAS. Il faut arreter le
+    cmd.exe qui porte run_panel_loop.bat, puis son python, puis
+    relancer le .bat. Sinon le panneau redemarre sans les variables et
+    rien ne le signale -- il continue de parler a deepseek-reasoner.
+
+    (Cette note corrige ce que ce fichier affirmait le 13/08 au matin :
+    « les variables seront prises au prochain cycle, sans rien faire ».
+    C etait faux, et le genre de faux qui ne se voit pas : le panneau
+    repond, le REPL repond, seule l identite du modele est autre.)
 
 UNE ANCRE, verifiee unique. IDEMPOTENT. Sauvegarde horodatee.
 Le fichier n est PAS execute par ce script.
@@ -154,8 +173,14 @@ def main():
     print("Rien d autre n est touche : ni PA_ROLE, ni le garde-fou")
     print("anti-doublon, ni la boucle de relance.")
     print()
-    print("Prend effet au prochain redemarrage du panneau -- le wrapper")
-    print("le relance tout seul toutes les ~40 minutes.")
+    print("ATTENTION : ca ne prend PAS effet tout seul. Les `set` sont")
+    print("avant `:loop` -- le cmd.exe qui tourne les a deja executes et")
+    print("sa boucle ne repasse pas dessus. Relancer le python du panneau")
+    print("le redemarrerait avec l ancien environnement, sans que rien ne")
+    print("le signale : il repondrait toujours, mais a deepseek-reasoner.")
+    print()
+    print("Il faut arreter le cmd.exe qui porte run_panel_loop.bat, puis")
+    print("son python, puis relancer le .bat.")
 
     if a.essai:
         print()
