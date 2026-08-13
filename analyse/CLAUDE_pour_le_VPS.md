@@ -94,15 +94,37 @@ stack_watchdog.bat:16-19  REM Planifie : \TradingStack\FreshnessWatchdog,
                           REM neutralise un survivant. Pas de double engine.
 ```
 
-Donc : le moteur **s'arrête seul à 20:00** (`--stop-hour 20`), et une
-tâche planifiée relance V3 dans le quart d'heure. Un `Stop-Process` à
-la main court-circuite le garde-fou anti-double-moteur de V3 et risque
-d'en laisser tourner deux. La relance manuelle, si elle est vraiment
-nécessaire, passe par `START_TRADING_STACK_V3.bat` — pas autrement.
+Donc le moteur **s'arrête seul à 20:00** (`--stop-hour 20`), une
+demi-heure après la mise à plat de séance.
+
+**Ce qui le relance n'est PAS vérifié.** Le commentaire ci-dessus
+décrit une tâche `\TradingStack\FreshnessWatchdog`, mais le 13/08
+`Get-ScheduledTask -TaskPath "\TradingStack\*"` répond « The system
+cannot find the file specified », et le cmdlet échoue même sans filtre
+— une entrée corrompue casse son énumération. Le commentaire d'un
+`.bat` décrit une intention d'installation, pas un état constaté ;
+c'est une source à traiter comme telle. Contourner avec
+`schtasks /query /fo TABLE /nh`.
+
+Ce qui se vérifie, en revanche, c'est le battement :
+
+```powershell
+$hb = "$env:APPDATA\MetaQuotes\Terminal\Common\Files\cross_index_gate.dat"
+((Get-Date) - (Get-Item $hb).LastWriteTime).TotalSeconds
+```
+
+Sous 15 secondes après 20:00, quelque chose a relancé le moteur. Au
+-delà, il est arrêté et il faut lancer `START_TRADING_STACK_V3.bat`.
+
+Un `Stop-Process` à la main court-circuite le garde-fou
+anti-double-moteur de V3 et risque d'en laisser tourner deux. La
+relance passe par le `.bat`, pas autrement.
 
 Conséquence pratique : **un patch sur un module importé par le moteur
-prend effet tout seul, hors séance, le soir même.** C'est la meilleure
-fenêtre possible, et elle ne demande aucune action.
+prend effet au prochain démarrage, donc le soir après 20:00, hors
+séance.** C'est la meilleure fenêtre possible — celle où la règle de
+session empêche les cellules fraîchement armées d'ouvrir en rafale.
+Elle demande au plus un geste, jamais en pleine séance.
 
 ---
 
