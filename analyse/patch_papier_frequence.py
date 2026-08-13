@@ -75,7 +75,10 @@ RE_VEILLE = re.compile(
     r'[ \t]*"creneau": creneau\(\), "ouvertes": len\(ouvertes\),\n'
     r'[ \t]*"cellules": len\(grille\)\}\)$', re.M)
 
-RE_RAPPORT = re.compile(r'^def rapport\(\):$', re.M)
+# patch_papier_depuis renomme la signature en rapport(depuis=None).
+# L ancre accepte les deux : l ordre d application des patchs ne
+# doit pas decider si celui-ci marche.
+RE_RAPPORT = re.compile(r'^def rapport\((?:depuis=None)?\):$', re.M)
 
 RE_SECTION = re.compile(
     r'^([ \t]*)L\.append\("=" \* LARG\)\n'
