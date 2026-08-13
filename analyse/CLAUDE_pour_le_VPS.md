@@ -173,6 +173,31 @@ Lancer directement
 en boucle. Toujours tester la connexion TCP d'abord, distinguer
 « refusé » de « lent », et ne redémarrer que sur un refus.
 
+**Le `VERIFY` de V3 annonce un double moteur qui n'existe pas.** Le
+13/08 il a écrit `KO trading_engine : 2 instances (DOUBLE)` alors
+qu'un seul tournait. Il compte les processus dont la ligne de commande
+contient `trading_engine`, et le `stall_sniper` en fait partie :
+
+```
+stall_sniper.py 9140 ...\logs\trading_engine_20260813.log
+```
+
+Croire cette alerte et « supprimer le doublon » revient à tuer le seul
+moteur en service, avec des positions ouvertes. Le compte juste exclut
+le sniper :
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  Where-Object { $_.CommandLine -match 'trading_engine\.py' -and
+                 $_.CommandLine -notmatch 'stall_sniper' }
+```
+
+**Et pour coller une commande** : PowerShell fusionne les lignes d'un
+collage multi-lignes, ce qui a produit trois échecs le 13/08
+(`patch_x60_atomique.py$PY = ...`). Une commande = **une seule ligne**,
+les étapes séparées par des points-virgules. Une ligne unique ne peut
+pas se fusionner avec la suivante.
+
 ---
 
 ## Comment on modifie un fichier ici
