@@ -17,11 +17,15 @@ montrera le panel. Avec, il peut chercher ce qu'on ne sait pas encore.
 Format : ce qui est **mesuré**, avec son N et sa couverture. Pas
 d'opinion. Une ligne datée par fait.
 
-**Version 6 — 13/08, 16:10.** Cinq choses ont changé depuis la v2 du
+**Version 7 — 13/08, 16:20.** Six choses ont changé depuis la v2 du
 matin, et un conseil donné sans elles arrivera à côté :
-0. **« Le x60 entraîne la fenêtre » ne tient plus** : 91 % de l'effet
-   vient de trois fenêtres, toutes antérieures au 05/08 (section 4).
-   Le gradient x60, lui, tient encore.
+0. **Sur le x60, le bras 206 bat le 207 de +16,76 par ticket** sur les
+   trois actifs, à entrées identiques — environ 1 590 € (section 4).
+   Le mécanisme est identifié : le 207 remonte son stop *et* coupe
+   70 % tôt (section 2). C'est la piste la plus actionnable du jour.
+0bis. **« Le x60 entraîne la fenêtre » ne tient plus** : 91 % de
+   l'effet vient de trois fenêtres, toutes antérieures au 05/08
+   (section 4). Le gradient x60, lui, tient encore.
 1. **M10, M20 et M30 sont en live** depuis 13:10 (section 5). Le
    moteur ne tourne plus sur neuf magics par bras.
 2. **L'ER est postérieur, et le flux est différé de 10 min** —
@@ -99,14 +103,28 @@ y compris pour les nouvelles unités 10/20/30.
   même si `ignition` n'est jamais repassé à False (correctif 17/07).
 - **Filtre** : RSI(14) M3 > 50 pour un achat, < 50 pour une vente
   (ENFORCE 20/07, fail-open : si le RSI manque, on passe).
-- **Stop** : filet fixe, jamais suivi — 4000 / 200 / 1600 points selon
-  l'actif. **Réserve du 13/08, non résolue** : trois positions du bras
-  207 portaient un SL *au-dessus* de leur prix d'entrée sur un achat
-  (nas100 29847,95 → SL 29915,33 ; nas100 29852,20 → 29923,08 ;
-  spx500 7779,40 → 7787,60), volume intact, donc sans sortie partielle.
-  Quelque chose déplace des stops en profit, et ce n'est pas décrit
-  ici. Soit cette ligne est incomplète, soit un module agit hors du
-  moteur. À trancher.
+- **Stop, bras 206** : filet fixe, jamais suivi — 4000 / 200 / 1600
+  points selon l'actif. **Vérifié le 13/08 sur le book vivant** :
+  toutes les positions 206 portaient exactement le filet (us30
+  53973,60 → 49973,60 ; us30 sell → +4000 ; nas100 sell 29774,10 →
+  31374,10). Aucune n'avait de stop déplacé.
+- **Stop, bras 207** : **il bouge**, et ce n'est pas dans la
+  description d'origine. Trois positions 207 portaient un SL
+  *au-dessus* de leur prix d'entrée sur un achat — nas100 29847,95 →
+  29915,33 · nas100 29852,20 → 29923,08 · spx500 7779,40 → 7787,60 —
+  volume intact, donc **avant** toute sortie partielle. La quatrième
+  (207220, +17,71 seulement) avait encore le filet : il y a un seuil.
+- **Ce n'est PAS un daemon global.** `trading_engine.py` importe
+  `auto_be_after_mfe` (l.3031) et `candle_trail` (l.3153), et
+  `auto_be_after_mfe` fait bien du BE + lock-half — 53 à 295
+  déplacements par jour d'après son propre commentaire. Mais son
+  `_is_in_scope()` ne couvre que 93000-97999, 5000-5009, 6000-6009,
+  7000-7099, 8000-8009, 99500-99502, 100100-100300, 53000-53999 et
+  1100-1399 à suffixe 27/28/32/33. **206xxx et 207xxx ne tombent dans
+  aucune de ces plages** : le module les ignore. Le déplacement vient
+  donc du bras 207 lui-même. Conséquence importante : le
+  hold-until-reverse du **206 est intact**, et le gradient x60 mesuré
+  sur ce bras n'est pas contaminé par des sorties au BE.
 - **Lot** : balance / 20000, minimum 0.10.
 - **Session** : 08:00–19:30 Paris, jours ouvrés, flat au-delà.
 - **Sortie 207** : 70 % du VOLUME coupés au premier break de la bougie
@@ -179,6 +197,27 @@ encadrent zéro. Cette règle ne vaut rien, et ce n'est pas une opinion.
   WR 67 %) mais reste le seul setup positif du corpus (−8,69 sur
   1851). Aucune des six cellules n'atteint 20 tickets sur cette
   fenêtre : on décrit, on ne conclut pas.
+- **Sur le x60, le bras SIMPLE bat le bras à sortie partielle — sur
+  les trois actifs.** Même signal d'entrée, seule la sortie diffère,
+  donc c'est une comparaison appariée :
+
+  | actif | 206 | 207 | écart |
+  |---|---|---|---|
+  | US30 | +43,04 (31) | +30,09 (32) | **+12,95** |
+  | US500 | +38,99 (34) | +23,69 (35) | **+15,29** |
+  | US100 | +34,30 (26) | +11,57 (28) | **+22,74** |
+  | ensemble | **+39,03** (91) | **+22,27** (95) | **+16,76** |
+
+  Soit environ **1 590 € laissés par le bras 207** sur la période, à
+  entrées identiques. Depuis le 05/08 l'écart persiste (+20,95 contre
+  +10,22) mais s'inverse sur US100 (−4,61) : cinq comparaisons sur six
+  vont dans le même sens.
+  **Le mécanisme est maintenant connu** (section 2) : le 207 coupe
+  70 % tôt *et* remonte son stop, donc il tronque deux fois un edge
+  qui vit de laisser courir jusqu'au reverse. Réserve : trois actifs
+  ne font pas un grand échantillon de comparaisons, et les deux
+  fenêtres se recouvrent. Mais la direction, la taille et le mécanisme
+  concordent — c'est la piste la plus actionnable du 13/08.
 - **⚠ Ce qui NE tient pas : « le x60 entraîne la fenêtre ».**
   `familles.py` montre ALLUME +473,79 par fenêtre contre PRESENT
   −34,24 et ABSENT −37,45, et en tire que le rang ajoute quelque
