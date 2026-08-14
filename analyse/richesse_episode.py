@@ -207,11 +207,19 @@ def main():
     rat = []
     for act in episodes:
         for e in episodes[act]:
+            # La taille reste celle de l EPISODE ENTIER, meme sous
+            # --depuis : c est la definition juste, un episode ne
+            # devient pas pauvre parce qu on regarde une fenetre plus
+            # courte. En revanche seuls les tickets de la periode
+            # sont EVALUES -- et un episode a cheval sur la coupure
+            # garde sa taille complete tout en ne fournissant que ses
+            # tickets posterieurs. C est voulu, et c est ecrit ici
+            # parce que ca se lit mal dans les chiffres.
             e["taille"] = len(e["petits"])
-            for k in e["petits"]:
-                if dans(k):
-                    k["taille"] = e["taille"]
-                    rat.append(k)
+            e["retenus"] = [k for k in e["petits"] if dans(k)]
+            for k in e["retenus"]:
+                k["taille"] = e["taille"]
+                rat.append(k)
     if not rat:
         print("Aucun ticket rattache sur la periode demandee.")
         return 0
@@ -220,10 +228,15 @@ def main():
     print()
     print("A. DISTRIBUTION DES EPISODES PAR TAILLE")
     print("   " + "-" * 58)
+    # Ne compter que les episodes qui fournissent au moins un ticket a
+    # la periode analysee. La version du 14/08 15:00 comptait TOUS les
+    # episodes meme sous --depuis : elle affichait 106 episodes pour
+    # une periode qui n en contenait que ~70, et faussait donc la
+    # seule unite qui porte le resultat.
     par_t = collections.Counter()
     for act in episodes:
         for e in episodes[act]:
-            if e["taille"]:
+            if e["taille"] and e["retenus"]:
                 par_t[taille_nom(e["taille"])] += 1
     tot_ep = sum(par_t.values())
     for nom in TAILLES_NOM:
