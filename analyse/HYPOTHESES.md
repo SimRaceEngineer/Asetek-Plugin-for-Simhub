@@ -1956,24 +1956,62 @@ sous forme de statistique agrégée, jamais comme un événement daté et
 attribué. Et `PASALIGNE` ne dit pas **lequel** décroche : la lecture
 graphique le dit, la donnée non.
 
-### Ce qu'il faut mesurer avant les échéances
+### Ce qui a été mesuré, le 15/08 à 00:42
 
-**Un.** La carte **par actif**, même page, pour voir si les références
-post-cassure divergent. Si US100 est à +2 pendant que US30 est à −12,
-la référence unique ne décrit personne.
+`cassure_par_actif.py` cherche, pour chaque actif, la date qui sépare
+le mieux ses signaux en deux moitiés de moyennes différentes, et
+calibre ce maximum par **permutation de journées en bloc** — 400
+tirages, graine fixe. Résultat :
 
-**Deux.** Un **détecteur de date de cassure par actif**, au lieu du
-5 août imposé à tous : couper la série de chaque actif à chaque date
-candidate, mesurer l'écart entre les deux moitiés, garder la date qui
-le maximise — **et rapporter de combien elle bat les autres**. Une
-date de rupture « la meilleure de trente » subit exactement le même
-seuil de sélection que nos cellules, et l'oublier serait refaire à
-l'échelle du temps l'erreur qu'on corrige à l'échelle des profils.
+| actif | meilleure date | avant → après | écart | p |
+|---|---|---|---|---|
+| **US500** | 05/08 | +22,00 → −7,45 | **−29,45** | **0,005** |
+| TOUS | 05/08 | +9,37 → −5,46 | −14,83 | 0,040 |
+| US30 | 05/08 | +7,09 → −5,73 | −12,82 | 0,115 |
+| US100 | 05/08 | +2,83 → −3,55 | −6,38 | 0,382 |
 
-**Trois.** Si une date propre au US100 apparaît, relire H22 à H26 avec
-ce découpage **avant** leurs échéances des 20, 18, 26 août et
-1er septembre. Les relire après serait choisir le découpage qui donne
-le résultat souhaité.
+**La date du 5 août est confirmée pour les quatre.** Sur 8 à 11 dates
+candidates par actif, aucune ne sépare mieux. Le choix fait à l'œil
+était le bon, et ce n'était pas acquis d'avance.
+
+**La réserve initiale — « un actif se casse peut-être ailleurs » — est
+donc levée.** Aucun actif ne réclame une autre date.
+
+### Mais elle est remplacée par une autre, chiffrée
+
+**Les amplitudes n'ont rien à voir entre elles.** Le US500 perd
+29,45 € par signal à la cassure ; le US100 en perd 6,38, indiscernable
+du bruit (p = 0,38). Ce n'est pas le même événement vécu trois fois :
+c'est un choc violent sur le S&P, moyen sur le Dow, et quasi nul sur
+le Nasdaq.
+
+**Conséquence directe sur H22 à H26.** Les références post-cassure par
+actif valent **−3,55 (US100), −5,73 (US30), −7,45 (US500)**, contre
+**−5,46** en commun. La référence unique est à peu près centrale —
+elle ne ment pas grossièrement. Mais **l'étalement entre actifs vaut
+3,9 €**, quand l'écart testé par H26 vaut **+6,73**.
+
+Du même ordre de grandeur. **Une hypothèse mesurée sur `TOUS` peut
+donc se déplacer d'un tiers de son effet par simple changement de la
+composition par actif du flux** — sans qu'aucune règle de marché
+n'ait bougé.
+
+**Ce que ça impose au moment de trancher.** Les cinq échéances (20,
+18, 26 août, 1er septembre) devront être lues **avec la répartition
+par actif des signaux neufs affichée à côté du verdict**. Si cette
+répartition diffère de celle de la fenêtre de découverte, l'écart
+mesuré n'est pas comparable à l'écart annoncé, et il faut le dire
+avant de conclure — pas après.
+
+### Le chiffre qui justifie tout l'appareil
+
+Sous H0, sur les vraies données, le maximum de |t| obtenu **en
+cherchant la meilleure date dans du bruit de même structure** vaut en
+médiane **1,53** pour US100, **2,36** pour US30, **3,22** pour TOUS.
+
+Chercher rapporte deux à trois, systématiquement, sans qu'il y ait
+quoi que ce soit à trouver. Ce n'est plus une mise en garde
+théorique : c'est mesuré sur ce dossier.
 
 ---
 
