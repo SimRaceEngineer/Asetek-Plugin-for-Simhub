@@ -143,12 +143,12 @@ def calcule(sig, a):
     return donnees, refs, actifs
 
 
-CSS = """
+CSS = r"""
 :root { color-scheme: dark; }
 body { background:#0e1116; color:#c9d1d9; margin:0; padding:18px 22px;
-       font:13px/1.45 Consolas,"DejaVu Sans Mono",monospace; }
-h1 { font-size:17px; margin:0 0 4px; color:#e6edf3; font-weight:600; }
-.sous { color:#7d8590; margin:0 0 16px; font-size:12px; }
+       font:15px/1.5 Consolas,"DejaVu Sans Mono",monospace; }
+h1 { font-size:19px; margin:0 0 4px; color:#e6edf3; font-weight:600; }
+.sous { color:#7d8590; margin:0 0 16px; font-size:13px; }
 .barre { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end;
          background:#161b22; border:1px solid #30363d; border-radius:6px;
          padding:10px 14px; margin-bottom:14px; }
@@ -158,32 +158,49 @@ h1 { font-size:17px; margin:0 0 4px; color:#e6edf3; font-weight:600; }
 select { background:#0d1117; color:#c9d1d9; border:1px solid #30363d;
          border-radius:4px; padding:4px 8px; font:inherit; }
 .entete { background:#161b22; border:1px solid #30363d; border-radius:6px;
-          padding:10px 14px; margin-bottom:14px; font-size:12px; }
+          padding:12px 16px; margin-bottom:14px; font-size:14px; }
 .entete b { color:#e6edf3; }
-.gros { font-size:15px; }
+.gros { font-size:17px; }
 table { border-collapse:separate; border-spacing:2px; margin:0 0 22px; }
-caption { text-align:left; color:#e6edf3; font-size:13px; padding:6px 0;
+caption { text-align:left; color:#e6edf3; font-size:15px; padding:8px 0;
           font-weight:600; }
-th { font-weight:500; font-size:11px; color:#8b949e; padding:4px 8px;
+th { font-weight:500; font-size:13px; color:#8b949e; padding:5px 10px;
      text-align:center; white-space:nowrap; }
 th.ligne { text-align:right; }
-td { width:96px; height:42px; text-align:center; border-radius:4px;
+td { width:118px; height:54px; text-align:center; border-radius:4px;
      padding:2px; vertical-align:middle; }
-.moy { display:block; font-size:13px; font-weight:600; }
-.eff { display:block; font-size:10px; opacity:.72; }
+.moy { display:block; font-size:17px; font-weight:600; }
+.eff { display:block; font-size:12px; opacity:.78; }
 .vide { background:#12161c; color:#3d444d; }
 .souscrit { background:#161b22; color:#565f6b; }
 .leg { display:flex; align-items:center; gap:0; margin:2px 0 10px; }
-.leg i { display:block; width:34px; height:14px; font-style:normal; }
-.note { color:#7d8590; font-size:12px; max-width:980px; margin:0 0 8px; }
+.leg i { display:block; width:34px; height:18px; font-style:normal; }
+.note { color:#7d8590; font-size:13px; max-width:1100px; margin:0 0 8px; }
 .note b { color:#c9d1d9; }
 .avert { border-left:3px solid #d29922; padding:8px 12px; margin:14px 0;
          background:#1c1a12; color:#c9d1d9; max-width:980px;
-         font-size:12px; }
+         font-size:13px; }
 .sep { height:1px; background:#21262d; margin:22px 0 16px; }
+.chrome { position:sticky; top:0; z-index:9; display:flex; gap:12px;
+          align-items:center; flex-wrap:wrap; background:#161b22;
+          border-bottom:1px solid #30363d; padding:8px 22px;
+          margin:-18px -22px 16px; }
+.chrome .titre { color:#e6edf3; font-weight:600; }
+.chrome a, .chrome button { background:#0d1117; color:#58a6ff;
+          border:1px solid #30363d; border-radius:4px; padding:5px 12px;
+          font:inherit; font-weight:bold; text-decoration:none;
+          cursor:pointer; }
+.chrome a:hover, .chrome button:hover { border-color:#58a6ff; }
+.chrome .quand { color:#7d8590; font-size:12px; margin-left:auto; }
+#etat { font-size:12px; }
 """
 
-JS = """
+# BRUTE (r""") : ce bloc contient du JavaScript, donc des
+# echappements qui appartiennent a JS et non a Python. Sans le r,
+# Python transforme le \n de L.join("\\n") en vraie fin de ligne
+# DANS le litteral JavaScript -- erreur de syntaxe, script mort, et
+# la page s affiche vide sans aucun message. Vu le 14/08 a 21:34.
+JS = r"""
 const D = DONNEES, R = REFERENCES, SEUIL = SEUILT, MINN = MINEFF;
 const GAPS = GAPSJS, CONS = CONSJS, CHUR = CHURJS, UTS = UTSJS;
 
@@ -230,8 +247,10 @@ function dessine() {
        + " &laquo; gagnante &raquo;. Le chiffre en euros dans la case dit"
        + " le niveau reel." : "");
 
+  const choix = v("ut");
+  const vues = choix === "toutes" ? UTS : [choix];
   let h = "";
-  for (const ut of UTS) {
+  for (const ut of vues) {
     const k = cote + "|" + actif + "|" + seance + "|" + rails + "|" + ut;
     const g = D[k];
     if (!g) { h += "<p class='note'>ut " + ut
@@ -262,7 +281,86 @@ function dessine() {
   }
   document.getElementById("grilles").innerHTML = h;
 }
-for (const id of ["cote", "actif", "seance", "rails"])
+// --- le bouton copier -------------------------------------------------
+// Il rend du TEXTE et non du HTML : la destination est le REPL, pas un
+// navigateur. C est par ce bouton que les chiffres d une page arrivent
+// dans une conversation ; une page sans lui est une page dont on ne
+// peut pas discuter.
+function pad(s, n) {
+  s = String(s);
+  while (s.length < n) s += " ";
+  return s;
+}
+function texte() {
+  const cote = v("cote"), actif = v("actif"), seance = v("seance"),
+        rails = v("rails");
+  const ref = R[cote + "|" + actif];
+  const L = [];
+  L.push("CARTE DES PROFILS -- cote " + cote + " | actif " + actif
+         + " | seance " + seance + " | rails " + rails);
+  if (ref) L.push("reference de la periode : " + ref[0].toFixed(2)
+                  + " EUR/signal sur " + ref[1] + " signaux");
+  L.push("t = (moyenne - reference) x racine(n) / sigma. Seuil de");
+  L.push("Bonferroni |t| >= " + SEUIL.toFixed(2) + " sur les cellules");
+  L.push("enumerees. Sous " + MINN + " signaux : pas de t, non mesurable.");
+  L.push("Ces cellules ont ete ENUMEREES, pas annoncees d avance.");
+  const vues = v("ut") === "toutes" ? UTS : [v("ut")];
+  for (const ut of vues) {
+    const g = D[cote + "|" + actif + "|" + seance + "|" + rails + "|" + ut];
+    L.push("");
+    if (!g) { L.push("ut " + ut + " : aucun signal dans cette page.");
+              continue; }
+    L.push("ut " + ut + " -- " + g.n + " signaux dans la page, moyenne "
+           + g.moy.toFixed(2));
+    L.push(pad("gap / consensus", 26) + pad("churn", 12) + pad("n", 7)
+           + pad("moy", 9) + "t");
+    let i = 0;
+    for (const gp of GAPS) for (const cs of CONS) {
+      for (let j = 0; j < CHUR.length; j++) {
+        const c = g.c[i][j];
+        if (c[0] === 0) continue;
+        L.push(pad(gp + " / " + cs, 26) + pad(CHUR[j], 12)
+               + pad(c[0], 7) + pad(c[1].toFixed(1), 9)
+               + (c[0] < MINN ? "n<" + MINN : c[2].toFixed(2)));
+      }
+      i++;
+    }
+  }
+  return L.join("\n");
+}
+function copier() {
+  const t = texte();
+  const e = document.getElementById("etat");
+  function fin(ok) {
+    e.textContent = ok ? "copie, " + t.length + " caracteres"
+                       : "copie impossible -- selectionne la page a la main";
+    e.style.color = ok ? "#3fb950" : "#f85149";
+    setTimeout(function () { e.textContent = ""; }, 5000);
+  }
+  // navigator.clipboard exige un contexte SUR. Cette page est servie en
+  // http:// sur un nom de machine, donc l API y est absente et un
+  // bouton ecrit naivement ne ferait rien, sans erreur visible. La zone
+  // de texte cachee marche dans les deux cas ; l API moderne n est
+  // qu un repli.
+  try {
+    const z = document.createElement("textarea");
+    z.value = t;
+    z.style.position = "fixed";
+    z.style.top = "-1000px";
+    document.body.appendChild(z);
+    z.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(z);
+    if (ok) { fin(true); return; }
+  } catch (err) { /* on tente l API en dessous */ }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(t).then(function () { fin(true); },
+                                          function () { fin(false); });
+  } else { fin(false); }
+}
+document.getElementById("copier").addEventListener("click", copier);
+
+for (const id of ["cote", "actif", "seance", "rails", "ut"])
   document.getElementById(id).addEventListener("change", dessine);
 dessine();
 """
@@ -288,10 +386,17 @@ def page(donnees, refs, actifs, zc, a, nsig, nbrut, cellules):
     return (
         "<!doctype html><html lang=fr><head><meta charset=utf-8>"
         "<title>Carte des profils</title><style>%s</style></head><body>"
-        "<h1>Carte des profils &mdash; %d signaux, cassure au %s</h1>"
+        "<div class=chrome>"
+        "<span class=titre>Carte des profils</span>"
+        "<a href=\"/\">&larr; PANNEAU</a>"
+        "<a href=\"/repl\">REPL</a>"
+        "<button id=copier>copier</button>"
+        "<span id=etat></span>"
+        "<span class=quand>%d signaux &middot; cassure au %s &middot; "
+        "genere le %s</span>"
+        "</div>"
         "<p class=sous>%d enregistrements &rarr; %d signaux (jumeaux "
-        "206/207 fusionnes) &middot; genere le %s &middot; sigma = %.0f EUR"
-        "</p>"
+        "206/207 fusionnes) &middot; sigma = %.0f EUR</p>"
         "<div class=barre>"
         "<div class=champ><label>cote</label><select id=cote>%s</select></div>"
         "<div class=champ><label>actif</label><select id=actif>%s</select>"
@@ -300,6 +405,8 @@ def page(donnees, refs, actifs, zc, a, nsig, nbrut, cellules):
         "</div>"
         "<div class=champ><label>rails</label><select id=rails>%s</select>"
         "</div>"
+        "<div class=champ><label>unite de temps</label>"
+        "<select id=ut>%s</select></div>"
         "</div>"
         "<div class=entete id=entete></div>"
         "<div class=leg id=leg></div>"
@@ -322,10 +429,12 @@ def page(donnees, refs, actifs, zc, a, nsig, nbrut, cellules):
         "<div class=sep></div>"
         "<div id=grilles></div>"
         "<script>%s</script></body></html>"
-    ) % (CSS, nsig, a.cassure, nbrut, nsig,
-         dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), a.sigma,
+    ) % (CSS, nsig, a.cassure,
+         dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), nbrut, nsig,
+         a.sigma,
          opts(COTES, "DEPUIS"), opts(actifs, "TOUS"),
          opts(SEANCES, "US"), opts([r or "-" for r in RAILS], "-"),
+         opts(("toutes",) + UTS, "toutes"),
          zc, zc, cellules, a.min_n, cellules, js)
 
 

@@ -353,6 +353,28 @@ l'autre n'est pas la moitié du travail, c'est zéro. Et avant d'ajouter
 quoi que ce soit à une interface existante, inventorier la convention
 qui s'y trouve déjà plutôt que d'en inventer une.
 
+**Et ce n'était encore que la moitié, 23:32.** La page ouverte, il
+manquait tout le reste du châssis : **aucun retour vers le panneau,
+aucun en-tête, aucun bouton copier**. Une page servie par le panneau
+est une page *du* panneau — elle doit permettre d'en revenir et de
+copier son contenu, comme toutes les autres.
+
+Le bouton copier n'est pas décoratif sur cette machine : c'est par lui
+que le contenu part dans le REPL. Une page sans bouton copier est une
+page dont les chiffres ne peuvent pas être discutés.
+
+**La règle complète, donc.** Un panneau = **une route + un bouton dans
+la barre + un châssis** : retour vers `/`, en-tête qui dit ce qu'on
+regarde et de quand ça date, et bouton copier qui rend le contenu en
+**texte** — pas en HTML, puisque la destination est un modèle.
+
+**Le piège technique qui va avec.** `navigator.clipboard` exige un
+contexte sûr. La page est servie en `http://` sur un nom de machine
+(`vmi654074:8095`), donc **l'API est absente** — un bouton copier
+écrit naïvement ne fait rien du tout, sans erreur visible. Il faut la
+zone de texte cachée et `document.execCommand("copy")`, qui fonctionne
+dans les deux cas.
+
 ---
 
 ## 14/08/2026 — deux commandes de diagnostic mal écrites
