@@ -326,15 +326,39 @@ def main():
 
         n0, m0 = stat([s["pnl"] for s in lot])
         dis("  reference, tous signaux : n=%d  moy %+8.2f" % (n0, m0))
+
+        seuls = {}
+        for nom, fam, f in fl:
+            seuls[nom] = stat([s["pnl"] for s in lot if f(s)])
+
+        # Les filtres SEULS, avec leur n. Sans cette table on lit
+        # "M15 ALIGNE -10,49" sans savoir si c est sur 700 ou 1 200
+        # signaux -- donc sans pouvoir appliquer le paragraphe 0.
+        # Le manque a ete vu sur la premiere sortie reelle.
+        dis()
+        dis("  chaque filtre SEUL, et ce qu il faudrait pour le croire")
+        dis("  %-18s %7s %9s %9s %10s"
+            % ("filtre", "n", "moy", "vs ref", "n requis"))
+        dis("  " + "-" * (18 + 7 + 9 + 9 + 10 + 5))
+        for nom, fam, f in fl:
+            n, m = seuls[nom]
+            if not n:
+                dis("  %-18s %7s" % (nom, "-"))
+                continue
+            e = m - m0
+            # n > (z*sigma/e)^2, z=2.9 car ces decoupes ne sont PAS
+            # annoncees d avance, sigma = 60 EUR (estimation du §0).
+            req = int((2.9 * 60.0 / abs(e)) ** 2) if abs(e) > 1e-9 else 0
+            dis("  %-18s %7d %+9.2f %+9.2f %10s%s"
+                % (nom, n, m, e,
+                   ("%d" % req) if req else "-",
+                   "" if (req and n >= req) else "   trop peu"))
+
         dis()
         dis("  %-18s %-18s %6s %9s %9s %9s %9s"
             % ("filtre A", "filtre B", "n", "A+B", "A seul", "B seul",
                "apport"))
         dis("  " + "-" * (18 + 18 + 6 + 4 * 9 + 6))
-
-        seuls = {}
-        for nom, fam, f in fl:
-            seuls[nom] = stat([s["pnl"] for s in lot if f(s)])
 
         for i in range(k):
             na, fa, pa = fl[i]
