@@ -464,6 +464,22 @@ ligne. Un bloc de code est un contrat : ce qu'il contient part dans un
 terminal sans être relu. **Relire le bloc caractère par caractère
 avant d'envoyer**, en particulier son dernier caractère.
 
+**Troisième récidive, 01:00 : `python -c` sur cette machine.** J'ai
+envoyé une commande de la forme
+`python -c 'import json; ... open(r"chemin", ...)'`. PowerShell passe
+le contenu de l'apostrophe au programme, **mais l'analyseur
+d'arguments de Windows retire les guillemets doubles internes avant
+que Python ne les voie** : `r"docs\..."` est arrive comme
+`rdocs\...` et Python a rendu
+`SyntaxError: unexpected character after line continuation character`.
+Deux tentatives, deux echecs identiques.
+
+**La regle, propre a cette machine.** `python -c` avec du code cite
+est inutilisable ici. Soit on ecrit du **PowerShell pur** (`Get-Content
+-TotalCount 1 | ConvertFrom-Json` fait le meme travail), soit on ecrit
+un fichier `.py` et on le lance. Ne jamais faire dependre une commande
+de la survie de guillemets a travers deux analyseurs.
+
 **Deuxième récidive à 23:19.** J'ai montré la ligne HTML 4361 dans un
 bloc de code pour la commenter. Elle a été collée dans PowerShell :
 `The term '<' is not recognized`. Un bloc de code, sur cette machine,
