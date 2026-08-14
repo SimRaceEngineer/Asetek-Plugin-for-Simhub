@@ -1552,3 +1552,109 @@ du bruit une fois le seuil du §0 appliqué, la conclusion à écrire est
 « aucun setup ne se distingue sur cette fenêtre » — pas « il faut
 découper autrement ». Le droit de redécouper s'achète avec des données
 neuves, jamais avec les mêmes.
+
+---
+
+## H23 — Ne pas entrer en séance US quand les rails sont MID
+
+Écrite le 14/08/2026 à 22:20, **après** avoir vu le chiffre. C'est une
+hypothèse, pas un résultat.
+
+### Ce qu'on a vu
+
+Sur la carte des profils (`profils_croises.py --ut M5 --actif TOUS`),
+côté **DEPUIS** la cassure du 5 août — 1 645 signaux, référence
+**−5,46 €** :
+
+| profil | n | moyenne | écart | t | prof. |
+|---|---|---|---|---|---|
+| `US + MID` | 222 | −13,21 | −7,75 | −1,93 | 2 |
+| `US + MID + PASALIGNE` | 88 | −22,52 | −17,06 | −2,67 | 3 |
+| `US + MID + CHURN` | 69 | −20,24 | −14,78 | −2,05 | 3 |
+| `US + MID + horsCHURN + PASALIGNE` | 56 | −22,77 | −17,31 | −2,16 | 4 |
+| `MID + STEADY` | 69 | −21,50 | −16,04 | −2,22 | 2 |
+
+`MID` est le seau de rails le plus systématiquement rouge de la page,
+et il l'est à **profondeur 2**, c'est-à-dire sans qu'on ait eu besoin
+d'empiler des conditions pour le faire apparaître.
+
+### L'hypothèse, à la profondeur 2 et pas plus
+
+**`séance US + rails MID` sous-performe la référence de sa propre
+période d'au moins 7,75 € par signal.**
+
+C'est délibérément la forme la *moins* impressionnante du tableau.
+Descendre à `US + MID + PASALIGNE` double l'écart (−17,06) et divise
+l'effectif par deux et demi (88) : l'écart grandit parce que
+l'échantillon rétrécit, c'est le mécanisme habituel. La forme à
+profondeur 2 est la seule qui garde de quoi être mesurée, et elle ne
+dépend d'**aucune unité de temps** — elle ne contraint ni le gap ni le
+consensus, donc elle n'est pas quatre fois le même échantillon.
+
+### Le critère de falsification, et sa date
+
+Avec σ ≈ 60 € et e = 7,75 €, la règle du §0 `n > (z·σ/e)²` donne :
+
+- **z = 1,96**, parce que cette hypothèse-ci est annoncée d'avance et
+  qu'elle est seule : **n > 230**.
+- z = 4,14, le seuil de Bonferroni des 1 440 cellules énumérées pour
+  la trouver : n > 1 027. C'est le chiffre honnête pour les données
+  qui l'ont suggérée — et c'est pourquoi on ne les réutilise pas.
+
+Sur **données neuves à partir du 15/08**, à raison d'environ 206
+signaux par séance dont ~13,5 % tombent dans `US + MID`, soit ~28 par
+séance, les 230 signaux requis sont atteints en **8 séances, autour du
+26 août**. (Le taux est estimé sur 1 645 signaux / 8 séances depuis le
+5 août : à revérifier plutôt qu'à croire.)
+
+**H23 est fausse si**, sur ≥ 230 signaux `US + MID` postérieurs au
+15/08, l'écart à la référence de la même période est ≥ 0, ou si son
+intervalle de confiance à 95 % contient 0.
+
+### Ce qui la rendrait vraie par construction
+
+Trois pièges, et le troisième est le vrai.
+
+**Compter les jumeaux deux fois.** Les magic 206/207 sont fusionnés en
+un signal par `signaux()`. Un comptage par ticket gonflerait n de
+~50 % et ferait passer le seuil sans qu'aucune information nouvelle
+n'arrive.
+
+**Rechercher la profondeur.** Si le test à profondeur 2 échoue, il
+sera tentant de sauver H23 en la relisant à `+ PASALIGNE`. C'est
+interdit : ce serait choisir la coupe après avoir vu le résultat, dans
+un espace où l'on sait déjà que 354 profils sur 720 ont un effectif
+suffisant.
+
+**Confondre l'abstention avec un gain.** H23 ne dit pas que ne pas
+prendre ces signaux fait gagner 7,75 € par signal évité. Elle dit
+qu'ils sont plus mauvais que la moyenne d'une période **qui perd déjà
+5,46 € par signal**. S'abstenir sur `US + MID` remonte la moyenne des
+signaux restants ; ça ne la rend pas positive, et ça ne dit rien de ce
+que devient le compte. Le seul énoncé défendable est comparatif.
+
+### Le voisin qui doit servir d'avertissement
+
+Sur la même carte, la famille du gap **change de signe à la cassure** :
+
+- **AVANT** : `US + NARROWING`, n=89, écart **+30,20**, t = **+4,75**
+  — une des cinq lignes qui passent le seuil de Bonferroni.
+- **DEPUIS** : c'est `US + WIDENING` qui tient le haut de la frontière
+  (n=250, +11,04), et `NARROWING` a disparu des neuf points de la
+  frontière.
+
+Un filtre dont le **sens s'inverse** au changement de régime ne peut
+pas devenir une règle permanente. Il exigerait un détecteur de régime
+— lequel devrait lui-même être annoncé d'avance, faute de quoi on
+n'aurait fait que déplacer le sur-ajustement d'un cran. C'est la
+raison pour laquelle H23 porte sur `MID`, qui est rouge des deux côtés
+de sa propre période, et non sur la trajectoire du gap.
+
+### Ce que dit la carte, et qu'il ne faut pas oublier
+
+Les **cinq** profils qui passent |t| ≥ 4,14 sont **tous du côté
+AVANT**. Aucun profil postérieur au 5 août n'atteint son seuil, sur
+1 440 cellules énumérées. La référence elle-même est passée de
+**+9,37** à **−5,46** : c'est un écart de près de 15 € par signal, et
+c'est le seul fait de cette page qui ne demande aucune statistique
+pour être vu.
