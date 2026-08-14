@@ -85,6 +85,7 @@ import time
 EVENTS = os.path.join("docs", "x60_onset", "events.jsonl")
 RAILS = os.path.join("docs", "rails_trades", "tickets_rails.jsonl")
 SORTIE = os.path.join("panels", "panel_quadruple.txt")
+JOINDRE = os.path.join("panels", "panel_x60_onset.txt")
 QUATRE = ("10", "20", "30", "60")
 PETIT = ("01", "02", "03", "05")
 FUSION = 30
@@ -167,6 +168,8 @@ def main():
     p.add_argument("--rails", default=RAILS)
     p.add_argument("--sortie", default=SORTIE)
     p.add_argument("--depuis", default=None)
+    p.add_argument("--joindre", default=JOINDRE,
+                   help="panneau a inclure en tete ; \"\" pour aucun")
     a = p.parse_args()
 
     ev = []
@@ -191,6 +194,33 @@ def main():
 
     def garde(iso):
         return (not a.depuis) or (iso or "")[:10] >= a.depuis
+
+    # Le panneau x60 est INCLUS tel quel, en tete. Un tableau que
+    # l utilisateur ne voit pas ne sert a rien : il ouvre le panneau
+    # dont il a l habitude. Plutot que de patcher le collecteur pour
+    # y ajouter des sections -- ce qui risquerait les donnees du gel
+    # pour de la mise en page -- on recopie sa sortie ici. Lui garde
+    # son fichier, intact, et ce panneau devient le sur-ensemble.
+    if a.joindre and os.path.isfile(a.joindre):
+        age = (dt.datetime.now()
+               - dt.datetime.fromtimestamp(os.path.getmtime(a.joindre)))
+        mn = age.total_seconds() / 60.0
+        for l in io.open(a.joindre, encoding="utf-8",
+                         errors="replace").read().split("\n"):
+            dis(l.rstrip())
+        dis()
+        dis("=" * LARG)
+        dis("  ci-dessus : %s, ecrit il y a %.0f min" % (a.joindre, mn))
+        if mn > 60:
+            dis("  ATTENTION : ce panneau n a pas ete regenere depuis")
+            dis("  plus d une heure. Ses chiffres peuvent etre perimes")
+            dis("  alors que ceux qui suivent sont a jour -- ne pas les")
+            dis("  comparer sans regarder les deux horodatages.")
+        dis("  ci-dessous : les quatre unites cote a cote")
+        dis("=" * LARG)
+    elif a.joindre:
+        dis("  (%s introuvable -- panneau x60 non inclus)" % a.joindre)
+        dis()
 
     dis("=" * LARG)
     dis("PANNEAU QUADRUPLE  x10 / x20 / x30 / x60")
