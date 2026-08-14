@@ -350,6 +350,43 @@ franchement mauvais.**
 
 ---
 
+## Pré-enregistrement — séance US du 14/08, écrit à 13:30
+
+Écrit **avant** l'ouverture du cash US (15:30). Une prédiction notée
+après coup ne vaut rien ; celle-ci est datée et vérifiable ce soir.
+
+**Configuration de départ, relevée à 12:51-12:52.** US100 puis US500
+passent `CHOP → TREND_WEAK`, chop 52,6 et 48,2 — de part et d'autre du
+seuil 50. `regime_history` classe les trois actifs `INDETERMINATE /
+PRE_SESSION`, motif `us_cash_opens_in_157min`. US30 laggard, au milieu
+de son range, pendant qu'US500 et US100 sont proches du haut.
+
+**P1 (teste H7).** Les x60 de la séance US ne seront pas
+systématiquement perdants. Si le total US ressort négatif, il sera
+dominé par un à trois tickets. *Vérification : compter les tickets et
+retirer les trois plus grosses pertes — pas lire le total.*
+
+**P2 (teste H8).** Le chop vient de traverser son seuil ; la journée
+devrait produire des bascules en série. Les tickets ouverts dans les
+minutes suivant une bascule seront plus mauvais que ceux ouverts en
+régime installé. *Vérification : PnL contre `elapsed_min`.*
+
+**P3 (teste la contradiction des classifieurs).** Si ce soir un panneau
+qualifie la matinée de « range » alors que `regime_history` la classe
+`INDETERMINATE`, alors la conclusion « 09h-11h ne pas trader » (H3)
+dépend de l'instrument qu'on ouvre, et non du marché. *Vérification :
+comparer les deux étiquettes sur la même plage horaire.*
+
+**P4 (aucune action).** Aucune position ne sera prise sur la foi d'un
+signal x10 / x20 / x30. En live ils totalisent 13 tickets — M10 +150,12
+sur 9, M20 −158,33 sur 3, M30 +45,91 sur 1 — contre un seuil de ~54.
+Un seul trade retourne le signe du M20 comme du M30. Le M10 est le seul
+positif à la fois en live et dans la partie du papier comparable au
+live (en séance : M10 +13,43 · M20 −16,31 · M30 −51,72). C'est un
+indice, pas un feu vert.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
