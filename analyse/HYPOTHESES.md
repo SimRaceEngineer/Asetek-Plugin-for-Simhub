@@ -1,199 +1,282 @@
-# HYPOTHÈSES — écrites le 14/08, avant la collecte
+# HYPOTHESES — écrites le 14/08/2026, avant les données
 
-**Ce fichier est daté et ne doit plus être modifié.** Il liste ce qu'on
-va tester pendant les quinze jours, avec pour chaque question la mesure
-exacte, le seuil d'effectif, et la règle de décision. Écrites **avant**
-d'avoir vu les données.
+Ce fichier existe pour une seule raison : **une hypothèse écrite après
+avoir vu le résultat n'est pas une hypothèse.** C'est une description.
 
-## Pourquoi ce fichier existe
+La stack est gelée pour 15 jours. Pendant ce gel, les collecteurs
+écrivent le contexte d'entrée, le contexte de sortie, le plateau et la
+séance de chaque ticket, sur les quatre unités x10 / x20 / x30 / x60.
+À la fin, on lira. Ce qui est écrit ici est ce qu'on prédit **avant**
+de lire, avec, pour chacune, ce qui la tuerait.
 
-En quinze jours, `papier_tf` produira de l'ordre de 200 à 350 entrées
-x10 sur trois actifs, moins pour les autres durées. Découpé par durée ×
-bras × séance × régime × HLC, ça fait **10 à 30 trades par case**.
-
-À cet effectif, il existe **toujours** une combinaison flatteuse. Ce
-n'est pas une opinion sur le marché, c'est de l'arithmétique : avec
-quarante cases tirées d'un bruit centré, la meilleure sort à deux
-écarts-types par construction. Le panneau `matrice_tf` en affichera
-plusieurs dizaines.
-
-Donc : un chiffre de la matrice ne devient un **résultat** que s'il
-répond à une question posée ici. Tout le reste est de l'exploration —
-utile pour écrire les hypothèses du mois prochain, jamais pour décider
-maintenant.
-
-## Le budget de tests
-
-**Sept hypothèses principales.** Sept tests, décidés d'avance, sur un
-échantillon qu'on ne regarde pas en route. Toute question née de la
-lecture des données est notée dans la section EXPLORATION et ne compte
-pas comme un test.
-
-**Aucune décision de production avant le 29/08**, même si une case
-paraît spectaculaire au bout de trois jours. Regarder un compteur en
-train de monter et s'arrêter quand il est haut, c'est choisir son
-résultat.
+Toute conclusion tirée fin août qui ne correspond à aucune ligne de ce
+fichier devra être traitée comme une trouvaille de fouille — à
+re-tester sur des données neuves, pas à mettre en production.
 
 ---
 
-## H1 — le gradient x60 tient hors échantillon
+## 0. La règle de comptage, posée avant de compter
 
-**Prédiction.** Sur les quinze jours, le setup 60 (`familles.py`) reste
-positif en EUR/ticket, et supérieur à chacun des setups 01, 02, 03, 05.
+Pour distinguer un edge *e* du bruit avec un écart-type par ticket σ :
 
-**Mesure.** `python familles.py --depuis 2026-08-14 --setup 60 --detail`
+    n > (z · σ / e)²
 
-**Seuil.** 40 tickets x60 minimum sur la fenêtre. En dessous : non
-testé, pas « non confirmé ».
+Trois conséquences, à accepter maintenant plutôt qu'à découvrir en
+septembre :
 
-**Décision.** Confirmé si positif ET premier de tous les setups.
-Réfuté s'il passe négatif. Entre les deux — positif mais dépassé par un
-setup court — l'hypothèse « le H1 est spécial » tombe, et il reste
-« le H1 est un magic qui gagne parmi trente ».
+**σ n'est pas connu.** Il doit être mesuré sur les tickets réels et
+reporté ici avant toute lecture. Tant qu'il est inconnu, tous les *n*
+ci-dessous sont des ordres de grandeur, calculés avec σ ≈ 60 € — un
+chiffre plausible, pas une mesure. **Premier travail de fin de gel :
+remplacer ce 60 par le vrai.**
 
-*État au 13/08 : +30,47/ticket sur 186 (21/07→13/08), +15,52 sur 83
-depuis le 05/08. L'avantage a déjà été divisé par deux en changeant de
-régime.*
+**Le nombre de comparaisons décide du seuil.** On regardera 4 setups ×
+3 actifs × 4 séances × 2 bras, plus les régimes et les heures. C'est de
+l'ordre de **100 cellules**. À 100 comparaisons, le seuil à 5 % global
+correspond à z ≈ 3,5 par cellule, pas 1,96. Avec σ = 60 et e = 16 €/tk
+(l'écart 206/207 mesuré) :
 
-## H2 — le bras 206 bat le 207 sur les unités longues
+| comparaisons | z | n par cellule |
+|---|---|---|
+| 1 (annoncée d'avance) | 1,96 | ~54 |
+| 20 | 2,9 | ~118 |
+| 100 | 3,5 | ~172 |
 
-**Prédiction.** À entrées identiques, le 206 fait au moins +5 EUR/ticket
-de plus que le 207, sur H1 et sur M30.
+**Donc : une cellule à moins de ~50 tickets ne conclut rien, quelle que
+soit sa moyenne.** Elle décrit. Le tableau quadruple affichera le n de
+chaque cellule à côté de la moyenne, et marquera d'un `?` toute cellule
+sous le seuil. Une moyenne sans son n est un chiffre sans unité.
 
-**Mesure.** Même sortie, colonnes 206 et 207 par actif.
+**Le compteur de comparaisons.** Chaque fois qu'on regarde une
+découpe qui n'est pas listée dans ce fichier, on l'ajoute à la liste
+ci-dessous. C'est le seul garde-fou honnête contre le fait de trouver
+après coup la découpe qui gagne.
 
-**Seuil.** 30 tickets par bras et par durée.
-
-**Décision.** Confirmé si l'écart est positif **sur les trois actifs**
-et supérieur à 5 en agrégé. Un écart positif sur deux actifs sur trois
-ne confirme rien : c'est ce qu'on observait déjà, et ça peut tenir au
-hasard sur trois comparaisons.
-
-*État au 13/08 : +16,76/ticket en agrégé, positif sur les trois actifs
-sur l'historique complet, mais inversé sur US100 depuis le 05/08. C'est
-la piste la plus actionnable et elle a besoin d'un échantillon frais.*
-
-## H3 — le déplacement de stop coûte de l'argent
-
-**Prédiction.** Les positions dont le stop a été remonté finissent, en
-moyenne, **moins bien** que celles qui ne l'ont pas été, à MFE
-comparable.
-
-**Mesure.** Non disponible aujourd'hui. Elle exige un log du
-déclenchement : ticket, magic, instant, profit au moment du
-déplacement, MFE atteint, résultat final. **À instrumenter avant de
-pouvoir tester.** Sans ce log, H3 reste ouverte et ne se rattrape pas
-rétroactivement — l'historique ne garde que le SL final.
-
-**Raison de la prédiction.** La MFE médiane d'une perdante vaut 9 à
-15 € ; le déplacement se déclenche entre +10 et +39. Il ne peut donc
-quasiment jamais protéger une perdante, et n'agit que sur des
-gagnantes — pour les raccourcir. Trois mesures indépendantes disent
-déjà qu'il ne faut pas tronquer les gagnantes.
-
-## H4 — le M10 perd en séance
-
-**Prédiction.** Sur les entrées M10 ouvertes entre 08:00 et 19:30, le
-résultat par trade est négatif.
-
-**Mesure.** `matrice_tf`, section 1, colonnes EUROPE et US.
-
-**Seuil.** 40 entrées M10 en séance.
-
-**Décision.** Confirmé si négatif avec N ≥ 40 → on retire le M10 du
-live. Réfuté si positif. Le papier hors séance ne compte pas : la
-production est bornée, cette colonne n'est pas capturable.
-
-*État au 13/08 : −14,52/trade sur 16 en séance, +35,34 sur 14 hors
-séance — mais la colonne séance est passée de +8,06 à −14,52 en trois
-heures. Elle ne soutient rien, dans un sens ni dans l'autre.*
-
-## H5 — le x10 nocturne est un artefact de traversée
-
-**Prédiction.** Parmi les entrées x10 ouvertes entre 22:00 et 09:00, le
-gain se concentre sur celles qui ont **franchi une ouverture de
-séance**. Les autres — nées et mortes dans la nuit — sont à peu près
-nulles.
-
-**Mesure.** `matrice_tf`, section 3, ligne M10, colonnes « n'a rien
-franchi » contre « a franchi 1+ ».
-
-**Seuil.** 25 entrées dans chacune des deux colonnes.
-
-**Décision.** Confirmé si l'écart dépasse 10 EUR/trade en faveur des
-traversantes → l'heure d'entrée nocturne est une étiquette trompeuse et
-il ne faut pas en faire un créneau. Réfuté si les deux colonnes se
-tiennent → la nuit paie vraiment.
-
-**C'est l'hypothèse la plus importante des sept**, parce qu'elle
-décide si « le x10 donne de bons moments la nuit » est une observation
-ou un mirage. Hors séance rien ne remet à plat : une nuit calme est une
-nuit sans reverse, donc la position de 02h vit jusqu'au matin.
-
-## H6 — l'alignement sur un x60 se mesure à sa SORTIE
-
-**Prédiction.** À l'instant où un x60 sort, les positions courtes du
-**même actif** alignées sur son sens font mieux que celles à
-contre-sens.
-
-**Mesure.** `x60_onset`, section plateau, au moment `X60_SORTIE`.
-
-**Seuil.** 25 présences dans chaque camp.
-
-**Décision.** Confirmé si l'écart dépasse 8 EUR/présence. Réfuté sinon.
-
-**Pourquoi à la sortie et pas à l'entrée.** À l'instant de l'entrée
-d'un x60, il n'existe **aucune** position alignée sur le même actif —
-zéro sur zéro — parce qu'on photographie au moment précis où il vient
-de basculer. Le camp « AVEC » est vide *par définition de l'instant
-choisi*, pas par rareté. Mesuré à l'entrée, ce test n'a pas de groupe
-témoin et ne peut rien conclure.
-
-## H7 — le filtre horaire 09h-11h survit
-
-**Prédiction.** Le créneau 09h-11h reste le découpage horaire au plus
-gros Δ, devant toutes les cellules orderflow.
-
-**Mesure.** Panneau orderflow, contrefactuel Δ par signal.
-
-**Seuil.** 100 signaux dans le créneau.
-
-**Décision.** Confirmé s'il reste premier. Réfuté s'il passe sous
-+2,00 par signal.
-
-*État : Δ +5,43, confirmé sur deux slicings, contre +0,08 pour le
-CARNAGE seul et −0,15 pour l'anti-contre-flux. C'est la seule règle
-orderflow qui ait survécu au gel V9.*
+    Découpes non prévues examinées : (aucune au 14/08)
 
 ---
 
-## Ce qui compte comme EXPLORATION
+## 1. Le motif qu'on cherche à ne pas reproduire
 
-Tout le reste, et notamment :
+Sept fois depuis le début, un chiffre s'est révélé garanti par sa
+méthode de calcul et non par le marché :
 
-- les croisements contexte × durée de la section 4 de `matrice_tf` ;
-- les combinaisons du type « MIXED + HLC widening + Asie » ;
-- toute case repérée parce qu'elle est belle dans le tableau.
+1. le gain du PARTIEL70, garanti par la prise de bénéfice elle-même
+2. les entrées x60 inventées au redémarrage du collecteur
+3. le camp AVEC vide, garanti par le filtre qui le peuplait
+4. l'archive détruite par son propre rafraîchissement
+5. « le bras 206 ne bouge jamais son stop » — réfuté 20 min plus tard,
+   mon échantillon ne contenait que des positions perdantes et le
+   déclencheur est le profit
+6. un contenu de réponse vide garanti par `max_tokens=5`
+7. l'hypothèse « la clôture de séance a tronqué les gagnantes » —
+   réfutée par mon propre diagnostic : les deux sorties de 19:30:06 ont
+   des MFE de −2,72 et −2,08, elles n'ont **jamais** été en profit
 
-Ces lectures servent à **écrire les hypothèses de septembre**, pas à
-décider en août. Une case explorée qui devient une hypothèse doit être
-retestée sur des données qu'elle n'a pas servi à choisir — sans quoi
-elle est positive par construction, comme les quatre artefacts du
-13/08.
-
-## La discipline de lecture, en trois lignes
-
-1. **Un chiffre sans sa couverture ne vaut rien.** Zéro trade et
-   observateur arrêté produisent le même fichier vide — le 13/08 au
-   soir, les deux observateurs sont restés morts douze heures sans que
-   rien ne le signale.
-2. **Sous le seuil, on décrit, on ne conclut pas.** `matrice_tf` marque
-   ces cases d'un `?`.
-3. **Un cumul de règles choisies parce que leur Δ était positif sur le
-   même échantillon est positif par construction.** C'est un plafond,
-   jamais un plan.
+Trois des sept sont de moi. Le motif n'est pas une maladresse
+ponctuelle, c'est le mode d'échec par défaut de ce travail. Chaque
+hypothèse ci-dessous porte donc, explicitement, **ce qui la rendrait
+vraie par construction**.
 
 ---
 
-*Ouvert le 14/08/2026. Relecture prévue le 29/08. Aucune décision de
-production d'ici là.*
+## H1 — Ne pas tronquer les gagnantes
+
+**Prédiction.** Aucun TP fixe, à aucun niveau, sur aucun des trois
+actifs, ne battra la sortie hold-until-reverse actuelle.
+
+**Base.** Trois mesures indépendantes convergent déjà : le TP fixe est
+négatif à tous les niveaux ; le stop seul est négatif partout, les deux
+seuls réglages positifs étant des maxima isolés que le script étiquette
+lui-même « overfitting » ; et le bras 206 (hold) bat le 207 (partiel
+70 %) de **+16,76 €/ticket sur les trois actifs**, à entrées
+identiques — confirmé par des sorties jumelles partageant MFE et MAE au
+centime.
+
+**Ce qui la tue.** Un TP qui bat le hold sur au moins deux actifs, avec
+n ≥ 50 par actif, et qui reste positif quand on retire le meilleur
+décile de trades.
+
+**Ce qui la rendrait vraie par construction.** Comparer un TP à un hold
+sur un échantillon dominé par des tendances. C'est pourquoi la
+comparaison doit être refaite **par régime**, pas en agrégé.
+
+**Statut : la mieux étayée des sept. Aucune action.**
+
+---
+
+## H2 — Le risque appartient au lot, pas à la distance de stop
+
+**Prédiction.** Resserrer le filet fixe dégradera le résultat net, quel
+que soit le niveau testé.
+
+**Base.** Le filet est absurde comme chiffre de risque — US30 = 17,6 %
+du compte, 183 × la MAE médiane — et correct comme choix de
+conception : la MAE médiane est de 21,8 pts sur US30 (q75 39,0), 23,5
+sur NAS100 (40,5), 3,2 sur SPX500 (5,8). Un stop posé à 55 / 100 / 4
+points coupe dans la distribution des trades qui finissent gagnants. La
+grille l'a chiffré : **−334 €** sur l'échantillon.
+
+**Ce qui la tue.** Un niveau de stop qui améliore le net **et** dont
+les voisins immédiats l'améliorent aussi (pas un maximum isolé).
+
+**Ce qui la rendrait vraie par construction.** Mesurer sur une période
+sans gap ni trou de liquidité. Le filet existe pour le jour où le
+marché saute ; son coût se voit tous les jours, son bénéfice une fois
+par an. **Un test de 15 jours ne peut pas voir ce bénéfice.**
+
+**Statut : hands-off confirmé par l'utilisateur. Aucune action.**
+
+---
+
+## H3 — 09h-11h : ne pas trader
+
+**Prédiction.** Sur les 15 jours, les tranches 09h, 10h et 11h seront
+négatives en régime range, sur les trois actifs, tous setups confondus.
+
+**Base.** C'est la seule affirmation à ce jour qui repose sur un gros
+échantillon **et** deux sources indépendantes : `panel_rails_post0508`
+(3517 tickets) donne 09h −10,65, 10h −8,22, 11h −10,69 €/trade en
+range ; `panel_orderflow` section 7 donne, aux mêmes heures, un ER
+majoritairement CARNAGE/MOU avec des PnL de −18,18 (09h) et −13,64
+(10h). Deux instruments qui ne partagent pas leur calcul.
+
+**Ce qui la tue.** Une des trois heures positive avec n ≥ 100 sur la
+nouvelle fenêtre, ou l'effet qui disparaît quand on contrôle par
+actif — c'est-à-dire s'il n'est qu'un effet US30 déguisé en effet
+horaire.
+
+**Ce qui la rendrait vraie par construction.** L'heure et le régime ne
+sont pas indépendants : si le range est sur-représenté le matin, on
+mesure le régime en croyant mesurer l'heure. **Il faut le tableau
+heure × régime, pas les deux marges séparément.**
+
+**Statut : la meilleure candidate au « quand ne pas trader ». À
+re-mesurer croisée avec le régime.**
+
+---
+
+## H4 — CHURN = standby
+
+**Prédiction.** Le régime CHURN restera négatif sur les trois actifs et
+les quatre setups.
+
+**Base.** `horloge_regime` du 12/08 : CHURN −16,29 €/ticket sur 109
+tickets, DOUTEUX −5,26 sur 166. Croise avec l'orderflow, où les tickets
+classés CARNAGE sont négatifs (−4,79 à −8,91) quelle que soit la classe
+rails.
+
+**Ce qui la tue.** CHURN positif sur un setup, avec n ≥ 50 sur ce
+setup.
+
+**Ce qui la rendrait vraie par construction.** Une seule journée pour
+l'horloge. Et surtout : **le régime est calculé par le même moteur qui
+décide des entrées.** Si `churn_regime` filtre déjà partiellement, on
+mesure le résidu de son propre filtre, pas le régime. À vérifier dans
+le code avant de conclure quoi que ce soit.
+
+**Statut : plausible, contaminée par une dépendance possible entre le
+classifieur et le déclencheur.**
+
+---
+
+## H5 — Le x60 gagne seul
+
+**Prédiction.** Sur les 15 jours, la présence d'un x60 en position
+n'améliorera pas le résultat des autres bras présents en même temps.
+
+**Base.** `familles.txt` depuis le 05/08 : les 5 fenêtres d'allumage
+x60 totalisent −267,40 € ; les tickets du x60 lui-même font +3,29, ceux
+des autres −270,69.
+
+**Ce qui la tue.** Les accompagnants d'un x60 significativement
+meilleurs que les mêmes bras hors présence x60, n ≥ 50 de chaque côté.
+
+**Ce qui la rendrait vraie par construction.** **Cinq fenêtres.** C'est
+le chiffre le plus fragile de tout le dossier — cinq événements, dont
+un seul suffirait à retourner le signe. Le releveur `X_ENTREE` /
+`X_SORTIE` posé le 14/08 existe précisément pour que cette question
+devienne mesurable : il photographie le plateau — qui est en position,
+avec quel latent, à quel âge — à la seconde où une cellule entre. Cette
+photo ne se reconstitue pas après coup.
+
+**Statut : question ouverte, instrument posé, échantillon nul.
+C'est LA raison d'être du gel.**
+
+---
+
+## H6 — Leader de prix ≠ leader de setup
+
+**Prédiction.** L'actif qui mène le mouvement de prix ne sera pas
+l'actif le plus rentable sur le setup 60.
+
+**Base.** Observation du 14/08 : US100 mène le momentum M15 (range_pos
+80 %, angle +4,12) alors qu'il est le membre **le plus faible** du H1
+depuis le 05/08 (206 −0,15 / 207 +4,46, contre US500 206 +33,09).
+
+**Ce qui la tue.** Une corrélation positive entre rang de leadership et
+rendement du setup, sur les 15 jours.
+
+**Ce qui la rendrait vraie par construction.** Une observation d'un
+seul jour érigée en règle. Elle est ici parce qu'elle est *falsifiable*
+et intéressante, pas parce qu'elle est établie.
+
+**Statut : hypothèse au sens propre. Rien derrière.**
+
+---
+
+## H7 — La séance US n'est pas hostile au x60
+
+**Prédiction — celle-ci va CONTRE la lecture actuelle.** L'écart
+EUROPE +102,74 / US −364,86 relevé sur le panel x60 ne survivra pas à
+l'échantillon.
+
+**Pourquoi je prédis le contraire de ce que montre le panel.** Le camp
+US compte **cinq clôtures**. Trois d'entre elles expliquent la quasi-
+totalité du chiffre : un `M206360` avec MAE −266,95, et deux US30
+sortis à 19:30:06 à ≈ −88 € chacun. Ce n'est pas un effet de séance,
+c'est trois trades. Et pour les deux de 19:30:06, on a déjà vérifié
+qu'ils n'ont jamais été en profit (MFE −2,72 et −2,08) : rien n'a été
+tronqué par l'horloge, ils étaient faux dès l'entrée.
+
+Nommer « séance US » un total dominé par trois tickets, c'est le motif
+n°1 de la liste, dans sa forme la plus classique.
+
+**Ce qui la tue.** L'écart EUROPE/US persiste avec n ≥ 50 de chaque
+côté, **et** persiste après retrait des trois plus grosses pertes.
+
+**Statut : hypothèse posée à contre-courant, exprès. Si les données
+la réfutent, l'effet de séance sera d'autant plus crédible qu'il aura
+été prédit absent.**
+
+---
+
+## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
+
+- **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
+  +56,69 sur M30 — sans spread ni slippage, aux heures où le spread est
+  précisément le plus large. Le papier hors séance est optimiste **par
+  construction**. Il n'entrera dans aucune conclusion. La seule partie
+  comparable au live est la partie en séance, et elle est nettement
+  moins flatteuse (M10 +13,43 · M20 −16,31 · M30 −51,72).
+- **Le setup 60 à +15,52 €/tk sur 83 tickets.** Avec σ = 60, l'erreur
+  type est 6,6 € et t ≈ 2,35 : correct pour **une** comparaison
+  annoncée d'avance. Mais le setup 60 a été **choisi** comme le
+  meilleur parmi une dizaine de candidats. Après correction, il ne
+  passe plus. Ce n'est pas une raison de l'abandonner — c'est une
+  raison de ne pas construire dessus avant d'avoir les n du §0.
+- **Toute conclusion tirée d'un LLM entraîné sur ces données.** Voir le
+  §0 : de l'ordre de 15 000 tickets pour que la centaine de cellules
+  signifie quelque chose. Quinze jours n'y suffiront pas. Ce qu'on
+  collecte est le jeu d'entraînement d'un travail ultérieur, pas de
+  celui-là.
+
+---
+
+## Ce qui ferait abandonner l'exercice
+
+Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
+du bruit une fois le seuil du §0 appliqué, la conclusion à écrire est
+« aucun setup ne se distingue sur cette fenêtre » — pas « il faut
+découper autrement ». Le droit de redécouper s'achète avec des données
+neuves, jamais avec les mêmes.
