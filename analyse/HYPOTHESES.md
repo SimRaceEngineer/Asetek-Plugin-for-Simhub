@@ -436,9 +436,64 @@ pas moins — mais déplace la conclusion : ce n'est peut-être pas
 hors séance US par construction. Une seule cause pour deux
 observations, ce qui est meilleur que deux règles.
 
+### Les trois contrôles, passés le 14/08 à 14:15
+
+Sur l'heure d'entrée seule, **sans le classifieur** :
+
+```
+HORS SEANCE          n=2461  moy -5.48  total -13478.55  elaguee1pc -5.71
+SEANCE 15h30-19h30   n=1099  moy +9.80  total +10775.19  elaguee1pc +8.69
+```
+
+1. *Concentration :* la moyenne élaguée à 1 % est **−5,71**, soit
+   légèrement **pire** que la brute. Retirer les extrêmes n'améliore
+   rien : ce n'est pas une queue. Pire ticket −535 € sur −13 479, soit
+   4 % du total.
+2. *Dépendance au classifieur :* écartée, le découpage est fait sur
+   `entry_ts` seul.
+3. *Répartition :* le camp hors séance est négatif **11 jours sur 14**.
+
+H9 tient. **Mais le détail par jour en montre une plus grosse.**
+
+### H9 bis — la vraie coupure est le 5 août, pas la séance
+
+| | séance | hors séance | net |
+|---|---|---|---|
+| 29/07 → 04/08 | **+13 300 €** | −1 136 € | **+12 164 €** |
+| 05/08 → 14/08 | **−2 524 €** | −12 343 € | **−14 867 €** |
+
+Cinq jours à +12 164 €, puis **huit jours à −14 867 €**, la séance
+elle-même passée négative. Net sur la fenêtre : −2 703 €. Tout le gain
+du début a été rendu, et davantage.
+
+L'écart séance / hors séance **survit** à la coupure — post-05/08, la
+séance perd 3,46 €/tk contre 8,49 hors séance — donc H9 garde sa
+*direction*. Elle perd son énoncé : ce n'est pas « la séance gagne ».
+C'est « **depuis le 5 août tout perd, et le hors-séance perd deux fois
+plus** ».
+
+Le 5 août n'est pas une date choisie après coup : c'est celle que la
+stack elle-même retient en nommant `panel_rails_post0508`. Le
+décrochage était connu. Chiffré à onze jours consécutifs et à
+−14 867 €, il change de nature.
+
+**Ce que ça fait au gel.** Le gel de 15 jours a été décidé sur la
+prémisse « on a un setup concluant, laissons tourner ». Au rythme
+constaté, quinze jours de plus coûteraient de l'ordre de −15 000 €
+supplémentaires. La décision appartient à l'utilisateur et n'est pas
+rediscutée ici ; elle est simplement notée comme ayant été prise
+**avant** que ce chiffre existe.
+
+**La question qui départage** « tout arrêter » et « couper une
+partie » : le setup 60 est-il encore positif depuis le 05/08 sur les
+tickets réels, comme `familles.txt` le donne ? Si oui, la réponse est
+étroite — couper les autres, x05 en tête (−9 006 € à lui seul hors
+séance). Si non, ce n'est pas un problème de setup, et le gel garde
+tout son sens : il faudra chercher ailleurs, et pour ça il faut les
+données.
+
 **Statut : le résultat le mieux étayé du dossier en effectif, le moins
-étayé en discipline — non prédit, trouvé en cherchant autre chose.
-Aucune action avant les trois contrôles.**
+étayé en discipline — non prédit, trouvé en cherchant autre chose.**
 
 ---
 
