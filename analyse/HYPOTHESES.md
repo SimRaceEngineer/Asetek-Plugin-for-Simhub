@@ -52,7 +52,9 @@ découpe qui n'est pas listée dans ce fichier, on l'ajoute à la liste
 ci-dessous. C'est le seul garde-fou honnête contre le fait de trouver
 après coup la découpe qui gagne.
 
-    Découpes non prévues examinées : (aucune au 14/08)
+    Découpes non prévues examinées :
+      - 14/08 14:00 — participation à la séance US (→ H9),
+        trouvée en cherchant H8.  Total : 1
 
 ---
 
@@ -321,10 +323,39 @@ journal de refus horodaté avec son contexte, c'est le seul endroit du
 dossier où l'on observe les **non**-trades. Tout le reste ne voit que
 ce qui a été pris — un biais de sélection dont on n'a aucune mesure.
 
-**Statut : hypothèse la plus récente, et la plus prometteuse des trois
-« quand ne pas trader », parce qu'elle est la seule qui explique
-pourquoi une moyenne peut être négative sans qu'aucun moment ne soit
-franchement mauvais.**
+**Statut au 14/08 à 14:00 : TOUJOURS PAS TESTÉE. Et le fichier sur
+lequel je comptais ne porte pas ce que je croyais.**
+
+`elapsed_min` n'est **pas** l'âge du régime. C'est le temps écoulé
+depuis l'ouverture du cash US, vérifié trois fois : premier
+enregistrement à 21:45:07 avec `elapsed_min` 375,1 et `n_bars` 376
+(15h30 + 375 min = 21:45, exact) ; valeur `0` à 12:52 avec
+`PRE_SESSION / us_cash_opens_in_157min` ; « durée médiane de régime »
+de 509,7 min, soit 15h30 → minuit, avec 39 remises à zéro pour 3
+actifs = 13 séances.
+
+Pire : `phase` est une fonction déterministe d'`elapsed_min`. Les deux
+tableaux que `regime_elapsed.py` produisait comme « l'énoncé » et « la
+forme » sont **la même table deux fois** — trois cellules identiques au
+centime, totaux compris (STABLE ≡ 120-240 min, CONFIRMATION ≡ 60-120,
+MONEY_HOUR_END ≡ 30-60).
+
+Et le garde-fou n'a rien vu : le « sous 2 minutes : 0 % » validait une
+horloge de séance qui n'a jamais bégayé, pas le classifieur de régime.
+Un garde-fou qui surveille la mauvaise variable rassure sans protéger.
+
+**Huitième instance du motif, la quatrième de moi.** L'erreur n'est pas
+d'avoir mal lu un champ : c'est d'avoir écrit un lecteur autour d'une
+hypothèse sur le sens d'un champ, sans vérifier ce sens sur trois
+points de la donnée avant de construire.
+
+**Ce qu'il faut pour tester H8, et qui reste à trouver :** un
+horodatage de changement de régime dérivé du prix. `frg_transitions`
+existe mais bégaie autour du seuil chop 50. `regime_history` porte
+`type` par instantané — un changement de `type` entre deux instantanés
+successifs est une bascule, et c'est probablement la bonne source, à
+condition de mesurer d'abord combien de ces bascules durent moins de
+deux minutes.
 
 ---
 
@@ -347,6 +378,67 @@ franchement mauvais.**
   signifie quelque chose. Quinze jours n'y suffiront pas. Ce qu'on
   collecte est le jeu d'entraînement d'un travail ultérieur, pas de
   celui-là.
+
+---
+
+## H9 — Ne pas trader hors séance US
+
+**Découverte le 14/08 à 14:00, en cherchant autre chose.** Elle n'était
+pas prédite. Elle est donc, au sens du §0, une **trouvaille de
+fouille** — à traiter comme telle, quelle que soit sa taille.
+
+**Le chiffre.** Sur 3 370 tickets rattachés (28/07 → 14/08) :
+
+| | tickets | €/ticket | total |
+|---|---|---|---|
+| hors séance US | 2 353 | **−6,16** | **−14 490 €** |
+| en séance 15h30-19h30 | 1 017 | **+12,32** | **+12 535 €** |
+
+Dix-huit euros d'écart par ticket, sur des effectifs treize et six fois
+au-dessus du seuil le plus sévère du §0 (~172). Deux tickets sur trois
+sont pris hors séance, et toute la perte y est. Le net global de
+−1 954 € est la somme d'une machine qui gagne en séance et se le fait
+reprendre en dehors.
+
+**Où ça saigne.** x05 hors séance : −14,62 × 616 = **−9 006 €**, deux
+tiers du total à lui seul — alors qu'en séance le même x05 fait +36,20
+puis +91,04. Puis x02 (−3 492 € sur 1 015) et x01 (−885 € sur 250).
+**x60 est le seul setup positif hors séance** (+12,01 sur 89).
+
+**Les bons moments.** MONEY_HOUR_OPEN (15h35-16h00) +33,95 €/tk sur
+195 ; MONEY_HOUR_END (16h00-16h30) +16,47 sur 135 ; CONFIRMATION
+(16h30-17h30) +1,76 sur 257 ; STABLE (17h30-19h30) +7,53 sur 430. La
+demi-heure suivant l'ouverture vaut vingt fois le reste de la séance.
+Et **zéro ticket au-delà de 19h30** — la coupure dure déjà observée sur
+les sorties de 19:30:06.
+
+**Ce qui la tue.** Trois choses, dans cet ordre :
+
+1. *La concentration.* Dix tickets à −1 000 € fabriqueraient les deux
+   tiers du chiffre. Il faut la moyenne élaguée à 1 % et le détail
+   jour par jour. Si la perte tient à deux ou trois journées, c'est un
+   événement, pas un régime.
+2. *La dépendance au classifieur.* Le camp « hors séance » vient d'un
+   champ produit par le module de régime. Le contrôle doit se faire sur
+   **l'heure d'entrée seule**, sans lui — sinon on mesure le module.
+3. *L'absence de mécanisme.* Si le spread hors séance n'explique pas
+   l'écart, il faut chercher plus loin avant d'agir.
+
+**Ce qui la rendrait vraie par construction.** Le hors-séance est aussi
+là où le papier brillait (+35 à +95 €/tk) — et le papier ne paie ni
+spread ni slippage. Que le live perde exactement là où le papier
+gagnait le plus n'est pas une coïncidence : **c'est la signature d'un
+coût de transaction, pas d'un signal.** Ce qui rend H9 plus crédible,
+pas moins — mais déplace la conclusion : ce n'est peut-être pas
+« mauvais moment », c'est « moment cher ».
+
+**Rapport avec H3.** Si H9 tient, elle *explique* H3 : 09h-11h sont
+hors séance US par construction. Une seule cause pour deux
+observations, ce qui est meilleur que deux règles.
+
+**Statut : le résultat le mieux étayé du dossier en effectif, le moins
+étayé en discipline — non prédit, trouvé en cherchant autre chose.
+Aucune action avant les trois contrôles.**
 
 ---
 
