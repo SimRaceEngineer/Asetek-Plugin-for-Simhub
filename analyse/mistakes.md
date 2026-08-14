@@ -359,6 +359,14 @@ présenté comme un bloc se colle dans un terminal.
 **La règle.** Une réponse contient **une** commande, exécutable telle
 quelle dans PowerShell. Le reste est de la prose.
 
+**Récidive le même soir, 23:15.** Une commande de diagnostic s'est
+terminée par un `</parameter>` parasite — un fragment de mon propre
+outillage tombé dans le bloc. Elle a été collée telle quelle, et
+`Format-Table -AutoSize</parameter>` a fait échouer la moitié de la
+ligne. Un bloc de code est un contrat : ce qu'il contient part dans un
+terminal sans être relu. **Relire le bloc caractère par caractère
+avant d'envoyer**, en particulier son dernier caractère.
+
 ---
 
 ## 14/08/2026 — deux affirmations fausses, dites avec assurance
