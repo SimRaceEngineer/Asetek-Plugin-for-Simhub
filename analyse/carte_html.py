@@ -143,33 +143,53 @@ def calcule(sig, a):
     return donnees, refs, actifs
 
 
-def routes(chemin):
-    """Les routes servies, LUES dans price_action.py au moment de la
-    generation.
+def onglets(chemin):
+    """La barre du tableau de bord, RECOPIEE depuis price_action.py --
+    ses libelles, ses couleurs, son ordre.
 
-    Une liste ecrite en dur ici divergerait le jour ou une route est
-    ajoutee ou renommee -- c est le motif des deux constantes jumelles
-    qui a coute une soiree le 14/08. On la relit, donc elle ne peut pas
-    mentir.
+    Une premiere version inventait sa propre barre : tout en bleu, mes
+    polices, mon ordre. Ce n est pas "comme les autres panneaux", c est
+    un deuxieme style a maintenir. On relit donc les 178 divs de la
+    barre et on garde ce qu ils disent.
 
-    Les /api/ sont ecartees : ce sont des points de donnees, pas des
-    pages. Si le fichier est introuvable, on rend une barre minimale
-    plutot que rien : une carte sans navigation reste lisible, une
-    carte qui refuse de se generer ne sert a personne."""
-    mini = ["/repl", "/raw", "/rails_trades"]
+    Chaque bouton est rendu tel quel. Ceux dont le libelle correspond a
+    une route servie pointent dessus ; les autres sont des onglets
+    internes du tableau de bord et renvoient a `/`, ou leur onglet
+    existe. Aucun lien mort.
+
+    Si le fichier est illisible, on rend une barre minimale plutot que
+    rien : une carte sans navigation reste lisible."""
+    import re as _re
+    mini = [("/repl", "REPL", "#58a6ff"), ("/raw", "RAW", "#58a6ff")]
     try:
         src = io.open(chemin, encoding="utf-8", errors="replace").read()
     except IOError:
-        return mini, False
-    import re as _re
-    vues = _re.findall(r'parsed\.path == "(/[^"]*)"', src)
-    prop = sorted(set(r for r in vues
-                      if r != "/" and not r.startswith("/api/")))
-    return (prop, True) if prop else (mini, False)
+        return mini, 0, 0
 
-
-def etiquette(r):
-    return r.lstrip("/").replace("_", " ").upper()
+    vraies = set(_re.findall(r'parsed\.path == "(/[^"]*)"', src))
+    divs = _re.findall(
+        r'<div class="tab"[^>]*onclick="([^"]*)"[^>]*style="([^"]*)"[^>]*>'
+        r'([^<]+)</div>', src)
+    out, lies = [], 0
+    for onclick, style, libelle in divs:
+        libelle = libelle.strip()
+        m = _re.search(r"color:\s*(#[0-9a-fA-F]{3,6})", style)
+        coul = m.group(1) if m else "#c9d1d9"
+        m = _re.search(r"window\.open\('(/[^']*)'", onclick)
+        if m:
+            route = m.group(1)
+        else:
+            # le libelle donne la route quand elle existe : "RAILS
+            # TRADES" -> /rails_trades. Sinon c est un onglet interne
+            # du tableau de bord, et on y renvoie.
+            slug = "/" + libelle.lower().replace(" ", "_").replace("-", "_")
+            route = slug if slug in vraies else "/"
+        if route != "/":
+            lies += 1
+        out.append((route, libelle, coul))
+    if not out:
+        return mini, 0, 0
+    return out, lies, len(out)
 
 
 CSS = r"""
@@ -222,17 +242,14 @@ td { width:118px; height:54px; text-align:center; border-radius:4px;
 .chrome a:hover, .chrome button:hover { border-color:#58a6ff; }
 .chrome .quand { color:#7d8590; font-size:12px; margin-left:auto; }
 #etat { font-size:12px; }
-.nav { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 16px;
-       max-height:190px; overflow-y:auto; padding:8px;
-       background:#0d1117; border:1px solid #21262d;
-       border-radius:6px; }
-.nav a { color:#58a6ff; text-decoration:none; font-size:11px;
-         font-weight:bold; padding:3px 7px; border-radius:3px;
-         border:1px solid #21262d; white-space:nowrap; }
-.nav a:hover { border-color:#58a6ff; background:#161b22; }
-.nav a.ici { color:#0d1117; background:#58a6ff;
-             border-color:#58a6ff; }
-.navt { color:#7d8590; font-size:11px; margin:0 0 4px; }
+.nav { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px;
+       max-height:220px; overflow-y:auto; }
+.nav a { text-decoration:none; font-size:12px; font-weight:bold;
+         padding:5px 10px; border-radius:5px; white-space:nowrap;
+         border:1px solid #30363d; background:#161b22; }
+.nav a:hover { border-color:#8b949e; }
+.nav a.ici { outline:2px solid currentColor; }
+.navt { color:#7d8590; font-size:11px; margin:0 0 6px; }
 """
 
 # BRUTE (r""") : ce bloc contient du JavaScript, donc des
@@ -413,14 +430,16 @@ def page(donnees, refs, actifs, zc, a, nsig, nbrut, cellules):
             % (x, " selected" if x == defaut else "", ETI.get(x, x))
             for x in vals)
 
-    liste, lues = routes(a.panneau)
-    nav_titre = ("%d routes lues dans %s"
-                 % (len(liste), a.panneau)) if lues else \
-        ("%s illisible -- navigation minimale" % a.panneau)
+    barre, lies, total = onglets(a.panneau)
+    nav_titre = ("%d boutons repris de %s, dont %d qui pointent sur une "
+                 "route servie ; les autres renvoient au tableau de bord, "
+                 "ou leur onglet existe." % (total, a.panneau, lies)
+                 ) if total else ("%s illisible -- navigation minimale"
+                                  % a.panneau)
     nav_html = "".join(
-        '<a href="%s"%s>%s</a>'
-        % (r, ' class="ici"' if r == "/profils" else "",
-           etiquette(r)) for r in liste)
+        '<a href="%s" style="color:%s"%s>%s</a>'
+        % (r, c, ' class="ici"' if r == "/profils" else "", lib)
+        for r, lib, c in barre)
 
     js = JS
     js = js.replace("DONNEES", json.dumps(donnees, separators=(",", ":")))

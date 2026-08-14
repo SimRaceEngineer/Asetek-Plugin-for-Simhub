@@ -56,6 +56,10 @@ plus bas.
 - **Un service supervisé s'arrête, il ne se relance pas.** Chercher qui
   le supervise, attendre son retour, vérifier que le pid a changé.
 - **Un panneau = une route + un bouton.** L'un sans l'autre vaut zéro.
+- **Sur une interface qui existe, on recopie ; on ne conçoit pas.**
+  Extraire la convention du fichier, la rendre à l'identique.
+- **Une limite d'affichage n'est pas un résultat.** Pour prouver une
+  absence : compter d'abord, afficher ensuite. Jamais `-First N`.
 
 ---
 
@@ -380,6 +384,38 @@ La barre est donc **lue dans `price_action.py` à la génération**, pas
 écrite en dur : une liste figée divergerait à la première route
 ajoutée, et c'est le motif des deux constantes jumelles qui a déjà
 coûté une soirée.
+
+**Et une quatrième fois, 00:05 : j'ai inventé la barre.** Livrée
+enfin, la navigation était **la mienne** — tout en bleu, mes tailles,
+mon ordre alphabétique — au lieu de celle du tableau de bord, qui a
+ses libellés, ses couleurs et son ordre depuis des mois.
+
+Le reproche a été net : *« pfiooouuu tu as changé les couleurs et
+police… mets juste le header identique aux autres panels, c'est rien,
+ça prend 2 secondes, ça fait 20 min qu'on est dessus »*. Et c'est
+exact : ça prenait deux secondes **à condition de recopier au lieu de
+concevoir**.
+
+**Le raisonnement faux.** J'ai traité « ajouter une navigation » comme
+un problème de design. C'en était un de **transcription**. Il existait
+déjà 178 boutons, avec leurs couleurs — la seule bonne réponse était
+de les relire et de les rendre tels quels.
+
+**Le correctif.** `onglets()` extrait les divs de la barre depuis
+`price_action.py` : libellé, couleur, ordre. Chaque bouton dont le
+libellé correspond à une route servie pointe dessus ; les autres, qui
+sont des onglets internes, renvoient au tableau de bord. Rien n'est
+écrit en dur, donc la barre suivra la vôtre sans qu'on y pense.
+
+**La règle.** **Sur une interface qui existe, on recopie ; on ne
+conçoit pas.** Avant d'ajouter un élément visuel à un outil déjà en
+service, extraire la convention du fichier et la rendre à l'identique.
+Un deuxième style, même joli, est un deuxième style à maintenir — et
+il se voit immédiatement.
+
+Trois tours pour livrer une barre de navigation : d'abord sans, puis
+inventée, puis recopiée. Les deux premiers étaient évitables en lisant
+d'abord.
 
 **Le piège technique qui va avec.** `navigator.clipboard` exige un
 contexte sûr. La page est servie en `http://` sur un nom de machine
