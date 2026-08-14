@@ -596,10 +596,10 @@ def main():
             dis("  alors que ceux qui suivent sont a jour -- ne pas les")
             dis("  comparer sans regarder les deux horodatages.")
         dis("  ci-dessous : %s, ecrit il y a %.0f min" % (a.joindre, mn))
+        dis("=" * LARG)
         for l in io.open(a.joindre, encoding="utf-8",
                          errors="replace").read().split("\n"):
             dis(l.rstrip())
-        dis("=" * LARG)
     elif a.joindre:
         dis("  (%s introuvable -- panneau x60 non inclus)" % a.joindre)
         dis()

@@ -12,26 +12,35 @@ POURQUOI
     il faut donc scroller un ecran et demi avant d atteindre ce qui
     est neuf.
 
-    Resultat concret : l utilisateur a ouvert l onglet, a lu le haut,
-    et a dit "je ne vois toujours rien" -- deux fois. Le contenu
+    Resultat concret : l onglet a ete ouvert, le haut lu, et la
+    reponse a ete "je ne vois toujours rien" -- deux fois. Le contenu
     etait la, invisible par sa position.
 
-    Ce patch inverse : les dix sections d abord, le panneau x60 en
-    queue. Il reste accessible -- le retirer le rendrait introuvable,
-    puisque son onglet sert desormais le quadruple.
+    Ce patch inverse. Le panneau x60 reste, en queue : le retirer le
+    rendrait introuvable, puisque son onglet sert desormais le
+    quadruple.
+
+POURQUOI CE PATCH NE RECOPIE PAS LE BLOC
+
+    Le bloc a deplacer fait 1 500 caracteres. L embarquer en litteral
+    echappe, c est 1 500 caracteres a recopier sans faute entre ici et
+    le VPS -- et une faute donnerait une ancre introuvable, ou pire,
+    un bloc silencieusement different de celui qui a ete teste.
+
+    Le patch le DECOUPE donc dans le fichier cible, entre deux
+    reperes, et le recolle ailleurs. Il ne connait pas son contenu et
+    n a pas besoin de le connaitre : c est le fichier lui-meme qui
+    fait foi.
 
 CE QUI NE CHANGE PAS
 
-    Rien d autre. Meme contenu, meme calcul, meme fichier de sortie.
-    Le bloc est deplace, pas reecrit -- et les mentions "ci-dessus" et
-    "ci-dessous" sont echangees pour rester justes.
+    Meme contenu, meme calcul, meme fichier de sortie. Le bloc est
+    deplace, pas reecrit. Seules les mentions "ci-dessus" et
+    "ci-dessous" sont echangees, sans quoi elles mentiraient.
 
-DEUX ANCRES, chacune verifiee unique. IDEMPOTENT. Sauvegarde
-horodatee. ast.parse, puis controle que le bloc d inclusion existe
-toujours UNE fois et qu il est bien apres les sections.
-
-GENERE PAR DIFFERENCE : le script producteur a verifie que les deux
-substitutions reproduisent EXACTEMENT le fichier teste.
+IDEMPOTENT. Sauvegarde horodatee. ast.parse, puis quatre controles :
+le bloc existe une seule fois, il finit apres les sections, le
+fichier ne perd aucune ligne, et rien d autre n a bouge.
 
 Ce patch ne modifie qu un LECTEUR. Aucun ordre, aucun collecteur.
 """
@@ -44,20 +53,20 @@ import sys
 from datetime import datetime
 
 CIBLE = "panel_quadruple.py"
-MARQUEUR = "INCLUS tel quel, EN QUEUE"
+DEBUT = "    # Le panneau x60 est INCLUS tel quel"
+FIN = '    dis("=" * LARG)\n    dis("PANNEAU QUADRUPLE'
+POSE = '    txt = "\\n".join(_L) + "\\n"\n'
+MARQUEUR = "EN QUEUE"
 
-A1 = '    # Le panneau x60 est INCLUS tel quel, en tete. Un tableau que\n    # l utilisateur ne voit pas ne sert a rien : il ouvre le panneau\n    # dont il a l habitude. Plutot que de patcher le collecteur pour\n    # y ajouter des sections -- ce qui risquerait les donnees du gel\n    # pour de la mise en page -- on recopie sa sortie ici. Lui garde\n    # son fichier, intact, et ce panneau devient le sur-ensemble.\n    if a.joindre and os.path.isfile(a.joindre):\n        age = (dt.datetime.now()\n               - dt.datetime.fromtimestamp(os.path.getmtime(a.joindre)))\n        mn = age.total_seconds() / 60.0\n        for l in io.open(a.joindre, encoding="utf-8",\n                         errors="replace").read().split("\\n"):\n            dis(l.rstrip())\n        dis()\n        dis("=" * LARG)\n        dis("  ci-dessus : %s, ecrit il y a %.0f min" % (a.joindre, mn))\n        if mn > 60:\n            dis("  ATTENTION : ce panneau n a pas ete regenere depuis")\n            dis("  plus d une heure. Ses chiffres peuvent etre perimes")\n            dis("  alors que ceux qui suivent sont a jour -- ne pas les")\n            dis("  comparer sans regarder les deux horodatages.")\n        dis("  ci-dessous : les quatre unites cote a cote")\n        dis("=" * LARG)\n    elif a.joindre:\n        dis("  (%s introuvable -- panneau x60 non inclus)" % a.joindre)\n        dis()\n\n'
-N1 = ''
+A_HAUT = 'dis("  ci-dessus : %s, ecrit il y a %.0f min" % (a.joindre, mn))'
+N_HAUT = 'dis("  ci-dessus : les quatre unites cote a cote")'
+A_BAS = 'dis("  ci-dessous : les quatre unites cote a cote")'
 
-A2 = '    txt = "\\n".join(_L) + "\\n"\n'
-N2 = '    # Le panneau x60 est INCLUS tel quel, EN QUEUE. Un tableau que\n    # l utilisateur ne voit pas ne sert a rien : il ouvre le panneau\n    # dont il a l habitude. Plutot que de patcher le collecteur pour\n    # y ajouter des sections -- ce qui risquerait les donnees du gel\n    # pour de la mise en page -- on recopie sa sortie ici. Lui garde\n    # son fichier, intact, et ce panneau devient le sur-ensemble.\n    if a.joindre and os.path.isfile(a.joindre):\n        age = (dt.datetime.now()\n               - dt.datetime.fromtimestamp(os.path.getmtime(a.joindre)))\n        mn = age.total_seconds() / 60.0\n        dis()\n        dis("=" * LARG)\n        dis("  ci-dessus : les quatre unites cote a cote")\n        if mn > 60:\n            dis("  ATTENTION : ce panneau n a pas ete regenere depuis")\n            dis("  plus d une heure. Ses chiffres peuvent etre perimes")\n            dis("  alors que ceux qui suivent sont a jour -- ne pas les")\n            dis("  comparer sans regarder les deux horodatages.")\n        dis("  ci-dessous : %s, ecrit il y a %.0f min" % (a.joindre, mn))\n        for l in io.open(a.joindre, encoding="utf-8",\n                         errors="replace").read().split("\\n"):\n            dis(l.rstrip())\n        dis("=" * LARG)\n    elif a.joindre:\n        dis("  (%s introuvable -- panneau x60 non inclus)" % a.joindre)\n        dis()\n\n    txt = "\\n".join(_L) + "\\n"\n'
-
-ANCRES = ((A1, N1, "le bloc d inclusion en tete"),
-          (A2, N2, "l assemblage final"))
-
-INTOUCHABLES = ("def main(", "def setup_de(", "def table4(",
-                "def cellule(", "_L = []", "--boucle", "SEANCE US",
-                "LES EPISODES", "a.joindre")
+LECT = '        for l in io.open(a.joindre'
+SEP = '        dis()\n        dis("=" * LARG)\n        dis("  ci-'
+SEPF = '        dis("=" * LARG)\n    elif a.joindre:'
+FSEP = '        dis("=" * LARG)\n'
+N_BAS = 'dis("  ci-dessous : %s, ecrit il y a %.0f min" % (a.joindre, mn))'
 
 
 def main():
@@ -71,63 +80,113 @@ def main():
               % a.fichier)
         return 1
     src = io.open(a.fichier, encoding="utf-8", errors="replace").read()
-    print("%s : %d lignes" % (a.fichier, src.count("\n") + 1))
+    n_lignes = src.count("\n")
+    print("%s : %d lignes" % (a.fichier, n_lignes + 1))
 
     if MARQUEUR in src:
         print("Deja applique -- rien a faire.")
         return 0
 
-    neuf = src
-    for anc, nouv, nom in ANCRES:
-        n = neuf.count(anc)
-        if n != 1:
-            print("KO : %d occurrence(s) de %s, il en faut 1." % (n, nom))
+    for t, nom in ((DEBUT, "le debut du bloc"), (FIN, "la fin du bloc"),
+                   (POSE, "l assemblage final"),
+                   (A_HAUT, "la mention ci-dessus"),
+                   (A_BAS, "la mention ci-dessous")):
+        if src.count(t) != 1:
+            print("KO : %d occurrence(s) de %s, il en faut 1."
+                  % (src.count(t), nom))
             print("Rien n a ete ecrit.")
             return 1
-        neuf = neuf.replace(anc, nouv, 1)
-    print("Deux ancres, chacune unique.")
+    if src.index(DEBUT) > src.index(FIN):
+        print("KO : le bloc est deja apres l en-tete -- structure")
+        print("     inattendue, on ne touche a rien.")
+        print("Rien n a ete ecrit.")
+        return 1
+    print("Bloc localise, reperes uniques.")
+
+    # Decoupe : on ne connait pas le contenu du bloc et on n en a pas
+    # besoin. C est le fichier cible qui fait foi, pas une copie.
+    d, f = src.index(DEBUT), src.index(FIN)
+    bloc = src[d:f]
+    reste = src[:d] + src[f:]
+
+    bloc = (bloc.replace("INCLUS tel quel, en tete", "INCLUS tel quel, EN QUEUE")
+                .replace(A_HAUT, "@@HAUT@@").replace(A_BAS, N_BAS)
+                .replace("@@HAUT@@", N_HAUT))
+
+    # L INTERIEUR du bloc doit s inverser aussi. A l origine il lit le
+    # fichier PUIS ecrit le separateur ; une fois le bloc passe en
+    # queue, ce separateur se retrouverait apres le contenu qu il est
+    # cense annoncer, et ses libelles designeraient le contraire de ce
+    # qu ils disent. On remonte donc le separateur avant la lecture.
+    for t, nom in ((LECT, "la boucle de lecture"),
+                   (SEP, "le debut du separateur"),
+                   (SEPF, "la fin du separateur")):
+        if bloc.count(t) != 1:
+            print("KO : %d occurrence(s) de %s dans le bloc, il en"
+                  " faut 1." % (bloc.count(t), nom))
+            print("Rien n a ete ecrit.")
+            return 1
+    i = bloc.index(LECT)
+    j = bloc.index(SEP)
+    # On coupe a la FIN de la ligne du separateur, pas apres le
+    # `elif` : l emporter reviendrait a poser la boucle de
+    # lecture derriere lui, hors de son bloc.
+    k = bloc.index(SEPF) + len(FSEP)
+    if not i < j < k:
+        print("KO : lecture et separateur ne sont pas dans l ordre")
+        print("     attendu -- on ne reorganise rien a l aveugle.")
+        print("Rien n a ete ecrit.")
+        return 1
+    bloc = bloc[:i] + bloc[j:k] + bloc[i:j] + bloc[k:]
+    neuf = reste.replace(POSE, bloc + POSE, 1)
 
     try:
-        arbre = ast.parse(neuf)
+        ast.parse(neuf)
     except SyntaxError as e:
         print("KO : ne compile pas (ligne %s) : %s" % (e.lineno, e.msg))
         print("Rien n a ete ecrit.")
         return 1
 
-    for t in INTOUCHABLES:
-        if src.count(t) != neuf.count(t):
-            print("KO : %s n apparait plus le meme nombre de fois." % t)
-            print("Rien n a ete ecrit.")
-            return 1
-    print("Intacts : main, setup_de, table4, cellule, _L, --boucle.")
-
-    # Le bloc doit exister UNE fois et se trouver APRES les
-    # sections : deplace au mauvais endroit, il compilerait et
-    # l ordre serait inchange sans que rien ne le signale.
+    # Un deplacement ne cree ni ne detruit de lignes. Si le compte
+    # bouge, c est qu on a coupe autre chose que ce qu on croyait.
+    if neuf.count("\n") != n_lignes:
+        print("KO : le fichier passe de %d a %d lignes -- un"
+              " deplacement n en change aucune."
+              % (n_lignes, neuf.count("\n")))
+        print("Rien n a ete ecrit.")
+        return 1
     if neuf.count("a.joindre and os.path.isfile") != 1:
         print("KO : le bloc d inclusion n existe plus une seule fois.")
         print("Rien n a ete ecrit.")
         return 1
     if neuf.index("LES EPISODES") > neuf.index("a.joindre and os.path"):
-        print("KO : le bloc d inclusion est encore AVANT les sections.")
+        print("KO : le bloc est encore AVANT les sections.")
         print("Rien n a ete ecrit.")
         return 1
-    print("Ordre verifie : les sections, puis le panneau x60.")
+    for t in ("def main(", "def table4(", "--boucle", "SEANCE US",
+              "LES EPISODES", "LA RICHESSE"):
+        if src.count(t) != neuf.count(t):
+            print("KO : %s n apparait plus le meme nombre de fois." % t)
+            print("Rien n a ete ecrit.")
+            return 1
+    print("Verifie : meme nombre de lignes, bloc unique, place APRES")
+    print("les sections, et rien d autre n a bouge.")
 
     print()
-    print("panel_quadruple.txt commencera desormais par les dix")
-    print("sections a quatre entrees, et se terminera par le panneau")
-    print("x60 recopie -- au lieu de l inverse.")
+    print("panel_quadruple.txt commencera par les dix sections a")
+    print("quatre entrees, et se terminera par le panneau x60")
+    print("recopie -- au lieu de l inverse.")
     print()
     print("panel_x60_onset.txt n est toujours PAS modifie.")
-    print("ATTENTION -- le service NE reprendra PAS ce changement")
-    print("tout seul. Le mode --boucle appelle main() dans le MEME")
-    print("processus : il ne relit jamais son propre fichier. Le")
-    print("gardien, lui, ne relance que ce qui est MORT.")
     print()
-    print("Il faut donc arreter le processus panel_quadruple : le")
-    print("gardien le relancera dans les 5 min avec le code neuf.")
-    print("C est un lecteur, l arreter ne coute rien.")
+    print("ATTENTION -- le service NE reprendra PAS ce changement tout")
+    print("seul. Le mode --boucle appelle main() dans le MEME")
+    print("processus : il ne relit jamais son propre fichier. Et le")
+    print("gardien ne relance que ce qui est MORT.")
+    print()
+    print("Il faut donc arreter le processus panel_quadruple ; le")
+    print("gardien le relancera sous 5 min avec le code neuf. C est un")
+    print("lecteur, l arreter ne coute rien.")
 
     if a.essai:
         print()
