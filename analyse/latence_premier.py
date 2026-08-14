@@ -44,6 +44,18 @@ CE QUI EST MESURE, ET POURQUOI C EST CAUSAL
     Le rang 1 lui-meme est inevitable : c est lui qui revele la
     latence. Il est mesure a part, en section C, comme temoin.
 
+CORRECTION DU 14/08 -- LA SECTION B REGROUPAIT TROP
+
+    B met tous les rangs >= 2 dans un seul sac. Or ce sac est domine
+    par les rangs 5-9 et 10+, qui sont les MAUVAIS : 662 tickets sur
+    1063. Un effet de latence dans la zone qui paie y serait noye par
+    construction.
+
+    La zone qui paie s arrete a 4 : rang 3 +10.47, rang 4 +8.88,
+    rang 5-9 NEGATIF a -2.54. B bis restreint donc aux rangs 2-4, et
+    B ter affiche le croisement complet -- descriptif seulement, les
+    cellules y sont minuscules.
+
 LES PIEGES, ECRITS AVANT LE RESULTAT
 
     1. Latence et duree sont lieees mecaniquement : un episode dont
@@ -237,6 +249,48 @@ def main():
             g[c].append(k["pnl"])
     for _, _, ln in LAT:
         ligne(ln, g.get(ln, []))
+
+    print()
+    print("B bis. LA MEME CHOSE, RESTREINTE AUX RANGS 2-4")
+    print("   La section B regroupe TOUS les rangs >= 2. Or ce sac est")
+    print("   domine par les rangs 5-9 et 10+, qui sont les mauvais :")
+    print("   662 tickets sur 1063 au reglage large. Un effet de")
+    print("   latence dans la zone qui paie y serait noye PAR")
+    print("   CONSTRUCTION -- la section B ne pouvait pas le voir.")
+    print("   La zone qui paie s arrete a 4 : rang 3 +10.47, rang 4")
+    print("   +8.88, rang 5-9 NEGATIF a -2.54.")
+    print("   " + "-" * 58)
+    g = collections.defaultdict(list)
+    for e in eps_ok:
+        c = cat(e["lat"], LAT)
+        for r, k in enumerate(e["suite"], start=2):
+            if r <= 4:
+                g[c].append(k["pnl"])
+    for _, _, ln in LAT:
+        ligne(ln, g.get(ln, []))
+
+    print()
+    print("B ter. LE CROISEMENT COMPLET rang x latence (descriptif)")
+    print("   Six latences par six rangs sur %d episodes : chaque"
+          % len(eps_ok))
+    print("   cellule est minuscule et le sera. C est affiche pour")
+    print("   voir OU sont les tickets, pas pour y lire un resultat.")
+    print("   " + "-" * 58)
+    gx = collections.defaultdict(list)
+    for e in eps_ok:
+        c = cat(e["lat"], LAT)
+        for r, k in enumerate(e["suite"], start=2):
+            gx[(c, "rang %d" % r if r <= 4
+                else ("rang 5-9" if r <= 9 else "rang 10+"))].append(k["pnl"])
+    for _, _, ln in LAT:
+        vu = False
+        for rn in ("rang 2", "rang 3", "rang 4", "rang 5-9", "rang 10+"):
+            v = gx.get((ln, rn), [])
+            if v:
+                vu = True
+                ligne("%-12s %s" % (ln, rn), v)
+        if vu:
+            print()
 
     print()
     print("C. TEMOIN -- le rang 1 lui-meme, par sa propre latence")
