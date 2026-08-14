@@ -53,6 +53,13 @@ param(
 )
 
 $STACK   = "C:\Users\Administrator\Downloads\Scalp-EA-main\Scalp-EA-main"
+# Le MEME interpreteur que demarrage_quotidien.cmd (%PY%), ajoute le
+# 14/08. "python" tout court depend du PATH, et une tache planifiee n a
+# pas le PATH d un shell ouvert : un gardien qui lance le mauvais
+# python relance des processus qui ne trouvent pas MetaTrader5 et
+# meurent aussitot -- en boucle, toutes les cinq minutes, sans un mot.
+$PY = "C:\Users\Administrator\AppData\Local\Python\pythoncore-3.14-64\python.exe"
+if (-not (Test-Path $PY)) { $PY = "python" }
 $MOI     = $MyInvocation.MyCommand.Path
 $PAUSE   = Join-Path (Split-Path $MOI) "gardien.pause"
 $JOURNAL = Join-Path $STACK "logs\gardien.log"
@@ -66,11 +73,25 @@ $VERROU_S = 600   # au-dela, le verrou est considere comme abandonne
 #  Combien: nombre d instances voulu. 1 partout, et c est le point.
 # ---------------------------------------------------------------------
 $SERVICES = @(
-    @{ Nom = "8095";        Motif = "price_action.py";   Script = "price_action.py";   Args = "";              Port = 8095 },
+    @{ Nom = "8095";        Motif = "price_action.py";   Script = "price_action.py";   Args = "";              Port = 8095; Env = @{ PA_ROLE = "panel" } },
     @{ Nom = "orderflow";   Motif = "orderflow_panel.py"; Script = "orderflow_panel.py"; Args = "--port 8097"; Port = 8097 },
     @{ Nom = "panels_auto"; Motif = "panels_auto.py";    Script = "panels_auto.py";    Args = "--dest panels"; Port = 0 },
     @{ Nom = "sarkeep_m1";  Motif = "sarkeep_gel.py";    Script = "sarkeep_gel.py";    Args = "";              Port = 0 },
-    @{ Nom = "sarkeep_m5";  Motif = "sarkeep_m5.py";     Script = "sarkeep_m5.py";     Args = "";              Port = 0 }
+    @{ Nom = "sarkeep_m5";  Motif = "sarkeep_m5.py";     Script = "sarkeep_m5.py";     Args = "";              Port = 0 },
+    # --- LES COLLECTEURS, ajoutes le 14/08 -----------------------------
+    # Le 13/08 a 20:04 ces quatre-la sont morts avec panels_auto et ne
+    # sont pas revenus. Douze heures sans un releve, decouvertes en
+    # posant une question au REPL. Le gardien gardait les panneaux et
+    # laissait mourir ce qui produit la donnee.
+    #
+    # Les DEUX --loop ne sont pas decoratifs : lances sans, papier_tf
+    # et x60_onset impriment leur rapport et s arretent. Un gardien qui
+    # les relancerait sans --loop redemarrerait sans fin des processus
+    # qui meurent aussitot, et le compte ne tiendrait jamais.
+    @{ Nom = "papier_tf";   Motif = "papier_tf.py";      Script = "papier_tf.py";      Args = "--loop";        Port = 0 },
+    @{ Nom = "x60_onset";   Motif = "x60_onset.py";      Script = "x60_onset.py";      Args = "--loop";        Port = 0 },
+    @{ Nom = "raf_x60";     Motif = "rafraichir_x60.py"; Script = "rafraichir_x60.py"; Args = "";              Port = 0 },
+    @{ Nom = "raf_of";      Motif = "rafraichir_orderflow.py"; Script = "rafraichir_orderflow.py"; Args = ""; Port = 0 }
 )
 
 # ---------------------------------------------------------------------
@@ -131,7 +152,7 @@ if ($Desinstaller) {
 # ------------------------------------------------------------- verrou
 #
 #  Le 12/08 a 21h34, une passe manuelle et la premiere passe de la tache
-#  planifiee se sont croisees. Les deux ont vu « zero instance » de
+#  planifiee se sont croisees. Les deux ont vu "zero instance" de
 #  panels_auto, les deux ont lance : deux processus ecrivant les memes
 #  fichiers d export en meme temps. Le gardien avait produit le defaut
 #  qu il existe pour empecher.
@@ -199,8 +220,25 @@ function Passe {
             $argus = $s.Script
             if ($s.Args -ne "") { $argus = $s.Script + " " + $s.Args }
             try {
-                Start-Process -FilePath "python" -ArgumentList $argus `
+                # LE ROLE, pose juste avant et retire juste apres.
+                # price_action.py lance sans PA_ROLE=panel demarre en
+                # role MOTEUR et passe de VRAIS ORDRES. Un gardien qui
+                # relancerait ce script sans role, toutes les cinq
+                # minutes, serait plus dangereux que pas de gardien.
+                # On retire la variable ensuite pour qu elle ne fuite
+                # pas vers les autres lancements de la meme passe.
+                $poses = @()
+                if ($s.ContainsKey("Env")) {
+                    foreach ($k in $s.Env.Keys) {
+                        Set-Item -Path ("Env:" + $k) -Value $s.Env[$k]
+                        $poses += $k
+                    }
+                }
+                Start-Process -FilePath $PY -ArgumentList $argus `
                               -WorkingDirectory $STACK -WindowStyle Minimized
+                foreach ($k in $poses) {
+                    Remove-Item -Path ("Env:" + $k) -ErrorAction SilentlyContinue
+                }
                 Start-Sleep -Seconds 2
                 $apres = @(Lister $s.Motif)
                 Noter ("{0} : relance -- python {1} ({2} instance(s) apres)" -f `
