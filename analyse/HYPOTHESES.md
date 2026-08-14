@@ -188,6 +188,55 @@ re-mesurer croisée avec le régime.**
 
 ---
 
+## H9 — CONFIRMÉE PAR UN SECOND INSTRUMENT, le 14/08 à 18:10
+
+`panel_rails_trades.txt` mesure la même chose par un chemin qui ne
+partage rien avec le mien : classifieur rails RSI × leader × churn,
+agrégation par cellule, **et une frontière de séance différente —
+14h00 Paris au lieu de 15h30**.
+
+Sur ses lignes TOUS ASSETS :
+
+```
+TIGHT_CROSS MIXED US  133  62%  +4228.93  +31.80
+TIGHT_CROSS CLEAN US  173  60%  +1611.58   +9.32
+MID         CLEAN US  187  63%  +2125.93  +11.37
+WIDE        CLEAN US  183  56%  +2533.20  +13.84
+
+TIGHT_CROSS CLEAN EUR 116  28%  -1993.46  -17.19
+MID         CLEAN EUR 109  40%  -1393.88  -12.79
+WIDE        CHURN EUR 374  39%  -2410.79   -6.45
+```
+
+**Toutes les lignes US positives sauf une. Toutes les lignes EUR
+négatives, sans exception.** Regroupé : **US +6,93 €/trade sur 1 616,
+EUR −6,97 sur 2 087.** Écart 13,90 €, **t ≈ 7,0**.
+
+**CE QUE CETTE SECONDE MESURE PROUVE, ET CE QU'ELLE NE PROUVE PAS.**
+
+Elle prouve que l'effet ne vient **ni d'une erreur de mon code, ni du
+choix de la frontière horaire** : deux découpages différents (14h et
+15h30), deux agrégations différentes, même signe et même ordre de
+grandeur. C'est une robustesse *à la méthode*.
+
+Elle ne prouve **pas** que l'effet survivrait à une autre période. Les
+deux mesures portent sur la même fenêtre — grosso modo 21/07 → 14/08 —
+et largement sur les **mêmes tickets** (3 714 contre 3 560). Ce ne sont
+donc pas deux échantillons indépendants, mais **deux lectures
+indépendantes du même échantillon**. La quantité de preuve n'a pas
+doublé ; sa fragilité méthodologique, elle, a disparu.
+
+Une asymétrie mineure à noter : les lignes `NO_DATA` n'existent que
+côté EUR (105 et 50 tickets). Les retirer déplace la moyenne EUR de
+moins d'un euro — l'effet ne tient pas à elles.
+
+**Statut : le seul résultat du dossier confirmé par deux instruments
+indépendants. Il se distingue des dix-sept autres et doit être traité
+comme tel — c'est le seul sur lequel une décision serait défendable
+aujourd'hui.**
+
+---
+
 ## H4 — CHURN = standby
 
 **Prédiction.** Le régime CHURN restera négatif sur les trois actifs et
