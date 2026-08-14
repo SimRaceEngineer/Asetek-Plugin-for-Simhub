@@ -66,6 +66,16 @@ $JOURNAL = Join-Path $STACK "logs\gardien.log"
 $TACHE   = "Gardien-Stack"
 $VERROU  = Join-Path (Split-Path $MOI) "gardien.verrou"
 $VERROU_S = 600   # au-dela, le verrou est considere comme abandonne
+# Le journal du demarrage quotidien. Tant qu il vient d etre ecrit, V3
+# est en train de tuer puis relancer la stack : une passe du gardien
+# tomberait au milieu, verrait "zero instance" et lancerait -- puis V3
+# lancerait a son tour. Deux papier_tf ecrivant le meme trades.jsonl,
+# soit exactement la corruption qu on cherche a eviter. Le verrou ne
+# protege que d une autre passe du gardien, pas de V3.
+# Le boot V3 dure environ cinq minutes (GRACE 240 s puis verify) ; sept
+# minutes couvrent la fenetre avec de la marge.
+$DEMARRAGE   = Join-Path $STACK "logs\demarrage_quotidien.log"
+$DEMARRAGE_S = 420
 
 # ---------------------------------------------------------------------
 #  Motif  : ce qui reconnait le processus dans sa ligne de commande.
@@ -76,8 +86,6 @@ $SERVICES = @(
     @{ Nom = "8095";        Motif = "price_action.py";   Script = "price_action.py";   Args = "";              Port = 8095; Env = @{ PA_ROLE = "panel" } },
     @{ Nom = "orderflow";   Motif = "orderflow_panel.py"; Script = "orderflow_panel.py"; Args = "--port 8097"; Port = 8097 },
     @{ Nom = "panels_auto"; Motif = "panels_auto.py";    Script = "panels_auto.py";    Args = "--dest panels"; Port = 0 },
-    @{ Nom = "sarkeep_m1";  Motif = "sarkeep_gel.py";    Script = "sarkeep_gel.py";    Args = "";              Port = 0 },
-    @{ Nom = "sarkeep_m5";  Motif = "sarkeep_m5.py";     Script = "sarkeep_m5.py";     Args = "";              Port = 0 },
     # --- LES COLLECTEURS, ajoutes le 14/08 -----------------------------
     # Le 13/08 a 20:04 ces quatre-la sont morts avec panels_auto et ne
     # sont pas revenus. Douze heures sans un releve, decouvertes en
@@ -93,6 +101,10 @@ $SERVICES = @(
     @{ Nom = "raf_x60";     Motif = "rafraichir_x60.py"; Script = "rafraichir_x60.py"; Args = "";              Port = 0 },
     @{ Nom = "raf_of";      Motif = "rafraichir_orderflow.py"; Script = "rafraichir_orderflow.py"; Args = ""; Port = 0 }
 )
+# Les sarkeep ont ete RETIRES de la liste le 14/08 : le constat les
+# donnait ARRETES, et rien ne dit qu ils doivent tourner. Un gardien
+# qui ressuscite ce que personne n a demande est le meme defaut que
+# celui qu on repare, dans l autre sens.
 
 # ---------------------------------------------------------------------
 
@@ -197,6 +209,15 @@ function Passe {
     if (-not (Test-Path $STACK)) {
         Noter "KO : dossier de la stack introuvable -- $STACK"
         return
+    }
+
+    if (Test-Path $DEMARRAGE) {
+        $age = ((Get-Date) - (Get-Item $DEMARRAGE).LastWriteTime).TotalSeconds
+        if ($age -lt $DEMARRAGE_S) {
+            Noter ("demarrage quotidien en cours (journal ecrit il y a {0:N0} s)" -f $age)
+            Noter "passe reportee -- V3 relance lui-meme ce qu il vient d arreter"
+            return
+        }
     }
 
     if (-not (Prendre-Verrou)) { return }
