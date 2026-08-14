@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""
+# La docstring est BRUTE (r""") : elle contient `panels\panel_profils.txt`,
+# et `\p` n est pas une sequence d echappement valide. Python le signale
+# aujourd hui par un SyntaxWarning au premier import et en fera une
+# erreur dans une version future.
+r"""
 profils_croises.py -- la carte des profils, coloree par t et non par
                       la moyenne
 
