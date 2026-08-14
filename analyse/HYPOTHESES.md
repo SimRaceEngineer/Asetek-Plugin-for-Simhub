@@ -1442,6 +1442,109 @@ ne justifie aucun changement de paramètre pendant le gel.**
 
 ---
 
+## H22 — Ne pas entrer quand les trois indices sont alignés sur M15
+
+**ÉCRITE LE 14/08 À 21:30, ALORS QUE LA QUESTION EST ENCORE
+INDÉCIDABLE.** C'est le point de cette hypothèse : il manque environ
+deux séances de données pour trancher, et elle est posée maintenant
+plutôt que dans deux jours, quand on saurait déjà de quel côté ça
+penche. Écrite après, elle ne vaudrait rien.
+
+**L'énoncé.** Un signal entré alors que le consensus HLC M15 des trois
+indices est `ALIGNED` (`ALIGNED_BULL` ou `ALIGNED_BEAR`) fait moins
+bien que la moyenne des signaux de la même période.
+
+### L'état exact au 14/08, et la date d'échéance
+
+```
+DEPUIS le 05/08   M15 ALIGNE   n = 941   moy -10,49   vs réf -5,04
+                               n requis à z = 2,9 : 1 193
+```
+
+941 sur 1 193, soit **79 %** de l'exigence. À ~118 signaux `M15 ALIGNE`
+par séance depuis le 5 août (941 sur 8 séances), il manque **environ
+deux séances** : la question devient tranchable autour du **18 août**.
+
+C'est la première fois dans ce dossier qu'on peut **dater** une
+décision au lieu d'écrire « il faudrait plus de données ».
+
+### Ce que l'abstention coûterait, chiffré d'avance
+
+`M15 ALIGNE` couvre **941 des 1 645 signaux** post-cassure, soit
+**57 %**. S'abstenir là supprime plus de la moitié de l'activité.
+
+Le contrefactuel arithmétique, sur la fenêtre qui a produit
+l'hypothèse : retirer ces 941 signaux laisse 704 signaux dont la
+moyenne passe de **−5,46 à +1,26 €/signal**.
+
+**Ce chiffre est vrai et ne prouve rien.** Le filtre a été choisi
+*parce qu'il était le plus négatif des treize* : retirer le pire d'un
+lot fait monter le reste par construction. Il est écrit ici pour
+qu'on sache ce qu'on jouerait, pas comme un argument.
+
+### Le test, tel qu'il sera exécuté
+
+**Dès que `n ≥ 1 276`** — le seuil corrigé, voir plus bas — lire
+l'écart à la référence de la période et son `t`.
+
+**L'unité est le SIGNAL** (jumeaux 206/207 fusionnés), et le **nombre
+de séances distinctes** sera affiché à côté : 941 signaux répartis sur
+8 séances ne valent pas 941 observations indépendantes.
+
+**Critère de réfutation.** H22 est fausse si l'écart a un `|t| < 2,9`
+une fois l'effectif atteint, **ou** s'il devient positif, **ou** si
+l'effet ne tient que sur l'une des deux directions (voir ci-dessous).
+
+### Ce qui la rendrait vraie par construction — à vérifier AVANT
+
+**Le seuil n'est pas 2,9 mais ~3,0, et l'exigence ~1 276.** `M15
+ALIGNE` a été retenu comme **le plus négatif de treize filtres**. Le
+choix parmi treize monte la barre. Le chiffre de 1 193 vaut pour une
+comparaison annoncée d'avance ; celui qui s'applique ici est 1 276.
+La différence est d'une demi-séance, mais elle doit être écrite.
+
+**`ALIGNED_BULL` et `ALIGNED_BEAR` doivent être lus SÉPARÉMENT.** Si
+l'effet ne vient que du camp baissier, ce n'est pas « l'alignement qui
+coûte », c'est un biais directionnel sur une fenêtre où le marché a
+baissé — et ça ne survivra pas à un marché haussier. **Ce contrôle est
+obligatoire avant tout verdict.**
+
+**H22 n'existait pas avant le 5 août.** Sur la période antérieure,
+`M15 ALIGNE` valait `+9,54` contre une référence de `+9,37`, soit un
+écart de **+0,16** : indiscernable. Ce filtre n'est donc pas passé de
+bon à mauvais, il est passé de **neutre** à mauvais. C'est mieux qu'un
+changement de signe, et c'est quand même un avertissement : le
+phénomène est **postérieur à la cassure**, et rien ne garantit qu'il
+survive au régime suivant. Si le marché change à nouveau début
+septembre, H22 devra être re-mesurée avant d'être conservée.
+
+**Le mécanisme n'est pas une preuve.** L'histoire — « tout le monde
+d'accord = mouvement déjà installé = entrée tardive », cohérente avec
+H10 — est une explication *après* le chiffre. Elle rend le résultat
+plausible, elle ne le rend pas vrai, et elle ne doit jamais servir à
+sauver H22 si le test échoue.
+
+**Ne pas la « confirmer » sur une autre unité de temps.** M1, M3, M5 et
+M15 partitionnent les **mêmes** signaux. `M1 ALIGNE` et `M3 ALIGNE`
+sont aussi négatifs (−1,62 et −1,75) : ce n'est pas une confirmation
+indépendante, c'est le même échantillon vu sous un autre angle.
+
+**Le croisement n'apporte rien.** `M1 WIDENING × M15 ALIGNE` fait
+−5,40 sur 511 signaux, contre −5,04 sur 941 pour `M15 ALIGNE` seul :
+un écart à peine plus grand pour la moitié de l'effectif. **La règle
+simple bat la règle croisée** — à ne pas compliquer pour faire joli.
+
+### Ce que H22 n'autorise pas
+
+Elle ne dit rien du sens, de la taille, ni de la sortie. Elle
+n'autorise **aucun changement de paramètre pendant le gel** : c'est une
+mesure à faire, pas une règle à appliquer. Et si elle passe, elle
+devra encore être vérifiée hors échantillon avant d'entrer en
+production — comme H9, qui a passé le seuil sur une période et ne le
+passe plus sur la suivante.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
