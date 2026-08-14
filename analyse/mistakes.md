@@ -544,6 +544,42 @@ son sommet.** C'est precisement pour ca qu'il fallait l'accompagner.
 
 ---
 
+## 15/08/2026 00:40 — j'ai agrege les actifs pour economiser un fichier
+
+**Ce que j'ai fait.** Sorti la carte texte du REPL en `--actif TOUS`,
+en ecrivant que les decoupes par actif « divisent l effectif par trois
+pour un echantillon qui ne suit deja pas, et quadrupleraient le
+fichier pour du bruit ».
+
+**Ce que l utilisateur a vu, lui, sur trois graphiques.** Le 13/08 les
+trois indices cassent leur range ; **un seul tient**. Le US100 reste
+au-dessus de sa cassure, le US30 rend tout, le US500 est entre les
+deux. Un changement de regime propre a un actif — et aucun de nos
+outils ne pouvait le produire.
+
+**Le raisonnement faux.** J'ai traite l agregation comme une economie
+de place. C est une decision de mesure : **l agregation est faite pour
+lisser, et un decrochage isole est exactement ce qu elle lisse.**
+Trois actifs moyennes ensemble ne peuvent pas montrer que l un d eux
+diverge.
+
+**Et il y avait pire en amont.** Toute l analyse repose sur UNE date
+de cassure, le 5 aout, appliquee aux trois actifs et choisie a l oeil.
+Si un actif change de regime a une autre date, sa periode « depuis »
+melange deux regimes et la reference commune ne decrit plus personne.
+Cinq hypotheses datees reposent sur ce decoupage.
+
+**La regle.** **Une agregation est une hypothese, pas une commodite.**
+Agreger des actifs suppose qu ils partagent le regime ; agreger des
+periodes suppose qu on sait ou elles se separent. Les deux doivent
+etre ecrites comme des hypotheses testables, pas glissees dans un
+argument de taille de fichier.
+
+Consigne dans HYPOTHESES.md sous « Une reserve qui pese sur H22 a
+H26 », avec les trois mesures a faire avant les echeances.
+
+---
+
 ## 14/08/2026 — deux affirmations fausses, dites avec assurance
 
 **La première.** J'ai attribué le `prompt=205719` du REPL à

@@ -1911,6 +1911,72 @@ survivra pas à un marché qui change de sens.
 
 ---
 
+## Une réserve qui pèse sur H22 à H26 — la cassure unique
+
+Écrite le 15/08/2026 à 00:40, après une observation graphique de
+l'utilisateur qu'aucun de nos outils n'aurait produite.
+
+### L'observation
+
+Le 13/08 vers 15h, les trois indices cassent leur range. **Un seul
+tient.** Le US100 franchit ~29 846 et reste au-dessus (30 044 au
+moment où c'est écrit). Le US30 monte à 53 984 et rend tout — il
+clôture sous sa cassure. Le US500 est intermédiaire.
+
+### Ce que ça met en cause
+
+**Toutes les mesures de ce dossier reposent sur UNE date de cassure,
+le 5 août, appliquée aux trois actifs.** Cette date a été choisie à
+l'œil sur des séries agrégées.
+
+Si le US100 a changé de régime le 13, alors :
+
+- sa période « DEPUIS » **mélange deux régimes** ;
+- la référence commune de **−5,46 €/signal** est une moyenne qui peut
+  ne décrire aucun des trois actifs ;
+- et les écarts de H22 à H26, tous calculés contre cette référence,
+  portent une erreur dont on ne connaît ni le signe ni la taille.
+
+Ces hypothèses ne sont pas fausses pour autant. Leur **référence** est
+possiblement mal posée, et ça doit être écrit avant de les mesurer,
+pas après le verdict.
+
+### Pourquoi nos outils ne pouvaient pas le montrer
+
+La carte texte est sortie en `--actif TOUS`, au motif que les découpes
+par actif divisent l'effectif par trois. C'est vrai en moyenne — et
+c'est exactement ce qui **efface un changement de régime propre à un
+actif**. L'agrégation est faite pour lisser ; un décrochage isolé est
+précisément ce qu'elle lisse.
+
+Il y a une ironie utile : `PASALIGNE`, autour de quoi tournent H24,
+H25 et H26, **est** la signature de cet état — un indice qui tient
+pendant que les autres rendent. La carte contenait donc le phénomène,
+sous forme de statistique agrégée, jamais comme un événement daté et
+attribué. Et `PASALIGNE` ne dit pas **lequel** décroche : la lecture
+graphique le dit, la donnée non.
+
+### Ce qu'il faut mesurer avant les échéances
+
+**Un.** La carte **par actif**, même page, pour voir si les références
+post-cassure divergent. Si US100 est à +2 pendant que US30 est à −12,
+la référence unique ne décrit personne.
+
+**Deux.** Un **détecteur de date de cassure par actif**, au lieu du
+5 août imposé à tous : couper la série de chaque actif à chaque date
+candidate, mesurer l'écart entre les deux moitiés, garder la date qui
+le maximise — **et rapporter de combien elle bat les autres**. Une
+date de rupture « la meilleure de trente » subit exactement le même
+seuil de sélection que nos cellules, et l'oublier serait refaire à
+l'échelle du temps l'erreur qu'on corrige à l'échelle des profils.
+
+**Trois.** Si une date propre au US100 apparaît, relire H22 à H26 avec
+ce découpage **avant** leurs échéances des 20, 18, 26 août et
+1er septembre. Les relire après serait choisir le découpage qui donne
+le résultat souhaité.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
