@@ -51,6 +51,11 @@ plus bas.
   silence.** Une seule source, toujours.
 - **Une commande de diagnostic filtre avant d'afficher**, et met en
   premier les parties qui ne peuvent pas échouer.
+- **Un bloc de code EST une commande.** Ce qui n'est pas exécutable se
+  cite en ligne. Relire le bloc, et son dernier caractère.
+- **Un service supervisé s'arrête, il ne se relance pas.** Chercher qui
+  le supervise, attendre son retour, vérifier que le pid a changé.
+- **Un panneau = une route + un bouton.** L'un sans l'autre vaut zéro.
 
 ---
 
@@ -380,21 +385,21 @@ présenté comme un bloc se colle dans un terminal.
 **La règle.** Une réponse contient **une** commande, exécutable telle
 quelle dans PowerShell. Le reste est de la prose.
 
-**Deuxième récidive, 23:19.** J'ai montré la ligne HTML 4361 dans un
+**Récidive à 23:15.** Une commande de diagnostic s'est terminée par un
+`</parameter>` parasite — un fragment de mon propre outillage tombé
+dans le bloc. Elle a été collée telle quelle, et
+`Format-Table -AutoSize</parameter>` a fait échouer la moitié de la
+ligne. Un bloc de code est un contrat : ce qu'il contient part dans un
+terminal sans être relu. **Relire le bloc caractère par caractère
+avant d'envoyer**, en particulier son dernier caractère.
+
+**Deuxième récidive à 23:19.** J'ai montré la ligne HTML 4361 dans un
 bloc de code pour la commenter. Elle a été collée dans PowerShell :
 `The term '<' is not recognized`. Un bloc de code, sur cette machine,
 **est** une commande — c'est le contrat, quelle que soit mon
 intention. Du contenu qui n'est pas exécutable se cite en ligne, ou
 dans un bloc explicitement annoncé comme « à ne pas coller ». Trois
-salves d'erreurs en une soirée pour une règle de mise en forme.
-
-**Récidive le même soir, 23:15.** Une commande de diagnostic s'est
-terminée par un `</parameter>` parasite — un fragment de mon propre
-outillage tombé dans le bloc. Elle a été collée telle quelle, et
-`Format-Table -AutoSize</parameter>` a fait échouer la moitié de la
-ligne. Un bloc de code est un contrat : ce qu'il contient part dans un
-terminal sans être relu. **Relire le bloc caractère par caractère
-avant d'envoyer**, en particulier son dernier caractère.
+salves d'erreurs en une soirée pour une seule règle de mise en forme.
 
 ---
 
