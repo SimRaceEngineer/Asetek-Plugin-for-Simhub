@@ -73,6 +73,7 @@ LECTEUR SEUL. Aucun ordre, aucune ecriture hors de son propre fichier
 de sortie.
 """
 import argparse
+import bisect
 import collections
 import datetime as dt
 import io
@@ -85,6 +86,9 @@ EVENTS = os.path.join("docs", "x60_onset", "events.jsonl")
 RAILS = os.path.join("docs", "rails_trades", "tickets_rails.jsonl")
 SORTIE = os.path.join("panels", "panel_quadruple.txt")
 QUATRE = ("10", "20", "30", "60")
+PETIT = ("01", "02", "03", "05")
+FUSION = 30
+PORTEE = 120
 SEANCES = ("ASIE", "EUROPE", "US", "NUIT")
 SEUIL = 54
 LARG = 74
@@ -395,7 +399,164 @@ def main():
         dis("    %-20s %6d" % (k, v))
 
     # ------------------------------------------------------------------
-    bloc("6. RAPPELS DE LECTURE",
+    # ------------------------------------------------------------------
+    # 6 a 9 : ce que tickets_rails apporte et que events.jsonl ne peut
+    # pas donner -- il remonte au 21/07 la ou le collecteur x60 ne
+    # remonte qu au 12/08.
+    # ------------------------------------------------------------------
+    tk = []
+    for d in rails:
+        t = horo(d.get("entry_ts"))
+        if t is None or d.get("pnl_eur") is None:
+            continue
+        tk.append({"t": t, "jour": (d.get("entry_ts") or "")[:10],
+                   "actif": d.get("asset"),
+                   "setup": setup_de(d.get("magic")),
+                   "pnl": d.get("pnl_eur"),
+                   "h": (d.get("entry_ts") or "")[11:16]})
+    tk.sort(key=lambda k: k["t"])
+    tk = [k for k in tk if garde(k["jour"])]
+
+    # Episodes : un allumage de grand timeframe en ouvre un ; un second
+    # a moins de FUSION minutes le prolonge au lieu d en rouvrir un.
+    allum = collections.defaultdict(list)
+    for k in tk:
+        if k["setup"] in QUATRE:
+            allum[k["actif"]].append(k["t"])
+    for act in allum:
+        allum[act].sort()
+    eps = collections.defaultdict(list)
+    for act, ar in allum.items():
+        cur = None
+        for t in ar:
+            if cur and (t - cur["fin"]).total_seconds() <= FUSION * 60:
+                cur["fin"] = t
+                cur["n"] += 1
+                continue
+            cur = {"debut": t, "fin": t, "n": 1, "petits": []}
+            eps[act].append(cur)
+    debuts = dict((a2, [e["debut"] for e in v]) for a2, v in eps.items())
+    for k in tk:
+        if k["setup"] not in PETIT:
+            continue
+        v = eps.get(k["actif"])
+        if not v:
+            continue
+        i = bisect.bisect_right(debuts[k["actif"]], k["t"]) - 1
+        if i < 0:
+            continue
+        e = v[i]
+        if (k["t"] - e["fin"]).total_seconds() > PORTEE * 60:
+            continue
+        k["rang"] = len(e["petits"]) + 1
+        k["ep"] = e
+        e["petits"].append(k)
+    for act in eps:
+        for e in eps[act]:
+            for k in e["petits"]:
+                k["taille"] = len(e["petits"])
+
+    bloc("6. LES EPISODES  (source tickets_rails, depuis le 21/07)",
+         ["Un allumage de grand timeframe ouvre un episode ; un second",
+          "a moins de %d min le prolonge au lieu d en rouvrir un." % FUSION,
+          "L episode se ferme %d min apres son dernier allumage." % PORTEE,
+          "Ces deux durees sont des CHOIX, pas des mesures."])
+    tot_ep = sum(len(v) for v in eps.values())
+    dis()
+    dis("  allumages par actif et par setup")
+    dis("  %-14s %13s %13s %13s %13s"
+        % ("", "x10", "x20", "x30", "x60"))
+    dis("  " + "-" * (14 + 4 * 14))
+    for act in sorted(eps):
+        cpt = collections.Counter(k["setup"] for k in tk
+                                  if k["actif"] == act and k["setup"] in QUATRE)
+        dis("  %-14s %s"
+            % (act, " ".join("%13d" % cpt.get(x, 0) for x in QUATRE)))
+    rat = [k for act in eps for e in eps[act] for k in e["petits"]]
+    dis()
+    dis("  %d episodes, %d petits rattaches, %d hors episode"
+        % (tot_ep, len(rat),
+           len([k for k in tk if k["setup"] in PETIT and "ep" not in k])))
+
+    bloc("7. LE PETIT SOUS COUVERTURE  (H10)",
+         ["Ligne = le petit setup qui entre. Colonne = le grand qui a",
+          "ouvert l episode. Mesure du 14/08 : porteur M10-M30",
+          "+13,89 EUR/tk contre -15,09 sous porteur H1, t ~ 4,1 --",
+          "mais sur une seance et demie d allumages x10/x20/x30.",
+          "C est cette ligne-la que le gel doit remplir."])
+    gpo = collections.defaultdict(list)
+    for act in eps:
+        for e in eps[act]:
+            # Le setup du PREMIER allumage de l episode : c est lui qui
+            # a ouvert, les suivants n ont fait que le prolonger.
+            prem = None
+            for k in tk:
+                if k["actif"] == act and k["setup"] in QUATRE \
+                        and k["t"] == e["debut"]:
+                    prem = k["setup"]
+                    break
+            if prem is None:
+                continue
+            for k in e["petits"]:
+                gpo[(k["setup"], prem)].append(k["pnl"])
+    table4("PnL moyen du petit, selon le grand qui a ouvert",
+           ["x%s entre" % x for x in PETIT],
+           lambda nm, x: gpo.get((nm.split(" ")[0][1:], x), []))
+
+    bloc("8. LA RICHESSE DE L EPISODE  (H14)",
+         ["Le seul resultat de la journee dont l effectif tienne a",
+          "l unite qui compte -- l EPISODE, pas le ticket.",
+          "Un bon depart est avare : il declenche trois ou quatre",
+          "entrees puis laisse courir. Un moteur qui ne cesse plus de",
+          "tirer signale l absence de depart, pas sa force.",
+          "ATTENTION : la taille finale n est PAS connue au moment",
+          "d entrer. Ce tableau explique, il ne se joue pas."])
+    dis()
+    for lib, f in (("1-4 entrees", lambda t: t <= 4),
+                   ("5-9 entrees", lambda t: 5 <= t <= 9),
+                   ("10+ entrees", lambda t: t >= 10)):
+        v = [k["pnl"] for k in rat if f(k.get("taille", 0))]
+        n2 = len(v)
+        if not n2:
+            dis("  %-16s        -" % lib)
+            continue
+        dis("  %-16s n=%-5d moy %+8.2f  total %+10.2f%s"
+            % (lib, n2, sum(v) / n2, sum(v), "" if n2 >= SEUIL else "  ?"))
+    dis()
+    for lib, f in (("rangs 1-4", lambda r: r <= 4),
+                   ("rangs 5+", lambda r: r >= 5)):
+        v = [k["pnl"] for k in rat if f(k.get("rang", 0))]
+        n2 = len(v)
+        if not n2:
+            continue
+        dis("  %-16s n=%-5d moy %+8.2f  total %+10.2f%s"
+            % (lib, n2, sum(v) / n2, sum(v), "" if n2 >= SEUIL else "  ?"))
+
+    bloc("9. SEANCE US  (H9)",
+         ["Le seul edge demontrable du dossier au 14/08. Mesure sur",
+          "3 560 tickets : -5,48 EUR/tk hors seance contre +9,80 en",
+          "seance. Moyenne elaguee a 1 % : -5,71, soit PIRE que la",
+          "brute -- ce n est donc pas une queue. Negatif 11 jours",
+          "sur 14. Le decoupage se fait sur l heure d entree seule,",
+          "sans classifieur."])
+    gse = collections.defaultdict(list)
+    for k in tk:
+        if k["setup"] is None:
+            continue
+        camp = "en seance" if "15:30" <= k["h"] < "19:30" else "hors seance"
+        gse[(camp, k["setup"])].append(k["pnl"])
+        gse[(camp, "TOUS")].append(k["pnl"])
+    table4("PnL moyen par ticket, les quatre grands",
+           ["en seance", "hors seance"],
+           lambda nm, x: gse.get((nm, x), []))
+    dis()
+    for camp in ("en seance", "hors seance"):
+        v = gse.get((camp, "TOUS"), [])
+        if v:
+            dis("  %-16s tous setups confondus : n=%-5d moy %+8.2f"
+                % (camp, len(v), sum(v) / len(v)))
+
+    bloc("10. RAPPELS DE LECTURE",
          ["Ce panneau DECRIT. Il ne conclut pas.",
           "",
           "`?` = moins de %d tickets : une comparaison annoncee" % SEUIL,
