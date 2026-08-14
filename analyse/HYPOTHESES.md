@@ -437,6 +437,76 @@ rare ici et compte double.**
 
 ---
 
+## H12 — La loi de départ qui s'auto-annule
+
+**L'énoncé, de l'utilisateur, le 14/08 :** *« il n'y a qu'un seul
+départ propre, une seule entrée ignition qui lance le marché, et tout
+le reste est du FOMO »*, puis *« on approche d'une loi de départ qui
+s'auto-annule jusqu'à la suivante »*.
+
+Ce n'est pas un filtre, c'est un **état avec une durée de vie** : un
+départ s'ouvre, il autorise, il meurt, et plus rien n'est valide
+jusqu'au suivant.
+
+**Ce qu'elle explique sans avoir été formulée pour ça :**
+
+| observation | lecture |
+|---|---|
+| hors séance −5,48 / séance +9,80 | les départs sont dans la séance |
+| x60 mauvais porteur (−15,09), seul setup non perdant | le H1 **confirme** un départ, il ne l'ouvre pas |
+| `jamais` : x02 −9,65 (451), x05 −14,59 (232) | entrer sans départ = le gros du volume et de la perte |
+| TREND +12,2 / RANGE −5,95 | un trend est un départ vu sur sa durée |
+| effondrement du 05/08 | en range, les allumages produisent de **faux départs** |
+
+**L'auto-annulation est déjà visible.** x05 depuis le 05/08, par bande :
+`0-15 +4,08 · 15-30 −15,93 · 30-60 −26,58 · 120-240 −2,58 · jamais
+−14,59`. Le pire moment n'est ni le départ ni l'absence de départ,
+c'est **30 à 60 minutes après** — pire que n'avoir jamais eu de départ.
+Courbe en U : le départ meurt, et la zone juste après est plus
+dangereuse que le calme plat, parce qu'on y entre encore avec la
+conviction d'un départ qui n'existe plus.
+
+**Chaque instrument a sa place dans la vie du départ.** x02 (effectifs
+plus solides) : `0-15 −4,94 (62) · 30-60 +1,21 (102) · 60-120 −8,21
+(152)`. Le M5 prend les quinze premières minutes, le M2 seulement la
+tranche 30-60. Mécanisme plausible : le départ est violent, un M2 s'y
+fait secouer et ne devient exploitable qu'une fois le mouvement
+installé.
+
+**LE DANGER DE CETTE HYPOTHÈSE.** Elle explique tout. C'est le propre
+des bonnes histoires, et c'est exactement ce qui doit rendre méfiant :
+une loi construite après coup sur des données déjà vues n'a aucun
+pouvoir de prédiction tant qu'elle n'a rien interdit. Sa valeur est
+donc **entièrement** dans ce qui suit.
+
+**Ce que H12 interdit — quatre choses qui ne doivent pas se produire :**
+
+1. **Le rang ne doit pas être neutre.** À délai égal, la première
+   entrée d'un départ doit battre la troisième. Des rangs identiques
+   dans une même bande videraient la loi de son cœur : il n'y aurait
+   pas « un départ propre », seulement une fenêtre horaire.
+   *(testé par `rang_ignition.py`, section D)*
+2. **La densité doit coûter.** Un départ produisant huit entrées doit
+   être moins bon par entrée qu'un départ qui en produit deux. Sinon
+   il n'y a pas de FOMO, seulement du volume. *(section A)*
+3. **Le contre-sens doit être mauvais partout**, pas seulement sur
+   x05. Aujourd'hui x02 ne le montre pas (−2,07 contre −0,18). Si ça
+   persiste, ce sont **deux lois** — directionnelle pour le M5,
+   régimique pour le M2 — et non une.
+4. **La zone morte doit exister pour tous.** x05 creuse à 30-60 min,
+   x02 à 60-120. Si chaque setup creuse à un endroit choisi après
+   coup, ce n'est plus une loi, c'est une description.
+
+**Instrument manquant.** Le point 4 demande le temps depuis la **fin**
+de l'épisode, pas depuis son début — la mesure directe de
+l'auto-annulation. À écrire.
+
+**Statut : la synthèse la plus prometteuse du dossier et la plus
+exposée. Elle vit ou meurt sur ces quatre interdits, dont deux sont
+déjà instrumentés et non lancés.**
+
+---
+
 ## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
 
 - **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
