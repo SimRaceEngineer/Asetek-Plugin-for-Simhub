@@ -919,6 +919,74 @@ survécu à la journée.
 
 ---
 
+## H17 et H18 — Le délai en BOUGIES, pas en minutes
+
+**ÉCRITES LE 14/08 À 16:05, AVANT TOUTE MESURE.** Déclarées d'avance,
+elles n'entrent pas dans le compteur du §0.
+
+**L'objection qui les produit, de l'utilisateur.** Mes tranches de
+latence (0-2, 2-5, 5-10, 10-20, 20-40, 40+ minutes) sont arbitraires —
+je les ai choisies « à peu près logarithmiques », sans justification.
+Or *une minute n'a pas le même sens pour un M2 et un M5*. La tranche
+10-20 min met dans la même case un M2 qui a vu **dix bougies** et un
+M5 qui en a vu **quatre**. Ce n'est pas le même événement.
+
+**Pourquoi DEUX hypothèses et pas une.** Le délai en bougies peut se
+compter de deux façons, et elles ne donnent pas la même réponse.
+Choisir après avoir vu les résultats serait exactement la fouille que
+le §0 interdit. On déclare donc les deux, et **on lira les deux
+tableaux ensemble** quel que soit celui qui gagne.
+
+---
+
+### H17 — En bougies du PETIT qui entre
+
+**Prédiction.** Le résultat s'ordonne par le nombre de bougies du
+setup entrant écoulées depuis l'allumage — un M5 à 3 bougies se
+compare à un M2 à 3 bougies, pas à un M2 à 3 minutes.
+
+**Mon a priori, posé d'avance : je n'y crois pas.** En re-paramétrant
+ce qu'on a déjà, x02 a sa bonne bande à 30-60 min soit **15 à 30
+bougies M2**, et x05 à 0-15 min soit **0 à 3 bougies M5**. En bougies
+propres, les deux fenêtres ne se rapprochent pas — elles s'éloignent.
+
+**Ce qui la tue.** Pas d'ordre en bougies propres, ou un ordre moins
+net qu'en minutes.
+
+---
+
+### H18 — En bougies du PORTEUR qui a allumé
+
+**Prédiction.** Le résultat s'ordonne par le nombre de bougies du
+grand timeframe écoulées depuis son allumage.
+
+**Pourquoi c'est la plus prometteuse des deux.** Elle donnerait un
+mécanisme à H10, qui n'en a pas encore : un x60 qui s'allume, puis
+trente minutes, c'est **une demi-bougie H1** — très tôt en temps H1,
+très tard en temps marché. Le H1 serait mauvais porteur non pas par
+nature mais parce que sa bougie est trop lente pour un scalp. Un x10
+à trente minutes, c'est trois bougies : le mouvement a eu le temps de
+se déclarer *dans l'échelle du porteur*.
+
+**Ce qui la tue.** Pas d'ordre en bougies de porteur, ou un écart
+x60/x10-x30 qui persiste **à nombre de bougies de porteur égal** — ce
+qui voudrait dire que le porteur compte pour autre chose que sa
+vitesse.
+
+---
+
+**Ce que les deux partagent comme piège.** Le nombre de bougies est
+une transformation monotone du temps *à setup fixé*. À l'intérieur
+d'un même setup, H17 ne peut donc rien dire de plus que la latence en
+minutes — elle ne change quelque chose qu'en **comparant les setups
+entre eux**. Le test doit donc être lu sur les colonnes, pas sur les
+lignes ; un « effet » visible seulement à l'intérieur d'un setup serait
+la latence déjà réfutée, redécorée.
+
+**Statut : les deux pré-enregistrées, aucune lancée.**
+
+---
+
 ## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
 
 - **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
