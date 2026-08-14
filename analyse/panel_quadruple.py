@@ -6,6 +6,7 @@ panel_quadruple.py -- les quatre unites x10 / x20 / x30 / x60 cote a
   python panel_quadruple.py
   python panel_quadruple.py --depuis 2026-08-05
   python panel_quadruple.py --sortie panels/panel_quadruple.txt
+  python panel_quadruple.py --boucle 5        (service du gardien)
 
 POURQUOI UN PANNEAU SEPARE ET PAS UN PATCH DE x60_onset
 
@@ -78,6 +79,7 @@ import io
 import json
 import os
 import sys
+import time
 
 EVENTS = os.path.join("docs", "x60_onset", "events.jsonl")
 RAILS = os.path.join("docs", "rails_trades", "tickets_rails.jsonl")
@@ -423,4 +425,31 @@ def main():
 
 
 if __name__ == "__main__":
+    # --boucle est retire d argv AVANT argparse : le mode boucle est
+    # une affaire de lancement, pas de rapport, et le reste du script
+    # n a pas a le connaitre. Le gardien peut ainsi le traiter comme
+    # les autres services -- un processus qui reste en vie -- au lieu
+    # de le relancer a chaque passe et d inonder son journal.
+    _argv = sys.argv[1:]
+    _min = 0
+    if "--boucle" in _argv:
+        _i = _argv.index("--boucle")
+        try:
+            _min = int(_argv[_i + 1])
+        except (IndexError, ValueError):
+            sys.stderr.write("KO : --boucle attend un nombre de minutes\n")
+            sys.exit(1)
+        del _argv[_i:_i + 2]
+        sys.argv = [sys.argv[0]] + _argv
+    if _min > 0:
+        while True:
+            del _L[:]
+            try:
+                main()
+            except Exception as e:
+                # Un rapport qui echoue ne doit pas tuer la boucle :
+                # le gardien relancerait, l erreur se reproduirait, et
+                # on aurait un cycle au lieu d un message.
+                sys.stderr.write("passe en echec : %s\n" % e)
+            time.sleep(_min * 60)
     sys.exit(main())
