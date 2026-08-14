@@ -501,9 +501,97 @@ donc **entièrement** dans ce qui suit.
 de l'épisode, pas depuis son début — la mesure directe de
 l'auto-annulation. À écrire.
 
-**Statut : la synthèse la plus prometteuse du dossier et la plus
-exposée. Elle vit ou meurt sur ces quatre interdits, dont deux sont
-déjà instrumentés et non lancés.**
+### VERDICT du 14/08 — deux interdits levés, un violé
+
+Lancé aux deux réglages : `--fusion 30 --portee 120` et
+`--fusion 15 --portee 60`. Tout ce qui suit tient aux deux.
+
+**Interdit n°1 — VIOLÉ. « Un seul départ propre » est faux.**
+À délai égal, dans la bande 0-15 min :
+
+```
+30/120   rang 1 +6.98 (64)  rang 2 +7.28 (55)  rang 3 +11.69  rang 4 +20.57
+15/60    rang 1 +5.90 (74)  rang 2 +6.90 (64)  rang 3  +9.87  rang 4 +17.90
+```
+
+Le rang 1 est le **plus mauvais** du lot, et la performance **monte**
+avec le rang. L'effet de rang ne disparaît pas quand on contrôle le
+délai — il s'inverse. Les entrées suivantes ne sont pas du FOMO, elles
+sont meilleures.
+
+**Interdit n°2 — LEVÉ, et il me réfute moi.** La densité est
+identique de part et d'autre du 5 août : 9,59 contre 9,84
+petits/épisode (réglage large), 5,22 contre 5,30 (réglage serré). Ma
+crainte que l'effondrement post-05/08 soit une densité de FOMO mal lue
+était **fausse**. La conclusion du 05/08 tient, elle n'était pas un
+artefact d'agrégation. Un contrôle posé contre moi-même, qui passe.
+
+**Ce qui survit, et qui est le fait dominant du rapport :**
+
+```
+hors episode   n=1975  -3.50/tk  -6905.51   (reglage 30/120)
+hors episode   n=2395  -3.44/tk  -8243.12   (reglage 15/60)
+rangs 1-4      n= 401  +6.73/tk  +2696.88
+bande 0-15 min n= 191 +11.18/tk  +2134.90   (tous rangs confondus)
+```
+
+**Deux tickets sur trois — quatre sur cinq au réglage serré — sont
+pris en dehors de tout épisode, et c'est là que passe la perte.** Le
+débat rang 1 contre rang 3 porte sur 401 tickets ; celui-ci sur les
+deux tiers du volume.
+
+**Le sens se renforce au réglage serré.** Rangs 1-9 regroupés :
+`MEME +9,67 (377) contre CONTRE −4,51 (229)`, écart 14,18 €,
+**t ≈ 2,8** — contre t ≈ 2,0 au réglage large. Épisode plus serré =
+épisode plus pur = effet directionnel plus net. Le contraire d'un
+artefact de réglage. H11 se renforce.
+
+**L'asymétrie M2/M5 tient aux deux réglages.** `x02 rangs 1-4 :
++11,77 €/tk sur 213 tickets, t ≈ 2,9` — le M2 entre tôt et gagne.
+`x05 rang 1 −15,43, rang 2 −9,30, rang 3 +16,74` — **le M5 est le
+pire quand il entre le premier.** Deux instruments, deux places dans
+la vie du départ.
+
+**Interdit n°4 — NON TESTÉ.** La zone morte après la *fin* de
+l'épisode. L'instrument mesure le temps depuis le début, jamais depuis
+la mort du départ. À écrire.
+
+**Statut : H12 survit amputée. L'épisode existe et décide de presque
+tout ; la fenêtre de quinze minutes est propre ; le sens compte. Mais
+« un seul départ propre » est réfuté aux deux réglages.**
+
+---
+
+## H13 — La confirmation par répétition
+
+**Énoncé.** Le nombre d'entrées déjà déclenchées dans l'épisode en
+cours est un signal, disponible en direct et gratuit, que l'épisode
+est réel. Le moteur ne re-tire pas quatre fois dans un faux départ ;
+il re-tire quand les conditions tiennent.
+
+**Base.** L'inversion de l'interdit n°1 ci-dessus : à délai égal, le
+rang 4 bat le rang 1 aux deux réglages, sur les deux moitiés du jeu.
+
+**Pourquoi c'est actionnable et pas circulaire.** Au moment où le
+quatrième ticket s'ouvre, on sait que trois ont déjà été prises depuis
+l'allumage. Aucune information future n'est requise. C'est un
+compteur, pas une prédiction.
+
+**Ce qui la tue.** Le rang qui cesse de monter, ou qui monte aussi
+chez les tickets **hors** épisode — ce qui en ferait un effet de
+grappe générique et non une confirmation de départ.
+
+**Ce qui la rendrait vraie par construction.** Un épisode ne compte
+quatre entrées que s'il en a produit quatre. Si les épisodes riches
+sont mécaniquement ceux où le marché bougeait, on mesure l'amplitude
+du mouvement et on l'appelle une confirmation. **Contrôle à écrire :
+comparer le rang 4 des épisodes à 4 entrées au rang 4 des épisodes à
+10 entrées.** Si seul le second est bon, c'est la richesse de
+l'épisode qui parle, pas le rang.
+
+**Statut : renversement de la thèse de départ de l'utilisateur, tiré
+de son propre test. Non prédite — donc à traiter comme une trouvaille
+de fouille jusqu'à confirmation sur données neuves.**
 
 ---
 
