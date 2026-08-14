@@ -1543,15 +1543,6 @@ devra encore être vérifiée hors échantillon avant d'entrer en
 production — comme H9, qui a passé le seuil sur une période et ne le
 passe plus sur la suivante.
 
----
-
-## Ce qui ferait abandonner l'exercice
-
-Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
-du bruit une fois le seuil du §0 appliqué, la conclusion à écrire est
-« aucun setup ne se distingue sur cette fenêtre » — pas « il faut
-découper autrement ». Le droit de redécouper s'achète avec des données
-neuves, jamais avec les mêmes.
 
 ---
 
@@ -1658,3 +1649,13 @@ AVANT**. Aucun profil postérieur au 5 août n'atteint son seuil, sur
 **+9,37** à **−5,46** : c'est un écart de près de 15 € par signal, et
 c'est le seul fait de cette page qui ne demande aucune statistique
 pour être vu.
+
+---
+
+## Ce qui ferait abandonner l'exercice
+
+Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
+du bruit une fois le seuil du §0 appliqué, la conclusion à écrire est
+« aucun setup ne se distingue sur cette fenêtre » — pas « il faut
+découper autrement ». Le droit de redécouper s'achète avec des données
+neuves, jamais avec les mêmes.
