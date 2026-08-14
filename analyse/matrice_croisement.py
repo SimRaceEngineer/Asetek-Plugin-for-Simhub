@@ -2,9 +2,39 @@
 """
 matrice_croisement.py -- croiser les filtres deux a deux, avec le prix
 
-  python matrice_croisement.py --schema
-  python matrice_croisement.py
-  python matrice_croisement.py --cassure 2026-08-05 --seuil 54
+  python matrice_croisement_v3.py --schema
+  python matrice_croisement_v3.py
+  python matrice_croisement_v3.py --cassure 2026-08-05 --seuil 54
+
+v3 : ajout de la table des filtres SEULS avec leur n et le n REQUIS.
+La v2 donnait la moyenne de chaque filtre sans son effectif : on
+lisait "M15 ALIGNE -10,49" sans savoir si c etait sur 700 ou 1 200
+signaux, donc sans pouvoir appliquer le paragraphe 0. Le manque a ete
+vu sur la premiere sortie reelle.
+
+v2 : le champ de trajectoire du gap s appelle `self_mom` dans les
+donnees reelles, pas `mom`. Infere depuis le code sans jamais voir un
+enregistrement ; --schema l a montre avant la premiere lecture.
+
+CE QUE LA PREMIERE SORTIE REELLE A DONNE, le 14/08
+
+    Les TREIZE filtres sont positifs avant le 5 aout et negatifs
+    apres, sans une exception. La population entiere passe de +9,37 a
+    -5,46 et chaque decoupe suit. Aucun de ces filtres n isole une
+    sous-population qui aurait survecu a la cassure.
+
+    Y compris la seance US : prime de +20,76 sur la reference avant,
+    +3,00 apres -- 86 %% d amplitude perdue. Pour demontrer 3 EUR avec
+    sigma = 60 il faut ~3 400 signaux ; on en a 1 645. Sur les donnees
+    post-cassure seules, H9 n est plus demontrable.
+
+    Ce qui reste coherent : apres la cassure les pires cellules sont
+    toutes des ALIGNE (M1 ALIGNE x M15 ALIGNE, -12,47 sur 657) et les
+    moins mauvaises des WIDENING en seance. Alignement = mouvement
+    deja installe = entree tardive, soit exactement le mecanisme de
+    H10 trouve par un instrument different. Mais cette meme paire
+    valait +12,12 AVANT : elle change de signe comme le reste, donc ce
+    n est pas une regle, c est une propriete du regime.
 
 CE QU IL FAIT
 
