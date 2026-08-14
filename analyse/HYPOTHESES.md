@@ -1362,6 +1362,86 @@ signal d'entrée.
 
 ---
 
+## H21 — Séance US et jambe fraîche sur M5
+
+**ÉCRITE LE 14/08 À 21:00, AVANT TOUTE MESURE NOUVELLE.** Déclarée
+d'avance, elle n'entre pas dans le compteur du §0. Mais elle est née
+d'une cellule déjà vue, et c'est une différence qui doit rester
+visible : voir plus bas.
+
+**L'énoncé.** Un signal entré **pendant la séance US** (15h30-19h30) et
+dont le gap HLC **M5 est en `WIDENING`** (`self_mom`, la jambe verte
+s'écarte de la rouge) fait mieux que la moyenne des signaux de la même
+période.
+
+**D'où elle vient — et l'aveu qui va avec.** Cette cellule est le
+**maximum de 78 paires** de la matrice de croisement du 14/08. Elle n'a
+pas été prédite ; elle a été trouvée en regardant. Ce qui la distingue
+des soixante-dix-sept autres n'est pas sa valeur, c'est son
+**comportement à travers la cassure du 5 août** :
+
+```
+AVANT  : +25,32 sur 96 signaux    (référence +9,37)  ->  +15,95 au-dessus
+DEPUIS : +5,58 sur 250 signaux    (référence -5,46)  ->  +11,04 au-dessus
+```
+
+Là où la séance US seule perd **86 %** de sa prime sur la référence
+(+20,76 → +3,00), ce croisement n'en perd que **31 %**. C'est le seul
+candidat d'entrée du dossier positif des deux côtés de la cassure.
+
+### Le test, tel qu'il sera exécuté
+
+**L'unité est le SIGNAL**, jumeaux 206/207 fusionnés — même règle que
+`_signals()` de `rails_trades_panel.py`, sinon un signal compte deux
+fois.
+
+**La mesure se fait sur des données NEUVES**, à partir du 15/08. Les
+2 424 signaux qui ont produit l'hypothèse ne peuvent pas la tester.
+
+**Prédiction.** Sur les signaux postérieurs au 15/08, la cellule
+`séance US + M5 WIDENING` bat la moyenne de la même période d'un écart
+dont le `t` dépasse 1,96 — seuil d'une comparaison annoncée d'avance,
+puisque c'est désormais le cas.
+
+**Critère de réfutation.** H21 est fausse si l'écart a un `t < 1,96`,
+**ou** s'il change de signe, **ou** si la cellule reste sous 54 signaux
+— auquel cas on écrit « non testable », pas « non trouvée ».
+
+### Ce qui la rendrait vraie par construction — à vérifier AVANT
+
+**Elle pourrait n'être que H9 avec un accessoire.** La séance US porte
+déjà +3,00 sur la référence post-cassure. Il faut donc mesurer l'écart
+**à l'intérieur de la séance US seule** : `M5 WIDENING` contre
+`M5 non-WIDENING`, toutes deux en séance. Si l'écart disparaît là, H21
+n'ajoute rien à H9 et doit être écrite comme telle.
+
+**Le seuil honnête n'est pas 1,96 aujourd'hui, il l'est demain.** À
+z = 2,9 il faut 248 signaux pour démontrer 11,04 € ; la cellule en a
+250. Elle passe de deux signaux. Mais à z = 3,3 — le seuil d'un maximum
+choisi parmi 78 — il en faudrait 321, et elle échoue. **C'est pourquoi
+elle est pré-enregistrée et non adoptée.** Le compteur repart à un sur
+données neuves ; c'est tout ce que la pré-inscription achète, et c'est
+déjà beaucoup.
+
+**`self_mom` et non `mom`.** Le champ de trajectoire du gap porte ce
+nom dans les enregistrements. Une première version du lecteur cherchait
+`mom` et aurait renvoyé une cellule vide, lue comme « le widening ne
+croise avec rien ». À revérifier dans tout code qui testera H21.
+
+**Le WIDENING de M5 n'est pas indépendant de celui de M1, M3, M15.**
+Les quatre blocs portent les mêmes signaux repartitionnés. Si le test
+est reconduit sur une autre unité de temps et « confirme », ce n'est
+pas une confirmation.
+
+### Ce que H21 n'autorise pas
+
+Elle ne dit rien sur le sens, ni sur la taille, ni sur la sortie. Elle
+ne remplace aucune abstention : H9 reste au-dessus d'elle dans l'ordre
+de décision. Et tant qu'elle n'est pas mesurée hors échantillon, **elle
+ne justifie aucun changement de paramètre pendant le gel.**
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
