@@ -69,6 +69,18 @@ LES PROFILS EMBOITES
     tout de suite qu ajouter une contrainte divise l effectif sans
     toujours ajouter de l ecart.
 
+OU VA LA SORTIE, ET POURQUOI PAS DANS panels/
+
+    Dans `cartes/`, pas dans `panels/`. Le REPL balaye panels/ et
+    notes/ au demarrage : y deposer cette carte l ajouterait au
+    contexte, qui pese deja ~206 000 jetons pour 250 000 caracteres.
+    Un tableau de nombres alignes coute ~1,2 caractere par jeton,
+    trois fois pire que de la prose -- c est le pire format possible
+    pour un modele et le meilleur pour un oeil.
+
+    Si tu veux que le REPL la lise malgre tout :
+    --sortie panels\panel_profils.txt
+
 Lecteur SEUL : lit un .jsonl, ecrit un .txt. Aucun ordre, aucun
 collecteur, aucun etat modifie.
 """
@@ -82,7 +94,13 @@ import sys
 import datetime as dt
 
 TRADES = os.path.join("docs", "churn_trades", "churn_trades.jsonl")
-SORTIE = os.path.join("panels", "panel_profils.txt")
+# HORS de `panels` a dessein. Le REPL balaye panels/ et notes/ au
+# demarrage : y deposer cette carte l ajouterait automatiquement au
+# contexte, qui pese deja ~206 000 jetons. Les tableaux de nombres
+# alignes se tokenisent a ~1,2 caractere par jeton -- trois fois pire
+# que de la prose. Cette carte est faite pour l ecran, pas pour le
+# modele. `--sortie panels\panel_profils.txt` si tu veux qu il la lise.
+SORTIE = os.path.join("cartes", "panel_profils.txt")
 CASSURE = "2026-08-05"
 SIGMA = 60.0
 MIN_N = 54
