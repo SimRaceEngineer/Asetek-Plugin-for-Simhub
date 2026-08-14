@@ -195,33 +195,6 @@ def main():
     def garde(iso):
         return (not a.depuis) or (iso or "")[:10] >= a.depuis
 
-    # Le panneau x60 est INCLUS tel quel, en tete. Un tableau que
-    # l utilisateur ne voit pas ne sert a rien : il ouvre le panneau
-    # dont il a l habitude. Plutot que de patcher le collecteur pour
-    # y ajouter des sections -- ce qui risquerait les donnees du gel
-    # pour de la mise en page -- on recopie sa sortie ici. Lui garde
-    # son fichier, intact, et ce panneau devient le sur-ensemble.
-    if a.joindre and os.path.isfile(a.joindre):
-        age = (dt.datetime.now()
-               - dt.datetime.fromtimestamp(os.path.getmtime(a.joindre)))
-        mn = age.total_seconds() / 60.0
-        for l in io.open(a.joindre, encoding="utf-8",
-                         errors="replace").read().split("\n"):
-            dis(l.rstrip())
-        dis()
-        dis("=" * LARG)
-        dis("  ci-dessus : %s, ecrit il y a %.0f min" % (a.joindre, mn))
-        if mn > 60:
-            dis("  ATTENTION : ce panneau n a pas ete regenere depuis")
-            dis("  plus d une heure. Ses chiffres peuvent etre perimes")
-            dis("  alors que ceux qui suivent sont a jour -- ne pas les")
-            dis("  comparer sans regarder les deux horodatages.")
-        dis("  ci-dessous : les quatre unites cote a cote")
-        dis("=" * LARG)
-    elif a.joindre:
-        dis("  (%s introuvable -- panneau x60 non inclus)" % a.joindre)
-        dis()
-
     dis("=" * LARG)
     dis("PANNEAU QUADRUPLE  x10 / x20 / x30 / x60")
     dis("genere %s" % dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -603,6 +576,33 @@ def main():
           "Au 14/08, deux resultats seulement tiennent sur l ensemble",
           "du dossier : ne pas trader hors seance US, et ne pas trader",
           "un episode qui s emballe. Tout le reste est descriptif."])
+
+    # Le panneau x60 est INCLUS tel quel, EN QUEUE. Un tableau que
+    # l utilisateur ne voit pas ne sert a rien : il ouvre le panneau
+    # dont il a l habitude. Plutot que de patcher le collecteur pour
+    # y ajouter des sections -- ce qui risquerait les donnees du gel
+    # pour de la mise en page -- on recopie sa sortie ici. Lui garde
+    # son fichier, intact, et ce panneau devient le sur-ensemble.
+    if a.joindre and os.path.isfile(a.joindre):
+        age = (dt.datetime.now()
+               - dt.datetime.fromtimestamp(os.path.getmtime(a.joindre)))
+        mn = age.total_seconds() / 60.0
+        dis()
+        dis("=" * LARG)
+        dis("  ci-dessus : les quatre unites cote a cote")
+        if mn > 60:
+            dis("  ATTENTION : ce panneau n a pas ete regenere depuis")
+            dis("  plus d une heure. Ses chiffres peuvent etre perimes")
+            dis("  alors que ceux qui suivent sont a jour -- ne pas les")
+            dis("  comparer sans regarder les deux horodatages.")
+        dis("  ci-dessous : %s, ecrit il y a %.0f min" % (a.joindre, mn))
+        for l in io.open(a.joindre, encoding="utf-8",
+                         errors="replace").read().split("\n"):
+            dis(l.rstrip())
+        dis("=" * LARG)
+    elif a.joindre:
+        dis("  (%s introuvable -- panneau x60 non inclus)" % a.joindre)
+        dis()
 
     txt = "\n".join(_L) + "\n"
     sys.stdout.write(txt)
