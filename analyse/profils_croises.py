@@ -282,6 +282,82 @@ def seuil_bonferroni(cellules):
     return z
 
 
+def grille(a, sig, uts, zc, actifs):
+    """La grille de couleurs. Lignes = gap x consensus (12), colonnes =
+    churn (5). Une grille par unite de temps. Le rails et la seance
+    sont FIXES par la ligne de commande : une grille a deux dimensions
+    ne peut pas en montrer cinq, et empiler des dimensions dans une
+    seule case est le meilleur moyen de la rendre illisible."""
+    GAPS = (None, "WIDENING", "NARROWING", "STEADY")
+    CONS = (None, "ALIGNE", "PASALIGNE")
+    CHUR = (None, "CLEAN", "MIXED", "CHURN", "horsCHURN")
+    ETI = {None: "indiff", "WIDENING": "WIDEN", "NARROWING": "NARROW",
+           "STEADY": "STEADY", "ALIGNE": "ALIGNE", "PASALIGNE": "PAS-AL",
+           "CLEAN": "CLEAN", "MIXED": "MIXED", "CHURN": "CHURN",
+           "horsCHURN": "horsCH"}
+
+    dis()
+    dis("=" * LARG)
+    dis("GRILLE DE COULEURS")
+    dis("=" * LARG)
+    dis("  cote %s  |  seance %s  |  rails %s  |  actif %s"
+        % (a.cote, a.seance, a.rails or "indifferent",
+           a.actif or "TOUS"))
+    dis()
+    dis("  Lignes = trajectoire du gap x consensus. Colonnes = churn.")
+    dis("  Le rails et la seance sont fixes : une grille a deux")
+    dis("  dimensions n en montre pas cinq. --rails et --seance pour")
+    dis("  changer de page, --cote pour l autre cote de la cassure.")
+    dis()
+    dis("  Chaque case : symbole + effectif. La couleur code le t,")
+    dis("  jamais la moyenne. Sous %d signaux : `.`, non colore."
+        % a.min_n)
+    dis("  ### tres vert  ##  vert  #  faible  o  neutre")
+    dis("  XXX tres rouge XX  rouge X  faible")
+    dis("=" * LARG)
+
+    act = a.actif or "TOUS"
+    for u in uts:
+        lot = [s for s in sig if s["jour"]
+               and ((s["jour"] >= a.cassure) == (a.cote == "DEPUIS"))
+               and (act == "TOUS" or s["actif"] == act)
+               and (a.seance == "toutes" or s["seance"] == a.seance)
+               and (a.rails is None or s["rails"] == a.rails)]
+        if not lot:
+            dis()
+            dis("  ut %s : aucun signal dans cette page." % u)
+            continue
+        mref = sum(x["pnl"] for x in lot) / len(lot)
+        dis()
+        dis("-" * LARG)
+        dis("  ut %s  --  %d signaux dans la page, reference %+.2f"
+            % (u, len(lot), mref))
+        dis("-" * LARG)
+        dis("  %-16s" % "" + "".join("%12s" % ETI[c] for c in CHUR))
+        for g in GAPS:
+            for c2 in CONS:
+                nom_l = "%s / %s" % (ETI[g], ETI[c2])
+                cases = []
+                for ch in CHUR:
+                    v = [x["pnl"] for x in lot
+                         if (g is None or x["gap"].get(u) == g)
+                         and (c2 is None or colle(x, "cons", c2, u))
+                         and (ch is None or colle(x, "churn", ch, u))]
+                    n = len(v)
+                    # Meme gabarit pour TOUTES les cases, colorees ou
+                    # non : symbole sur 3, effectif sur 6. Une case `.`
+                    # formatee autrement decale la colonne entiere, et
+                    # une grille mal alignee ne se lit pas.
+                    if n < a.min_n:
+                        cases.append("%12s" % ("%3s%6d" % (" . ", n)))
+                        continue
+                    m = sum(v) / n
+                    t = (m - mref) * math.sqrt(n) / a.sigma
+                    cases.append("%12s" % ("%3s%6d" % (teinte(t, zc), n)))
+                dis("  %-16s%s" % (nom_l, "".join(cases)))
+            dis()
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--trades", default=TRADES)
@@ -295,6 +371,13 @@ def main():
     p.add_argument("--ut", default=None)
     p.add_argument("--limite", type=int, default=200000)
     p.add_argument("--schema", action="store_true")
+    p.add_argument("--grille", action="store_true",
+                   help="la grille de couleurs au lieu du classement")
+    p.add_argument("--cote", default="DEPUIS", choices=("DEPUIS", "AVANT"))
+    p.add_argument("--seance", default="US",
+                   choices=("US", "hors", "toutes"))
+    p.add_argument("--rails", default=None,
+                   help="TIGHT_CROSS / MID / WIDE ; defaut indifferent")
     a = p.parse_args()
 
     uts = [a.ut] if a.ut else ["M1", "M3", "M5", "M15"]
@@ -337,6 +420,18 @@ def main():
     n_ind = len(pr) - n_dep
     cellules = (n_dep * len(uts) + n_ind) * len(actifs) * 2
     zc = seuil_bonferroni(cellules)
+
+    if a.grille:
+        grille(a, sig, uts, zc, actifs)
+        d = os.path.dirname(a.sortie)
+        if d and not os.path.isdir(d):
+            os.makedirs(d)
+        io.open(a.sortie, "w", encoding="utf-8").write(
+            "\n".join(_ECHO) + "\n")
+        print()
+        print("ecrit : %s (%d octets)"
+              % (a.sortie, os.path.getsize(a.sortie)))
+        return 0
 
     dis("=" * LARG)
     dis("CARTE DES PROFILS -- coloree par t, jamais par la moyenne")

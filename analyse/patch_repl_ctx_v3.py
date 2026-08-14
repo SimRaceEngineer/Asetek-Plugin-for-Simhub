@@ -161,6 +161,7 @@ def main():
             return 1
         actuel = int(m.group(2))
         print("  deja patche -- REPL_CTX_WEB = %d." % actuel)
+        avant_web = actuel
         if actuel == a.web:
             neuf = src
             fait_repl = False
@@ -177,6 +178,7 @@ def main():
             print("  REPL_CTX_WEB %d -> %d" % (actuel, a.web))
             fait_repl = True
     else:
+        avant_web = None      # premiere application : rien avant
         for anc, nom in ((A_CONST, "REPL_CTX_MAX = 175000"),
                          (A_DEF, "def _ctx_repl"),
                          (A_S, "s = static_ctx or ''"),
@@ -308,7 +310,13 @@ def main():
           " 175000." % a.web)
     print("        nemotron_trader et reasoning_ab_trader : INCHANGES,")
     print("        ils appellent avec deux arguments -> REPL_CTX_MAX.")
-    print("Marche arriere : --web 175000")
+    # Le message etait CODE EN DUR a 175000. Juste a la premiere
+    # application -- revenir a 175000 c est revenir au comportement d
+    # avant. Faux des la seconde : apres un passage de 400000 a
+    # 250000, la marche arriere est 400000. Le message aurait fait
+    # descendre SOUS le point de depart en pretendant y revenir.
+    print("Marche arriere : --web %d"
+          % (avant_web if avant_web is not None else 175000))
     print()
     print("PREND EFFET AU PROCHAIN DEMARRAGE DE price_action.py.")
     print("NE JAMAIS le lancer a la main sans PA_ROLE=panel : sans")
