@@ -281,15 +281,45 @@ du même ordre que la fenêtre où l'on cherche l'effet, on mesure la
 latence du classifieur et on l'appelle un effet de marché. **Il faut
 donc relever la bascule à partir du prix, pas à partir de l'étiquette.**
 
-**Ce qu'il manque pour la tester.** L'instant de bascule, et la
-position dans le range, minute par minute. Les panneaux ne le gardent
-pas : ce sont des instantanés réécrits à chaque rafraîchissement —
-artefact n°4 de la liste. En revanche, depuis le 13/08 15:37, les
-barres de l'orderflow portent `close`, `high` et `low` : **la position
-dans le range se recalcule** pour toute minute couverte par l'historique
-des barres, à condition de retenir la même définition de fenêtre (7 j
-ou 24 h) que celle affichée par les panneaux. C'est la seule voie de
-reconstruction disponible, et elle ne remonte pas avant le 13/08.
+**Ce qu'il manque pour la tester — corrigé le 14/08 à 12:55.** Rien.
+J'avais écrit qu'il faudrait reconstruire l'instant de bascule depuis
+les barres, faute de trace. C'était faux, et c'est une erreur de
+méthode : j'ai conclu à l'absence d'une donnée sans avoir cherché les
+fichiers. `logs\regime_history.jsonl` (14 Mo) porte, par actif et par
+instant :
+
+    {"iso":"2026-08-14 12:52:23","regimes":{"US30":{
+      "type":"INDETERMINATE","confidence":"PRE_SESSION",
+      "reason":"us_cash_opens_in_157min","elapsed_min":0}}}
+
+`elapsed_min` **est** la variable de H8. Le test se réduit à joindre
+chaque ticket à `regime_history` par horodatage et à tracer le PnL
+contre `elapsed_min`. **Testable sur l'historique déjà accumulé, sans
+attendre la fin du gel.**
+
+**Deux avertissements sur les instruments, à respecter dans le test :**
+
+*Ne pas utiliser `frg_transitions.jsonl` comme source des bascules.*
+Deux transitions relevées à une minute d'écart, `chop` 52,6 et 48,2 :
+le seuil est à ~50 et aucune hystérésis n'est visible. Quand le chop
+oscille autour du seuil — c'est-à-dire exactement dans les phases
+indécises qui nous intéressent — le journal produit des bascules en
+rafale qui ne correspondent à aucun changement de marché. Le piège
+prévu était l'inertie du classifieur ; le vrai est son **bégaiement**.
+Utiliser la valeur `chop` et sa distance au seuil, pas les événements.
+
+*Deux classifieurs coexistent et se contredisent.* `regime_history`
+étiquette la matinée `INDETERMINATE / PRE_SESSION`, pas « range ».
+Toute la lecture « 09h-11h en range, ça perd » (H3) vient d'un autre
+instrument. Avant de conclure sur H3 ou H4, établir lequel des deux
+alimente les chiffres des panneaux. **Deux régimes contradictoires sur
+la même heure, c'est une conclusion qui dépend du fichier qu'on
+ouvre.**
+
+**Piste annexe, non prévue :** `refusal_log.py` porte `range_pos`. Un
+journal de refus horodaté avec son contexte, c'est le seul endroit du
+dossier où l'on observe les **non**-trades. Tout le reste ne voit que
+ce qui a été pris — un biais de sélection dont on n'a aucune mesure.
 
 **Statut : hypothèse la plus récente, et la plus prometteuse des trois
 « quand ne pas trader », parce qu'elle est la seule qui explique
