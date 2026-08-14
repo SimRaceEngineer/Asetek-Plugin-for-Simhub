@@ -30,9 +30,13 @@ DEUX PLAFONDS, PAS UN -- ET C EST LE PIEGE
     _DOCS_MAX_UN  = 100000   caracteres pour UN SEUL document
 
     Rails trades fait 102 450. Meme avec un total illimite, il serait
-    TRONQUE a 100 000 par le second plafond -- silencieusement, et
-    c est la queue du fichier qui sauterait. Lever un seul des deux ne
-    sert a rien.
+    TRONQUE a 100 000 par le second plafond : c est la queue du
+    fichier qui sauterait. Lever un seul des deux ne sert a rien.
+
+    La troncature n est PAS silencieuse -- repl_web.py ligne 181 ecrit
+    "[... tronque ...]" a l endroit de la coupe. Le modele voit donc
+    qu il lui manque quelque chose. Corrige ici : j avais ecrit deux
+    fois le contraire.
 
 CE QUE CA COUTE
 
@@ -88,11 +92,28 @@ from datetime import datetime
 
 CIBLE = "repl_web.py"
 # Reperees par le NOM, pas par la valeur : c est ce qui rend le patch
-# rejouable. \b apres MAX empeche _DOCS_MAX d attraper _DOCS_MAX_UN.
-# [ \t] et non \s : \s mange le retour a la ligne, et la substitution
-# souderait deux lignes. Le garde-fou de fin l a attrape une fois.
-R_TOT = re.compile(r"^_DOCS_MAX\b[ \t]*=[ \t]*(\d+)[ \t]*$", re.M)
-R_UN = re.compile(r"^_DOCS_MAX_UN\b[ \t]*=[ \t]*(\d+)[ \t]*$", re.M)
+# rejouable dans les deux sens.
+#
+# Trois pieges, tous rencontres pour de vrai :
+#   - les constantes sont INDENTEES de 8 espaces (elles vivent dans un
+#     bloc, pas au module) -- d ou le groupe 1 qui capture et restitue
+#     l indentation telle quelle ;
+#   - elles portent un COMMENTAIRE en bout de ligne -- d ou le groupe 3,
+#     preserve tel quel. Une premiere version exigeait la fin de ligne
+#     juste apres le nombre et trouvait 0 occurrence ;
+#   - \b apres MAX empeche _DOCS_MAX d attraper _DOCS_MAX_UN ;
+#   - [ \t] et non \s : \s mange le retour a la ligne et souderait
+#     deux lignes -- attrape par le garde-fou du nombre de lignes.
+R_TOT = re.compile(
+    r"^([ \t]*_DOCS_MAX\b[ \t]*=[ \t]*)(\d+)([ \t]*(?:#[^\r\n]*)?)$", re.M)
+R_UN = re.compile(
+    r"^([ \t]*_DOCS_MAX_UN\b[ \t]*=[ \t]*)(\d+)([ \t]*(?:#[^\r\n]*)?)$", re.M)
+
+
+def pose(r, valeur, texte):
+    """Remplace le nombre en gardant l indentation et le commentaire."""
+    return r.sub(lambda m: m.group(1) + str(valeur) + m.group(3),
+                 texte, count=1)
 
 
 def poids():
@@ -158,12 +179,13 @@ def main():
     for r, nom in ((R_TOT, "_DOCS_MAX"), (R_UN, "_DOCS_MAX_UN")):
         n = len(r.findall(src))
         if n != 1:
-            print("KO : %d ligne(s) '%s = <entier>', il en faut 1."
+            print("KO : %d ligne(s) '%s = <entier>' (indentation et"
                   % (n, nom))
+            print("     commentaire de fin admis), il en faut 1.")
             print("Rien n a ete ecrit.")
             return 1
-    tot_av = int(R_TOT.search(src).group(1))
-    un_av = int(R_UN.search(src).group(1))
+    tot_av = int(R_TOT.search(src).group(2))
+    un_av = int(R_UN.search(src).group(2))
     print("Valeurs actuelles : _DOCS_MAX = %d, _DOCS_MAX_UN = %d"
           % (tot_av, un_av))
 
@@ -192,7 +214,8 @@ def main():
     for c in perdus:
         print("    - %s  (PERDU par ce reglage)" % c)
     for c, t, pris in ap[1]:
-        print("    ! %s tronque a %d sur %d" % (c, pris, t))
+        print("    ! %s tronque a %d sur %d (marque dans le texte)"
+              % (c, pris, t))
     for c in ap[2]:
         if c not in [x[0] for x in ap[1]]:
             print("    x %s jamais atteint" % c)
@@ -206,16 +229,16 @@ def main():
         print()
         print("AVERTISSEMENT : --un %d < %d, le plus gros document"
               % (a.un, gros[1]))
-        print("est TRONQUE en silence. Il en faudrait au moins %d."
-              % gros[1])
+        print("est TRONQUE (marque '[... tronque ...]' a la coupe).")
+        print("Il en faudrait au moins %d." % gros[1])
 
     if (tot_av, un_av) == (a.total, a.un):
         print()
         print("Deja aux valeurs demandees. Rien n a ete ecrit.")
         return 0
 
-    neuf = R_TOT.sub("_DOCS_MAX = %d" % a.total, src, count=1)
-    neuf = R_UN.sub("_DOCS_MAX_UN = %d" % a.un, neuf, count=1)
+    neuf = pose(R_TOT, a.total, src)
+    neuf = pose(R_UN, a.un, neuf)
 
     try:
         ast.parse(neuf)
