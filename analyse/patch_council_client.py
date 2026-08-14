@@ -175,13 +175,25 @@ def main():
         print("Rien n a ete ecrit.")
         return 1
 
-    if "max_retries=0" in neuf:
-        print("KO : max_retries=0 subsiste. Rien n a ete ecrit.")
+    # On COMPTE, on ne cherche pas la presence : council_shadow porte
+    # d autres clients (Kimi, OpenAI) construits eux aussi sans reprise.
+    # Chercher la chaine dans tout le fichier les attrapait et bloquait
+    # un patch pourtant correct -- une garde trop large est une garde
+    # qui refuse le bon travail.
+    _av = src.count("max_retries=0")
+    _ap = neuf.count("max_retries=0")
+    if _ap != _av - 1:
+        print("KO : la reprise a zero n a pas ete retiree exactement une")
+        print("     fois (%d avant, %d apres). Rien n a ete ecrit."
+              % (_av, _ap))
         return 1
-    if neuf.count("max_retries=2") != 1:
-        print("KO : max_retries=2 n apparait pas exactement une fois.")
-        print("Rien n a ete ecrit.")
+    if neuf.count("max_retries=2") != src.count("max_retries=2") + 1:
+        print("KO : la nouvelle reprise n a pas ete ajoutee exactement une")
+        print("     fois. Rien n a ete ecrit.")
         return 1
+    print("Reprise : %d client(s) sans reprise avant, %d apres -- un seul"
+          % (_av, _ap))
+    print("a change, les autres clients du fichier sont intacts.")
 
     # Rien d autre ne doit avoir bouge : ni le chargement de la cle,
     # ni la base_url, ni le timeout, ni la regle d identite par argv[0].
