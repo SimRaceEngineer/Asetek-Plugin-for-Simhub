@@ -217,6 +217,26 @@ Le 13/08, un bloc s'est posé dans la branche `else` au lieu d'après le
 `if/else` : les deux versions compilent, mais la mauvaise ne s'exécute
 que quand l'étape précédente échoue. `ast.parse` ne l'aurait jamais vu.
 
+### `mistakes.md` — à lire avant, à tenir après
+
+**Lire `mistakes.md` avant d'écrire un patch, et y ajouter une entrée
+le jour même de chaque erreur ou de chaque casse.** Une erreur
+rattrapée par un garde-fou compte autant qu'une erreur en production :
+le garde-fou aurait pu manquer.
+
+Chaque entrée porte cinq choses — ce qui a été fait, **le raisonnement
+faux** qui y a conduit, la conséquence réelle sans l'adoucir, le
+correctif, et la règle vérifiable qui en découle. C'est le raisonnement
+faux qui est la partie utile : c'est lui qui se répète.
+
+Le 14/08, la page du panneau est morte au chargement sur
+`name '_os' is not defined` parce qu'un garde-fou utilisait `ast.walk`,
+qui descend dans les fonctions, et avait pris un import local pour un
+import de module. La règle qui en est sortie — *le code généré
+n'emprunte aucun nom au module cible* — a servi trois heures plus tard
+sur la route `/profils`, écrite avec des builtins uniquement. C'est à
+ça que sert le fichier.
+
 ---
 
 ## Ce qui est en cours d'observation
