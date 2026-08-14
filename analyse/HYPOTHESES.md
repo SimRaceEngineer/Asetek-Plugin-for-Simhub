@@ -1543,7 +1543,6 @@ devra encore être vérifiée hors échantillon avant d'entrer en
 production — comme H9, qui a passé le seuil sur une période et ne le
 passe plus sur la suivante.
 
-
 ---
 
 ## H23 — Ne pas entrer en séance US quand les rails sont MID
