@@ -10,7 +10,13 @@ POURQUOI
 
     docs\buddha\<jour>\cycles.jsonl contient un instantané COMPLET du
     moteur par cycle : 352 000 caracteres par ligne, ~1,8 Go par
-    journee, 19 journees archivees -- environ 34 Go.
+    journee.
+
+    DIX-HUIT journees sont disponibles, dont dix-sept en
+    `cycles.jsonl.gz` -- 62 a 547 Mo compresses. Seules les deux plus
+    recentes sont en clair. Une premiere version ne cherchait que le
+    nom sans extension : elle annoncait "2 journees a traiter" et
+    personne n aurait vu qu elle en ignorait dix-sept.
 
     On ne peut pas relire ca a chaque essai. On passe donc UNE fois,
     on garde une quinzaine de champs par actif, et on ecrit un CSV par
@@ -67,6 +73,7 @@ tournent -- il ne fait que lire des archives du jour precedent.
 """
 import argparse
 import csv
+import gzip
 import io
 import json
 import os
@@ -104,6 +111,33 @@ CHAMPS = (
     ("biais", ("__racine__", "bias")),
     ("score", ("__racine__", "total_score")),
 )
+
+
+def source(dossier):
+    """Le fichier de cycles d une journee, compresse ou non.
+
+    Les journees archivees sont en `cycles.jsonl.gz` ; seules les deux
+    plus recentes sont encore en clair. Une premiere version ne
+    cherchait que le nom sans extension et ignorait donc DIX-SEPT
+    journees sur dix-neuf, sans rien dire -- elle annoncait simplement
+    "2 journees a traiter", ce qui ressemblait a une reponse.
+
+    Un chercheur de fichiers qui ignore silencieusement la majorite de
+    ses candidats est pire qu une erreur : il rend un resultat
+    plausible."""
+    for nom in ("cycles.jsonl", "cycles.jsonl.gz"):
+        c = os.path.join(dossier, nom)
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def ouvre(chemin):
+    """Un flux de texte, que le fichier soit compresse ou non."""
+    if chemin.endswith(".gz"):
+        return io.TextIOWrapper(gzip.open(chemin, "rb"),
+                                encoding="utf-8", errors="replace")
+    return io.open(chemin, encoding="utf-8", errors="replace")
 
 
 def creuse(d, chemin):
@@ -158,7 +192,7 @@ def une_journee(chemin, sortie, chaque):
     f = io.open(sortie, "w", encoding="utf-8", newline="")
     w = csv.writer(f, delimiter=";")
     w.writerow(entete())
-    for l in io.open(chemin, encoding="utf-8", errors="replace"):
+    for l in ouvre(chemin):
         if not l.strip():
             continue
         try:
@@ -197,8 +231,7 @@ def main():
               % a.racine)
         return 1
     jours = sorted(d for d in os.listdir(a.racine)
-                   if os.path.isfile(os.path.join(a.racine, d,
-                                                  "cycles.jsonl")))
+                   if source(os.path.join(a.racine, d)))
     if a.jours:
         voulus = set(x.strip() for x in a.jours.split(","))
         jours = [j for j in jours if j in voulus]
@@ -208,9 +241,8 @@ def main():
 
     if a.schema:
         j = jours[-1]
-        c = os.path.join(a.racine, j, "cycles.jsonl")
-        rec = json.loads(io.open(c, encoding="utf-8",
-                                 errors="replace").readline())
+        c = source(os.path.join(a.racine, j))
+        rec = json.loads(ouvre(c).readline())
         cols = entete()
         vals = ligne_csv(rec)
         print("journee %s, premier cycle" % j)
@@ -230,9 +262,15 @@ def main():
         os.makedirs(a.sortie)
 
     print("%d journee(s) a traiter." % len(jours))
-    print("Une passe complete lit environ %.1f Go."
-          % (sum(os.path.getsize(os.path.join(a.racine, j, "cycles.jsonl"))
-                 for j in jours) / 1e9))
+    poids = sum(os.path.getsize(source(os.path.join(a.racine, j)))
+                for j in jours)
+    gz = sum(1 for j in jours
+             if source(os.path.join(a.racine, j)).endswith(".gz"))
+    print("Une passe complete lit %.1f Go sur disque (%d journee(s)"
+          " compressee(s))." % (poids / 1e9, gz))
+    if gz:
+        print("Les .gz se decompressent a la volee : compter environ")
+        print("trois a quatre fois ce poids en donnees lues.")
     print()
     total_l = total_c = 0
     t0 = time.time()
@@ -242,8 +280,10 @@ def main():
             print("  %s : deja extrait (%d octets), saute."
                   % (j, os.path.getsize(dest)))
             continue
-        src = os.path.join(a.racine, j, "cycles.jsonl")
-        print("  %s : %.2f Go ..." % (j, os.path.getsize(src) / 1e9))
+        src = source(os.path.join(a.racine, j))
+        print("  %s : %.2f Go%s ..."
+              % (j, os.path.getsize(src) / 1e9,
+                 " compresse" if src.endswith(".gz") else ""))
         lus, casses, sec = une_journee(src, dest, a.chaque)
         total_l += lus
         total_c += casses
