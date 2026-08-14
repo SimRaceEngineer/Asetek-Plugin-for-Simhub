@@ -1651,6 +1651,110 @@ pour être vu.
 
 ---
 
+## H24 — Séance US, gap M1 plat, pas de consensus, flux propre
+
+Écrite le 15/08/2026 à 00:20, **après** avoir vu le chiffre. C'est la
+première hypothèse d'ENTRÉE depuis H21 ; les trois précédentes
+disaient quand s'abstenir.
+
+### Ce qu'on a vu
+
+Carte des profils, côté **DEPUIS** la cassure, séance US, rails
+indifférent, actif TOUS — 613 signaux dans la page, référence de
+période **−5,46 €/signal** :
+
+```
+ut M1   gap indiff / consensus PAS ALIGNE / churn CLEAN
+        n = 92    moyenne +20,2    ecart +25,66    t = +4,11
+```
+
+C'est la case la plus verte de la page et elle est **mesurable** :
+92 signaux, bien au-dessus des 54 requis pour qu'un `t` veuille dire
+quelque chose.
+
+### L'énoncé
+
+**Un signal entré en séance US, dont le gap HLC M1 n'est ni en
+expansion ni en contraction (`indiff`), dont le consensus M1 n'est pas
+aligné, et dont le churn est `CLEAN`, bat la référence de sa propre
+période.**
+
+Lecture possible — et elle n'est qu'une histoire : marché ouvert, pas
+de direction commune entre les trois indices, géométrie propre. Le
+coup se jouerait sur un décrochage relatif plutôt que sur un mouvement
+d'ensemble. **Cette explication ne fait pas partie de l'hypothèse** et
+ne doit jamais servir à la sauver si le test échoue.
+
+### L'avertissement principal : M1 est le maximum de quatre
+
+La même cellule, sur les quatre unités de temps, porte les **mêmes
+signaux repartitionnés** :
+
+| ut | n | moyenne | t |
+|---|---|---|---|
+| **M1** | 92 | **+20,2** | +4,11 |
+| M3 | 85 | +8,6 | +2,17 |
+| M5 | 76 | +4,5 | +1,45 |
+| M15 | 85 | +14,5 | +3,06 |
+
+M1 n'a pas été choisie pour une raison théorique : **c'est la plus
+haute des quatre**. Une hypothèse bâtie sur le maximum d'un jeu de
+vues du même échantillon est le cas d'école du sur-ajustement. Si M1
+échoue sur données neuves, il sera interdit de se rabattre sur M15 —
+ce serait refaire le même choix une seconde fois.
+
+Le fait que les quatre soient positives est en revanche informatif :
+la famille `PAS ALIGNE + CLEAN` penche du bon côté partout, entre
++4,5 et +20,2. C'est la seule chose que ce tableau démontre.
+
+### Le critère de falsification, et sa date
+
+σ ≈ 60 €, écart mesuré e = 25,66 €, règle du §0 `n > (z·σ/e)²` :
+
+- **z = 1,96** — comparaison annoncée d'avance et seule : **n > 22**.
+  Ce chiffre est écrit pour mémoire ; il ne s'applique pas ici.
+- **z = 4,74** — le seuil de Bonferroni des 23 040 cellules énumérées
+  pour la trouver, majoré par le choix de M1 parmi quatre :
+  **n > 123**. **C'est celui qui compte.**
+
+À ~11,5 signaux de ce profil par séance (92 sur 8 séances depuis le
+5 août), les 123 signaux **neufs** sont atteints en **environ onze
+séances, soit autour du 1er septembre 2026**.
+
+**H24 est fausse si**, sur ≥ 123 signaux de ce profil postérieurs au
+15/08, l'écart à la référence de la même période est ≤ 0, ou si son
+intervalle de confiance à 95 % contient 0.
+
+### Ce qui la rendrait vraie par construction
+
+**La cousine instable.** `WIDENING / PAS ALIGNE / CLEAN` en M1 affiche
+**+42,5 sur 42 signaux** — deux fois l'écart, moins de la moitié de
+l'effectif, et sous la barre des 54. C'est la même idée dans sa
+version invérifiable. Elle est **exclue d'avance** : si H24 échoue, on
+ne la remplace pas par sa cousine.
+
+**Changer d'unité de temps.** Interdit, voir ci-dessus.
+
+**Compter les jumeaux deux fois.** Les magic 206/207 sont fusionnés en
+un signal par `signaux()`. Un comptage par ticket gonflerait n de
+~50 % et ferait passer le seuil sans qu'aucune information nouvelle
+n'arrive.
+
+**Oublier que la référence est négative.** +20,2 est un niveau, pas un
+écart : la période perd 5,46 € par signal. Ici, pour une fois, la
+cellule est franchement positive en niveau — c'est ce qui la distingue
+de H22 et H23, qui ne parlent que de moindre perte.
+
+### Ce que H24 n'autorise pas
+
+Elle ne dit rien du sens, ni de la taille, ni de la sortie, et
+**n'autorise aucun changement de paramètre pendant le gel**. Elle
+n'entre en concurrence avec aucune abstention : H22 et H23 restent
+au-dessus d'elle dans l'ordre de décision. Une entrée qu'une
+abstention interdit reste interdite.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
