@@ -291,6 +291,27 @@ il ne l'a pas été — au lieu d'un nombre choisi au jugé.
 jusqu'à la condition ou jusqu'à l'échec, et on dit lequel des deux est
 arrivé.
 
+**Et la vraie erreur était en amont, vue seulement à 23:23.** J'ai
+écrit trois redémarrages manuels d'un service **qui a un
+superviseur**. Il le relance tout seul dans les secondes qui suivent
+l'arrêt. Les trois fois, j'ai perdu la course :
+
+```
+23:23:03  arret de pid 11752
+23:23:05  apres 2 s : libre        <- ma boucle, corrigée, dit vrai
+23:23:05  mon lancement demarre
+23:23:06  [PA-PANEL] port-token 18095 deja tenu -> EXIT (anti multi-bind)
+```
+
+La boucle corrigée n'y pouvait rien : entre le constat et le bind, le
+superviseur avait repris la main. **La garde du panneau a tenu à chaque
+fois** — c'est elle qui a évité deux panneaux sur un port, pas moi.
+
+**La règle.** Avant de relancer quoi que ce soit sur cette machine,
+chercher qui le supervise. Un service supervisé s'arrête, il ne se
+relance pas : on attend son retour et on vérifie que **le pid a
+changé**. Écrit dans `NOTES_panneaux.md`, procédure en deux temps.
+
 ---
 
 ## 14/08/2026 23:08 — une route sans bouton

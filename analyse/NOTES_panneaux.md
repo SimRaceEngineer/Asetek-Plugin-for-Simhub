@@ -159,13 +159,28 @@ Route et bouton ne prennent effet qu'au prochain démarrage de
 elle, `_run_trading` est vrai et de vrais ordres partent.
 
 Arrêter **par pid**, jamais `Stop-Process -Name python` — ça tuerait
-les traders. Et attendre que **8095 *et* 18095** soient rendus : 18095
-est le jeton anti multi-bind, et une relance trop rapide sort sur
-`EXIT (anti multi-bind)`.
+les traders.
 
-Sur cette machine un superviseur peut relancer le panneau tout seul
-dans les secondes qui suivent l'arrêt — vérifier le pid avant de
-conclure qu'il est tombé.
+**Et ne pas relancer.** Le panneau a un superviseur sur cette machine :
+il le redémarre tout seul dans les secondes qui suivent l'arrêt. La
+procédure est donc en deux temps, pas en trois :
+
+1. arrêter par pid ;
+2. attendre que le port 8095 réapparaisse, et vérifier que le **pid a
+   changé**.
+
+Constaté trois fois le 14/08, dont une où la course a été perdue à la
+seconde près : arrêt de 11752 à 23:23:03, ports libres à 23:23:05,
+lancement manuel démarré dans la foulée — et à 23:23:06 il sortait sur
+`[PA-PANEL] port-token 18095 deja tenu -> EXIT (anti multi-bind)`,
+parce que le superviseur avait déjà repris la main entre les deux.
+
+18095 est ce jeton anti multi-bind. Il est tenu par le même processus
+que 8095 ; c'est lui qui empêche deux panneaux de se disputer le port,
+et c'est lui qui fait sortir toute relance manuelle arrivée trop tard.
+
+Un lancement manuel n'est légitime que si le port **ne revient pas**.
+Et alors, jamais sans `PA_ROLE=panel` sur la même ligne.
 
 ---
 
