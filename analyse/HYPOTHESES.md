@@ -869,8 +869,32 @@ tickets quand la latence monte. La troncature mécanique est réelle.
 638 tickets qui pèsent 67 observations. Visible dans la section A
 avant même de lire les résultats.
 
-**Statut : réfutée. Troisième test pré-enregistré mort en une
-commande, compteur inchangé.**
+**CONTRE-TEST du 14/08 15:30, sur objection de l'utilisateur.** La
+section B regroupait tous les rangs ≥ 2 — un sac dominé par les rangs
+5-9 et 10+, les mauvais. Objection juste : un effet dans la zone qui
+paie y était noyé par construction. Restreint aux rangs 2-4 :
+
+```
+0-2 min   n=38   -9.18 ?     10-20 min  n=46   -4.01 ?
+2-5 min   n=25  -10.54 ?     20-40 min  n=31   -2.34 ?
+5-10 min  n=33   +0.24 ?     40 min +   n=13  -16.98 ?
+```
+
+Toujours aucun ordre, et la latence la **plus courte** est parmi les
+pires. Toutes les cellules sous 54.
+
+**Mais le contre-test a produit un résultat inattendu et important :**
+total des rangs 2-4 post-05/08 = **−1 082 € sur 186 tickets, soit
+−5,82 €/tk**. **Depuis le 5 août, le sweet spot perd aussi.** Le
++10,47 / +8,88 des rangs 3-4 était un effet de fenêtre complète, donc
+d'avant la coupure.
+
+Il ne survit que dans les épisodes pauvres et moyens — `taille 5-9 :
+rang 3 +17,00, rang 4 +12,84` contre `taille 10-19 : rang 3 −11,29`.
+**Ce n'est pas le rang qui sauve, c'est l'épisode.** H14, encore.
+
+**Statut : réfutée, y compris sur le sous-groupe ciblé. Troisième test
+pré-enregistré mort en une commande, compteur inchangé.**
 
 ---
 
