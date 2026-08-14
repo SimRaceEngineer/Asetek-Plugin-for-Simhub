@@ -293,6 +293,42 @@ arrivé.
 
 ---
 
+## 14/08/2026 23:08 — une route sans bouton
+
+**Ce que j'ai fait.** Ajouté la route `/profils` au panneau, annoncé
+que la carte était « sur le 8095 », et livré une adresse à taper à la
+main. Aucun bouton dans la barre.
+
+**Le raisonnement faux.** J'ai traité « servir une page » et « rendre
+une page accessible » comme la même tâche. Sur ce panneau ce sont deux
+choses : la route répond, le bouton la rend trouvable — et un panneau
+qu'il faut savoir nommer pour l'atteindre n'existe pas.
+
+**Le rappel de l'utilisateur.** « Un panel = un bouton pour y accéder,
+et c'est toujours pareil, ne perdons plus de temps à refaire dix fois
+les choses. »
+
+**Ce que j'aurais dû lire avant d'écrire.** La convention était déjà
+dans le fichier, en trois lignes :
+
+```
+onclick="showTab('x60onset')"                  color:#3fb950   onglet interne
+onclick="window.open('/rails_cycle','_blank')" color:#58a6ff   route servie
+```
+
+**Le correctif.** Le bouton, sur le modèle exact de la ligne 4361 —
+`window.open` et bleu, puisque c'est une route et non un onglet. Et
+`NOTES_panneaux.md`, qui décrit la convention une fois pour toutes :
+les deux façons d'ouvrir, le code couleur, l'endroit où s'insère un
+bouton.
+
+**La règle.** **Un panneau = une route + un bouton.** Livrer l'un sans
+l'autre n'est pas la moitié du travail, c'est zéro. Et avant d'ajouter
+quoi que ce soit à une interface existante, inventorier la convention
+qui s'y trouve déjà plutôt que d'en inventer une.
+
+---
+
 ## 14/08/2026 — deux commandes de diagnostic mal écrites
 
 **La première** interrogeait les connexions du port 8095 sans filtrer
