@@ -796,6 +796,62 @@ pré-enregistrement doit produire.**
 
 ---
 
+## H16 — Un départ qui tarde est un faux départ
+
+**ÉCRITE LE 14/08 À 15:45, AVANT QUE LE SCRIPT TOURNE.** Déclarée
+d'avance, elle n'entre pas dans le compteur du §0 : le seuil reste
+z ≈ 2,9 et H14, déjà à t = 2,5, n'est pas pénalisée par cette
+recherche. C'est la deuxième fois qu'on paie zéro pour explorer.
+
+**D'où elle vient.** H15 est réfutée — le débit précoce ne porte rien.
+Mais sa section B laissait voir autre chose :
+
+```
+0 entree pendant le guet   n=304   -8.71
+2-3 entrees                n=278   -4.63
+```
+
+Le **pire** camp est celui qui n'a rien produit dans les dix premières
+minutes. Pas une histoire de débit : une histoire de **latence**. Un
+allumage qui met longtemps à entraîner une entrée n'a entraîné
+personne, et ce qui vient ensuite arrive sur un départ déjà mort.
+
+Ça recoupe la bande 30-60 min de x05 à −26,58 — pire que pas de
+couverture du tout.
+
+**Prédiction.** Plus la première entrée d'un épisode tarde, plus les
+suivantes sont mauvaises. Le camp `latence ≥ 20 min` sera nettement
+sous le camp `latence < 5 min`.
+
+**Pourquoi c'est causal.** La latence du premier ticket est connue à
+la seconde où ce ticket s'ouvre. On juge donc les tickets de **rang
+≥ 2**. Le rang 1 est inévitable — c'est lui qui révèle la latence — et
+sert de témoin en section C.
+
+**Ce qui la tue.** Pas d'ordre monotone entre les tranches, ou un
+écart déjà entièrement présent sur le rang 1 (témoin) : la règle
+constaterait un état sans rien éviter.
+
+**Ce qui la rendrait vraie par construction — trois pièges.**
+
+1. **Troncature mécanique.** Un épisode dont le premier ticket arrive
+   à la minute 40 a moins de temps restant dans la portée. S'il a
+   simplement moins de tickets après, on mesure une troncature. La
+   section E affiche `suite médiane` par tranche. *(Sur le jeu de test
+   à données aléatoires, cette médiane tombe déjà de 3,0 à 1,0 tickets
+   quand la latence monte — le piège est réel et pas théorique.)*
+2. **Biais de composition.** Un épisode à un seul ticket ne contribue
+   pas à la section B. Or ce sont les meilleurs selon H14. Le camp
+   jugé est donc biaisé vers les épisodes longs, c'est-à-dire vers les
+   mauvais.
+3. **Unité.** L'épisode, pas le ticket. 300 tickets sur 25 épisodes
+   valent 25 observations.
+
+**Statut : test pré-enregistré, non lancé au moment où ces lignes sont
+écrites.**
+
+---
+
 ## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
 
 - **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
