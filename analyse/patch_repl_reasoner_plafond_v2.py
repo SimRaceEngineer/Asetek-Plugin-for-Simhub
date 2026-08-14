@@ -2,10 +2,32 @@
 """
 patch_repl_reasoner_plafond.py -- le 8000 qui rendait des reponses vides
 
-  python patch_repl_reasoner_plafond.py --essai
-  python patch_repl_reasoner_plafond.py
-  python patch_repl_reasoner_plafond.py --jetons 60000
-  python patch_repl_reasoner_plafond.py --jetons 8000      (marche arriere)
+  python patch_repl_reasoner_plafond_v2.py --essai
+  python patch_repl_reasoner_plafond_v2.py
+  python patch_repl_reasoner_plafond_v2.py --jetons 60000
+  python patch_repl_reasoner_plafond_v2.py --jetons 8000      (marche arriere)
+
+V2 -- ET POURQUOI IL Y EN A UNE
+
+    La v1 deposee a 19:17 A FAIT TOMBER LA PAGE :
+
+        repl_web error: name '_os' is not defined
+
+    Elle cherchait sous quel nom os etait importe pour ecrire
+    `os.environ` ou `_os.environ` en consequence, et elle utilisait
+    ast.walk -- qui descend DANS les fonctions. Elle a trouve
+    `import os as _os` A L INTERIEUR de _ensure_init() et en a conclu
+    que _os existait au niveau module. Il n y existe pas.
+
+    Le controle etait juste dans son intention et faux dans sa
+    portee : il verifiait que os etait importe QUELQUE PART, pas LA
+    OU J ECRIS.
+
+    Ici la fonction generee importe os elle-meme (`import os as _o`),
+    donc il n y a plus rien a deviner. Verifie sur les trois cas :
+    os au niveau module, os dans une fonction seulement, os absent.
+
+    NE PAS UTILISER LE FICHIER DE 19:17. C est celui-la qui a casse.
 
 CE QUI S EST PASSE, LE 14/08 A 21:10
 
