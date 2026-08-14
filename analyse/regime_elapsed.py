@@ -83,7 +83,7 @@ import io
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 RH = os.path.join("logs", "regime_history.jsonl")
 TR = os.path.join("docs", "rails_trades", "tickets_rails.jsonl")
@@ -145,11 +145,56 @@ def lignes(chemin):
 
 # ----------------------------------------------------------------- regimes
 
+def ecart_ts_iso(brut):
+    """L horodatage epoch et l horodatage texte du MEME enregistrement
+    ne designent pas le meme instant.
+
+    Mesure sur le 28/07 :  ts = 1785278706 -> 22:45:06 UTC
+                           iso = "2026-07-28 21:45:07"
+    Une heure d ecart, dans le meme dict.
+
+    L explication la plus probable : `ts` est l heure du serveur du
+    courtier (souvent UTC+3 l ete) prise pour un epoch, tandis que
+    `iso` est l heure locale de la machine (Paris, UTC+2). Ecart
+    exactement une heure en ete.
+
+    Ca n a rien d anodin : une heure, c est precisement l echelle des
+    effets de seance qu on etudie. Quelqu un qui joindrait les tickets
+    sur `ts` decalerait tout l echantillon d une heure et fabriquerait
+    -- ou effacerait -- un effet de seance sans que rien ne le signale.
+
+    D ou la regle tenue par ce script : on joint iso <-> entry_ts, deux
+    horodatages texte sur la MEME horloge. On ne touche jamais a `ts`.
+    Cette fonction ne sert qu a mesurer l ecart et a le dire.
+    """
+    for d in brut[:200]:
+        e = _nombre(d.get("ts"))
+        t = _dt(d.get("iso"))
+        if e is None or t is None:
+            continue
+        try:
+            # Pas utcfromtimestamp : deprecie depuis 3.12, et la stack
+            # tourne sous 3.14.
+            u = datetime.fromtimestamp(e, timezone.utc).replace(tzinfo=None)
+        except (ValueError, OSError, OverflowError):
+            continue
+        return (u - t).total_seconds()
+    return None
+
+
 def charger_regimes(chemin):
     """[(datetime, actif, dict)] trie, par actif."""
     brut = lignes(chemin)
     if brut is None:
         return None, "introuvable"
+    ec = ecart_ts_iso(brut)
+    if ec is not None and abs(ec) > 60:
+        print("  AVIS : dans le meme enregistrement, `ts` et `iso` sont")
+        print("  decales de %.0f s (%.1f h). Ce script joint sur `iso`,"
+              % (ec, ec / 3600.0))
+        print("  qui est sur la meme horloge que `entry_ts`. Ne JAMAIS")
+        print("  joindre sur `ts` : une heure de decalage, c est l echelle")
+        print("  exacte des effets de seance qu on cherche a mesurer.")
     par_actif = collections.defaultdict(list)
     for d in brut:
         t = _dt(d.get("iso"))
@@ -394,6 +439,8 @@ def main():
     par_bande = collections.defaultdict(list)
     par_type = collections.defaultdict(list)
     par_setup_tranche = collections.defaultdict(list)
+    rendu = collections.defaultdict(list)      # mfe - final, par setup
+    par_motif = collections.defaultdict(list)  # close_reason
     ecarts = []
     sans_regime = sans_date = sans_pnl = 0
 
@@ -428,6 +475,19 @@ def main():
         ba = bande_de(position_range(r))
         if ba:
             par_bande[ba].append(v)
+
+        # "si on sortait avant" : combien du sommet a ete rendu.
+        # mfe_eur est le meilleur latent atteint ; v est le resultat
+        # final. L ecart est ce qu on aurait garde en sortant au pic --
+        # sortie qu AUCUNE regle ne sait viser, ce qui est dit sous le
+        # tableau plutot que sous-entendu.
+        mfe = _nombre(d.get("mfe_eur"))
+        if mfe is not None:
+            s2 = setup_de(d.get("magic"))
+            rendu["x%s" % s2 if s2 else "hors setup"].append(mfe - v)
+        mo = d.get("close_reason")
+        if isinstance(mo, str) and mo:
+            par_motif[mo].append(v)
 
     retenus = len(ecarts)
     print()
@@ -480,6 +540,35 @@ def main():
             vals = par_setup_tranche.get((s, o)) or []
             print("    %-24s %s" % (o, cellule(vals, nm)))
     print("  " + "-" * 62)
+
+    if par_motif:
+        tableau("Par MOTIF DE CLOTURE  (close_reason)",
+                par_motif, sorted(par_motif, key=lambda k: -len(par_motif[k])),
+                nm)
+
+    if rendu:
+        print()
+        print("SI ON SORTAIT AVANT -- ecart entre le meilleur latent")
+        print("atteint (mfe_eur) et le resultat final, par setup")
+        print("  " + "-" * 62)
+        print("  %-26s %8s %5s  %10s" % ("", "rendu/tk", "n", "total rendu"))
+        for s in sorted(rendu, key=lambda k: -len(rendu[k])):
+            vals = rendu[s]
+            n = len(vals)
+            tot = sum(vals)
+            marque = "?" if n < nm else " "
+            print("  %-26s %+8.2f %5d%s %+10.2f"
+                  % (s, tot / n, n, marque, tot))
+        print("  " + "-" * 62)
+        print("  Ce que ce tableau N EST PAS : un gain disponible. Sortir")
+        print("  au pic suppose de connaitre le pic, et AUCUNE regle ne")
+        print("  sait le viser -- c est la definition meme d un chiffre")
+        print("  garanti par sa methode de calcul. Il mesure une chose et")
+        print("  une seule : de combien la sortie actuelle s ecarte du")
+        print("  meilleur moment, et si cet ecart differe entre setups.")
+        print("  Le rapprocher de H1 : sur les mesures faites jusqu ici,")
+        print("  tout TP fixe visant a capturer ce rendu est ressorti")
+        print("  NEGATIF, a tous les niveaux et sur les trois actifs.")
 
     print()
     print("`?` = moins de %d tickets. Le seuil vient du paragraphe 0 de"
