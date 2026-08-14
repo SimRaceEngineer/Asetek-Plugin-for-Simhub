@@ -1755,6 +1755,162 @@ abstention interdit reste interdite.
 
 ---
 
+## H25 — Flux propre, gap M1 en expansion, pas de consensus
+
+Écrite le 15/08/2026 à 00:30, **après** avoir vu le chiffre. C'est la
+**seule ligne postérieure au 5 août** qui passe son seuil sur la carte
+complète — et elle le passe de 0,01.
+
+### Ce qu'on a vu
+
+Carte des profils sur les quatre unités de temps, actif TOUS,
+5 400 cellules énumérées, seuil de Bonferroni **|t| ≥ 4,44** :
+
+```
+DEPUIS  ut M1   CLEAN + WIDENING + PASALIGNE
+        n = 69   moyenne +26,72   ecart +32,18   t = +4,45
+```
+
+Sur treize lignes qui franchissent le seuil, **douze sont antérieures
+au 5 août**. Celle-ci est la treizième, et la seule d'après.
+
+### L'énoncé
+
+**Un signal dont le churn est `CLEAN`, dont le gap HLC M1 est en
+`WIDENING` et dont le consensus M1 n'est pas aligné bat la référence
+de sa propre période.**
+
+Ni séance, ni rails : profondeur 3, et aucune contrainte d'horaire.
+
+### Pourquoi « passer le seuil » ne veut presque rien dire ici
+
+**Passer le seuil et avoir l'effectif requis sont la même phrase.** À
+σ = 60 et e = 32,18, la règle du §0 avec z = 4,44 exige
+`n > (4,44 × 60 / 32,18)² = 69`. La cellule en a **69**. Le `t` de
+4,45 ne dit rien de plus que « n est arrivé pile au chiffre requis ».
+
+**Et le verdict dépend d'une constante estimée.** σ ≈ 60 € est une
+estimation, pas une mesure. Avec σ = 62, le même écart donne
+t = 4,31 : la ligne ne passe plus. Une conclusion qui bascule sur la
+deuxième décimale d'un paramètre supposé n'est pas une conclusion.
+
+**C'est le maximum de 5 400 cellules.** Le seuil de Bonferroni corrige
+précisément ce fait, et il est franchi de 0,01. Autant dire qu'il ne
+l'est pas.
+
+### Le critère de falsification, et sa date
+
+- **z = 1,96**, annoncée d'avance et seule : **n > 14**. Écrit pour
+  mémoire ; trop peu pour qu'on s'y fie.
+- **z = 4,44**, le seuil d'énumération : **n > 69**. C'est celui qu'on
+  retient, parce qu'on ne peut pas faire semblant de ne pas avoir
+  regardé 5 400 cases.
+
+À ~8,6 signaux de ce profil par séance (69 sur 8 séances), les 69
+signaux **neufs** sont atteints en **huit séances, soit autour du
+26 août 2026** — la même échéance que H23.
+
+**H25 est fausse si**, sur ≥ 69 signaux de ce profil postérieurs au
+15/08, l'écart à la référence de la même période est ≤ 0, ou si son
+intervalle de confiance à 95 % contient 0.
+
+### Ce qui la rendrait vraie par construction
+
+**Elle est encore un maximum de quatre unités de temps.** La même
+famille donne, sur les mêmes signaux repartitionnés : M15 → n=75,
+écart +21,90, t=3,16 ; M5 → n=77, +12,92, t=1,89. M1 est la plus
+haute des trois mesurables. Si M1 échoue, se rabattre sur M15 est
+interdit.
+
+**Elle chevauche H24.** `US + CLEAN + PASALIGNE` (H24, n=92) et
+`CLEAN + WIDENING + PASALIGNE` (H25, n=69) partagent une partie de
+leurs signaux : ce ne sont pas deux tests indépendants. Si les deux
+passent, ça ne fait pas deux confirmations — c'est la même famille
+`CLEAN + PASALIGNE` vue sous deux angles.
+
+**Compter les jumeaux deux fois** gonflerait n de ~50 % et ferait
+franchir le seuil à ce qui ne le franchit pas.
+
+---
+
+## H26 — Pas de consensus M15 : le revers de H22, et rien de plus
+
+Écrite le 15/08/2026 à 00:30. **Cette hypothèse n'apporte aucune
+information nouvelle par rapport à H22.** Elle est écrite pour que ce
+fait soit consigné plutôt que redécouvert.
+
+### Ce qu'on a vu
+
+```
+DEPUIS  ut M15   PASALIGNE seul
+        n = 704   moyenne +1,27   ecart +6,73   t = +2,98
+```
+
+704 signaux : **43 % de toute l'activité post-cassure**, à profondeur
+1, sans aucun empilement. C'est le point de la frontière qui offre le
+plus grand effectif au-dessus de sa référence.
+
+### Pourquoi ce n'est PAS une découverte
+
+`M15 ALIGNE` et `M15 PAS ALIGNE` **partitionnent l'échantillon** :
+941 + 704 = 1 645, la totalité des signaux post-cassure. Leurs écarts
+à la moyenne commune sont donc de signes opposés **par arithmétique**,
+pas par observation.
+
+H22 dit : `M15 ALIGNE` fait −5,04 sous la référence sur 941 signaux.
+H26 dit : le complément fait +6,73 au-dessus sur 704. **C'est la même
+mesure, écrite deux fois.** Le contrefactuel calculé pour H22 le
+montrait déjà : retirer les 941 alignés laissait 704 signaux à
++1,26 €/signal — exactement la moyenne de H26 à un centime près.
+
+**Conséquence : H26 ne compte pas comme une seconde confirmation de
+H22, et H22 ne compte pas comme une confirmation de H26.** Si les deux
+sont « validées » le même jour, une seule chose aura été démontrée.
+
+### À quoi elle sert quand même
+
+À changer de **rôle**. H22 est une règle d'abstention : elle dit de ne
+pas entrer sur 57 % des signaux. H26 est la même chose formulée comme
+règle d'entrée : elle dit ce qui reste, et sur quel effectif. Les deux
+lectures n'ont pas la même conséquence opérationnelle, et c'est la
+seule raison d'écrire les deux.
+
+### Le critère de falsification, et sa date — la plus proche du dossier
+
+σ ≈ 60, e = 6,73 :
+
+- **z = 1,96**, annoncée d'avance : **n > 305**.
+- **z = 4,44**, seuil d'énumération : **n > 1 567**.
+
+Comme H22 porte déjà la même mesure et qu'elle a été pré-enregistrée
+le 14/08 à 21:30 **avant** que la question soit tranchable, c'est le
+seuil annoncé d'avance qui s'applique : **305 signaux neufs**.
+
+À ~88 signaux `M15 PAS ALIGNE` par séance (704 sur 8), les 305 sont
+atteints en **environ trois séances et demie, soit autour du
+20 août 2026**. C'est la première échéance du dossier, avant H22 le
+18 — dont elle est le revers — et avant H23 le 26.
+
+**H26 est fausse si**, sur ≥ 305 signaux `M15 PAS ALIGNE` postérieurs
+au 15/08, l'écart à la référence de la même période est ≤ 0.
+
+### Ce qui la rendrait vraie par construction
+
+**Lire H22 et H26 comme deux résultats.** C'est le piège principal, et
+il est écrit en tête de cette entrée.
+
+**Oublier que +1,27 est un niveau proche de zéro.** La référence perd
+5,46 € par signal ; s'abstenir sur les alignés ramène le reste à
+**+1,27**, pas à un gain franc. Sur 704 signaux, c'est une activité
+qui cesse de coûter, pas une activité qui rapporte. Le dire autrement
+serait mentir sur l'ordre de grandeur.
+
+**`ALIGNED_BULL` et `ALIGNED_BEAR` doivent être lus séparément**, ici
+comme dans H22 : si l'effet ne vient que d'un camp directionnel, il ne
+survivra pas à un marché qui change de sens.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
