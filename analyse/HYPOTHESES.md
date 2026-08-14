@@ -753,8 +753,46 @@ fin.
 épisodes en tout. Un n de 400 tickets répartis sur 20 épisodes vaut 20
 observations, pas 400.
 
-**Statut : test pré-enregistré, non lancé au moment où ces lignes sont
-écrites.**
+### VERDICT du 14/08 — RÉFUTÉE, sur données post-05/08
+
+```
+0 pendant le guet   n=304   -8.71   -2647.74
+2-3 entrees         n=278   -4.63   -1287.05
+1 entree            n= 18  +10.87    +195.68  ?
+4-6 entrees         n= 19   -3.49     -66.26  ?
+```
+
+La prédiction était : fort débit précoce → épisode riche → mauvais.
+**L'ordre est inverse** — le pire camp est celui sans aucune entrée
+pendant le guet. Et l'écart entre les deux gros camps (4,08 €) a un
+**t de 0,82** : pas d'inversion démontrée non plus. **Le débit précoce
+ne porte aucune information utilisable, dans un sens ni dans l'autre.**
+
+Aucun seuil de refus ne produit un camp gardé positif, et le seuil à 3
+refuse le seul camp positif du tableau (`garde −4 359 / refuse +553`).
+
+**Pourquoi ça ne pouvait pas marcher (section A).** Il y a un peu de
+séparation — 71 % des épisodes à 2-3 entrées précoces finissent
+riches, contre 41 % de ceux à zéro — mais la catégorie décisive
+n'existe pas : **3 épisodes à 4-6 entrées, aucun à 7 et plus.** Les
+épisodes riches le deviennent lentement, pas d'un coup.
+
+Le contrôle E passe (durées 91/102/94 min, allumages 1,9/2,0/1,7) : ce
+n'est ni la durée ni les allumages. Il ne sert simplement à rien,
+faute d'effet à contrôler.
+
+**Conséquence pour H14 : le plafond à quatre reste une règle d'ARRÊT,
+et rien d'autre. On ne sait pas refuser un épisode riche à l'avance.**
+
+**Piste ouverte, NON exploitée.** Le camp le plus mauvais est celui
+dont la première entrée arrive tard : ce serait la **latence** du
+premier ticket, pas le débit. Variable différente, **treizième
+découpe** — elle monterait le seuil pour toutes les autres. À décider
+froidement, pas dans la foulée d'un résultat.
+
+**Statut : réfutée. Écrite avant d'être lancée, morte en une commande,
+sans que rien n'ait été construit dessus. C'est exactement ce que le
+pré-enregistrement doit produire.**
 
 ---
 
