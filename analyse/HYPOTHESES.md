@@ -704,6 +704,60 @@ l'effectif tient à l'unité correcte.**
 
 ---
 
+## H15 — La richesse se voit dans les dix premières minutes
+
+**ÉCRITE LE 14/08 À 15:10, AVANT QUE LE SCRIPT TOURNE.** C'est le
+point : annoncée d'avance, elle n'alourdit pas le compteur du §0. Le
+seuil reste z ≈ 2,9.
+
+**Prédiction.** Le nombre d'entrées produites dans les **dix premières
+minutes** d'un épisode prédit sa taille finale, et donc son résultat.
+Un épisode qui déclenche quatre fois avant la dixième minute finira
+riche et perdant.
+
+**Pourquoi ça compte.** H14 est établie mais **manchote** : la taille
+finale n'est pas connue au moment d'entrer, donc elle ne permet que de
+s'*arrêter* (compter jusqu'à quatre), jamais de *refuser*. Si le débit
+précoce prédit la richesse, on refuse l'épisode entier dès la dixième
+minute. C'est la différence entre tronquer une perte et ne pas la
+prendre.
+
+**Le protocole est strictement causal.** On observe les dix premières
+minutes, on décide, et **on n'évalue que les tickets ouverts après la
+dixième minute**. Aucune information postérieure à la décision n'entre
+dans le camp jugé. Si l'écart apparaît, il est exploitable tel quel —
+contrairement à H14, qui classe par une taille connue seulement à la
+fin.
+
+**Ce qui la tue.**
+- Le débit précoce ne sépare pas les tailles finales (section A) —
+  alors tout le reste est sans objet.
+- Ou l'écart existe sur les tickets **du guet** (section D, témoin)
+  aussi fort que sur les postérieurs : la règle constaterait un état
+  au lieu de l'anticiper, et n'éviterait rien.
+
+**Ce qui la rendrait vraie par construction — deux pièges.**
+
+1. **La volatilité.** Fort débit et mauvais résultat peuvent avoir la
+   même cause sans que l'un prédise l'autre. La section E contrôle
+   durée et nombre d'allumages ; elle ne peut pas contrôler
+   l'amplitude, faute de prix dans `tickets_rails`. **Ce test peut
+   donc confirmer une règle utilisable sans en donner la cause** — et
+   une règle dont on ignore la cause meurt sans prévenir quand le
+   régime change.
+2. **Zéro n'est pas faible.** Un épisode sans aucune entrée pendant le
+   guet n'a pas un débit faible : il n'a peut-être pas commencé. Il
+   est compté à part, jamais fusionné avec les faibles débits.
+
+**Rappel d'unité.** L'unité est l'**épisode**, pas le ticket : ~106
+épisodes en tout. Un n de 400 tickets répartis sur 20 épisodes vaut 20
+observations, pas 400.
+
+**Statut : test pré-enregistré, non lancé au moment où ces lignes sont
+écrites.**
+
+---
+
 ## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
 
 - **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
