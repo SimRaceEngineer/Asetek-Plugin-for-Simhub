@@ -251,6 +251,53 @@ la réfutent, l'effet de séance sera d'autant plus crédible qu'il aura
 
 ---
 
+## H8 — Ce n'est pas le range qui coûte, c'est l'entrée dans le range
+
+**Prédiction.** À l'intérieur d'un même régime range, le résultat n'est
+pas constant : les premières minutes après la bascule tendance → range
+concentrent l'essentiel de la perte, et le range installé depuis
+longtemps est proche de zéro plutôt que négatif.
+
+**D'où ça vient.** Observation du 14/08 au matin : une matinée
+« perdante en range » qui avait été gagnante pendant un temps, avec
+US30 revenu au milieu de son range pendant que les techs et le SP500
+restaient près du VAH. Le régime n'a pas changé de nom pendant que le
+résultat changeait de signe.
+
+**Pourquoi c'est différent de H3 et H4.** H3 découpe par heure, H4 par
+étiquette de régime. Les deux supposent que l'étiquette est stable sur
+sa durée. Si la perte est concentrée à la **bascule**, ni l'heure ni
+l'étiquette ne la voient : elles la diluent sur toute la plage. C'est
+exactement le mécanisme qui rend une moyenne horaire négative sans
+qu'aucune heure ne soit mauvaise.
+
+**Ce qui la tue.** Le PnL par ticket, tracé contre le temps écoulé
+depuis la dernière bascule de régime, reste plat. n ≥ 50 par tranche de
+temps-depuis-bascule.
+
+**Ce qui la rendrait vraie par construction.** Le classifieur de régime
+a une inertie : il étiquette « range » avec du retard. Si ce retard est
+du même ordre que la fenêtre où l'on cherche l'effet, on mesure la
+latence du classifieur et on l'appelle un effet de marché. **Il faut
+donc relever la bascule à partir du prix, pas à partir de l'étiquette.**
+
+**Ce qu'il manque pour la tester.** L'instant de bascule, et la
+position dans le range, minute par minute. Les panneaux ne le gardent
+pas : ce sont des instantanés réécrits à chaque rafraîchissement —
+artefact n°4 de la liste. En revanche, depuis le 13/08 15:37, les
+barres de l'orderflow portent `close`, `high` et `low` : **la position
+dans le range se recalcule** pour toute minute couverte par l'historique
+des barres, à condition de retenir la même définition de fenêtre (7 j
+ou 24 h) que celle affichée par les panneaux. C'est la seule voie de
+reconstruction disponible, et elle ne remonte pas avant le 13/08.
+
+**Statut : hypothèse la plus récente, et la plus prometteuse des trois
+« quand ne pas trader », parce qu'elle est la seule qui explique
+pourquoi une moyenne peut être négative sans qu'aucun moment ne soit
+franchement mauvais.**
+
+---
+
 ## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
 
 - **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
