@@ -71,6 +71,26 @@ PETIT = ("01", "02", "03", "05")
 SEUIL = 54
 FENETRES = (30, 60, 120)
 
+# Bandes DISJOINTES. Le cumule a 60 min contient les 30 premieres
+# minutes : il melange une couverture fraiche et une qui vieillit, et
+# cache donc l horizon propre a chaque unite. Les bandes le montrent.
+BANDES = ((0, 15), (15, 30), (30, 60), (60, 120), (120, 240))
+HORS = "au-dela / jamais"
+BANDES_NOM = tuple("%d-%d min" % b for b in BANDES) + (HORS,)
+
+
+def bande(secondes):
+    """Range un delai en minutes dans sa bande. None (aucun grand
+    avant) et les delais tres longs tombent dans le meme sac : dans
+    les deux cas il n y a pas de couverture utile."""
+    if secondes is None:
+        return HORS
+    m = secondes / 60.0
+    for lo, hi in BANDES:
+        if lo <= m < hi:
+            return "%d-%d min" % (lo, hi)
+    return HORS
+
 
 def setup_de(magic):
     """Meme decodeur que x60_onset et matrice_tf : 6 chiffres = arme,
@@ -172,6 +192,17 @@ def main():
             return None
         return (st, sn)
 
+    def delai(k):
+        """Secondes ecoulees depuis le dernier grand sur le meme actif,
+        sans plafond. None s il n y en a aucun avant."""
+        ar = idx.get(k["actif"])
+        if not ar:
+            return None
+        i = bisect.bisect_right(ar, (k["t"], "\xff", "\xff"))
+        if i <= 0:
+            return None
+        return (k["t"] - ar[i - 1][0]).total_seconds()
+
     def petits(depuis=None):
         for k in tickets:
             if k["setup"] not in PETIT or k["pnl"] is None:
@@ -197,6 +228,29 @@ def main():
         for s in PETIT:
             for camp in ("SANS", "AVEC"):
                 ligne("x%s  %s" % (s, camp), g.get((s, camp), []))
+
+    # ---------------------------------------------------------------
+    # B bis. Les BANDES, pas les fenetres cumulees
+    # ---------------------------------------------------------------
+    # Une fenetre de 60 min contient les 30 premieres : elle MELANGE
+    # une couverture fraiche et une couverture qui vieillit. La bande
+    # les separe, et c est la seule facon de voir que chaque unite a
+    # son horizon propre -- ce que le cumule cache par construction.
+    print()
+    print("B bis. PAR BANDE  (et non par fenetre cumulee)")
+    print("   Le cumule a 60 min contient les 30 premieres minutes :")
+    print("   il melange une couverture fraiche et une qui vieillit.")
+    print("   La bande les separe. C est ici qu on lit l horizon")
+    print("   propre a chaque unite -- et qu une couverture PERIMEE")
+    print("   peut se reveler pire que pas de couverture du tout.")
+    print("   " + "-" * 56)
+    g = collections.defaultdict(list)
+    for k in petits(a.depuis):
+        d = delai(k)
+        g[(k["setup"], bande(d))].append(k["pnl"])
+    for s in PETIT:
+        for b in BANDES_NOM:
+            ligne("x%s  %s" % (s, b), g.get((s, b), []))
 
     # ---------------------------------------------------------------
     # C. Le sens : couverture ou contradiction
