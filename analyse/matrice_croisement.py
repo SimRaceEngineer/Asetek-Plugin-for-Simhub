@@ -179,8 +179,18 @@ def seau_churn(v):
 
 
 def hlc(s, tf, champ):
+    """Le champ de trajectoire du gap s appelle `self_mom` dans les
+    donnees reelles, pas `mom` -- j avais infere le nom depuis le code
+    de rails_trades_panel.py et je me trompais. --schema l a montre
+    avant la premiere lecture. On essaie les deux plutot que d en
+    supposer un."""
     d = (s["hlc"] or {}).get(tf)
-    return d.get(champ) if isinstance(d, dict) else None
+    if not isinstance(d, dict):
+        return None
+    if champ == "mom":
+        v = d.get("self_mom")
+        return v if v is not None else d.get("mom")
+    return d.get(champ)
 
 
 # Chaque filtre : (nom court, famille, predicat). La FAMILLE est ce
