@@ -406,10 +406,64 @@ def main():
                 dis("  %-18s %-18s %6d %+9.2f %+9.2f %+9.2f %+9.2f%s"
                     % (na, nb, n, m, sa[1], sb[1], m - mieux, marque))
 
+    bloc("STABILITE DE PART ET D AUTRE DE LA CASSURE",
+         ["Une cellule qui change de signe au 5 aout n est pas une",
+          "regle : c est une propriete du regime. Le 14/08, les TREIZE",
+          "filtres etaient positifs avant et negatifs apres, sans une",
+          "exception -- et cinq croisements presentes comme des",
+          "interdits l etaient parce qu on n avait lu qu un cote.",
+          "",
+          "La colonne qui compte n est donc pas la moyenne mais l ECART",
+          "A LA REFERENCE DE SA PROPRE PERIODE, des deux cotes. Une",
+          "cellule au-dessus de sa reference avant ET apres a survecu a",
+          "un changement de regime ; les autres non."])
+    dis()
+    dis("  %-18s %-18s %9s %9s %9s"
+        % ("filtre A", "filtre B", "vs ref av", "vs ref dep", "garde"))
+    dis("  " + "-" * (18 + 18 + 3 * 9 + 6))
+    for i in range(k):
+        na, fa, pa = fl[i]
+        for j in range(i + 1, k):
+            nb, fb, pb = fl[j]
+            if fa == fb:
+                continue
+            duo = []
+            for cote in ("dep", "av"):
+                if cote == "dep":
+                    lot = [s2 for s2 in sig if s2["jour"] >= a.cassure]
+                else:
+                    lot = [s2 for s2 in sig
+                           if s2["jour"] and s2["jour"] < a.cassure]
+                if not lot:
+                    duo.append(None)
+                    continue
+                _, mref = stat([s2["pnl"] for s2 in lot])
+                n2, m2 = stat([s2["pnl"] for s2 in lot
+                               if pa(s2) and pb(s2)])
+                duo.append((n2, m2 - mref) if n2 else None)
+            dep, av = duo[0], duo[1]
+            if not dep or not av:
+                continue
+            # On n affiche que ce qui garde son signe : le reste est du
+            # regime, pas de la regle.
+            if (av[1] > 0) != (dep[1] > 0):
+                continue
+            dis("  %-18s %-18s %+9.2f %+9.2f %9s"
+                % (na, nb, av[1], dep[1],
+                   "%d/%d" % (av[0], dep[0])))
+
     bloc("COMMENT LIRE",
          ["`apport` = moyenne du croisement moins la meilleure des deux",
           "moyennes seules. Positif = le croisement ajoute quelque",
           "chose. Proche de zero = le second filtre repete le premier.",
+          "",
+          "ATTENTION AU SENS. Cette colonne est orientee pour une regle",
+          "d ENTREE : plus c est haut, mieux c est. Pour une regle d",
+          "ABSTENTION elle se lit A L ENVERS -- la cellule la plus",
+          "NEGATIVE est la meilleure candidate, puisqu on cherche ce",
+          "qu il faut eviter. Un lecteur qui construit un arbre d",
+          "interdits et lit cette colonne dans le sens de l entree",
+          "conclut exactement a l inverse de ce que la table dit.",
           "",
           "`?` = moins de %d signaux. A ce stade la valeur affichee" % a.seuil,
           "n est pas distinguable du bruit, quelle qu elle soit.",
