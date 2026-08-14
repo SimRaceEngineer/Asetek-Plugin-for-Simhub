@@ -1290,6 +1290,78 @@ attend le gel, elle n'a pas de numéro.
 
 ---
 
+## H20 — Le flux d'il y a dix minutes, connu à l'entrée
+
+**ÉCRITE LE 14/08 À 20:15, AVANT TOUTE MESURE.** Déclarée d'avance,
+elle n'entre pas dans le compteur du §0.
+
+**D'où elle vient, et pourquoi j'avais tort de l'écarter.** J'ai repris
+à mon compte la conclusion « le flux SierraChart est différé de 10 min,
+donc aucune règle d'orderflow n'est exploitable en direct ». C'est
+faux tel quel. Un flux retardé **ne supprime pas le filtre, il définit
+la variable** : à l'instant T on connaît l'état du flux à T−10, et
+cette valeur-là est parfaitement disponible en direct. La seule
+question ouverte est de savoir si un décalage de dix minutes détruit
+le contenu prédictif. Ça se mesure ; ça ne se décrète pas.
+
+**Énoncé.** L'état du flux **à T−10**, connu à T, sépare les allumages
+de grand timeframe (x10/x20/x30/x60) qui paient de ceux qui ne paient
+pas.
+
+### Le test, tel qu'il sera exécuté
+
+**La cible mesurée** est le PnL moyen de **tous les tickets entrés dans
+l'épisode** ouvert par cet allumage — c'est la décision réelle de la
+stack (« prendre ou non les entrées de cet épisode »), pas le résultat
+du grand tout seul.
+
+**L'unité est l'ÉPISODE, pas le ticket.** Au 14/08 il y a 124 épisodes.
+
+**DEUX camps, pas quatre.** 124 épisodes coupés en quartiles donnent
+~31 par cellule, sous la barre de 54 : le test serait mort-né. On coupe
+donc à la **médiane**, deux camps de ~62. Ce choix est fait ici,
+maintenant, avant d'avoir vu la moindre valeur. Les quartiles pourront
+être affichés, mais comme description et jamais comme verdict.
+
+**Prédiction.** Le camp « flux favorable à T−10 » bat le camp
+« défavorable », avec un écart dont le `t` dépasse 1,96 (comparaison
+annoncée d'avance).
+
+**Critère de réfutation.** H20 est fausse si l'écart entre les deux
+camps a un `t < 1,96`, **ou** si une cellule tombe sous 54 épisodes —
+auquel cas on écrit qu'on n'a rien mesuré, pas qu'on n'a rien trouvé.
+
+### Ce qui la rendrait vraie par construction — à vérifier AVANT
+
+**Le piège principal, et il tuerait tout : H20 pourrait n'être que H9
+déguisée.** Le flux est mauvais le matin — `CARNAGE` de 09h à 12h dans
+`panel_orderflow` — c'est-à-dire exactement hors séance US, là où H9 dit
+déjà de ne pas trader. Un test naïf trouverait donc un écart qui ne
+serait que la redécouverte de l'heure. **Le test se fera donc À
+L'INTÉRIEUR DE LA SÉANCE US SEULEMENT.** Si l'effectif n'y suffit pas,
+la conclusion à écrire est « non testable à ce stade », jamais un
+résultat obtenu en relâchant cette contrainte.
+
+**La fenêtre de flux doit se terminer STRICTEMENT avant T−10.** Si elle
+touche l'allumage, même d'une minute, on relit l'événement dans son
+propre miroir et l'effet est garanti.
+
+**L'ER de la barre qui contient l'entrée est postérieur.** Il faut la
+barre précédente CLÔTURÉE. C'est ce que `_er_prec` fournit ; on
+vérifiera dans le code que c'est bien celle-là qui est lue.
+
+**Le délai de dix minutes est une affirmation, pas une mesure.** Il faut
+le vérifier sur les horodatages du flux lui-même, pas sur l'heure
+d'écriture du fichier par la machine. Si le vrai délai est de vingt
+minutes, le test construit sur dix est faux dans le sens flatteur.
+
+**Le signe attendu est celui d'une ABSTENTION.** Comme H9 et H14, H20
+dira probablement quand ne pas entrer. Si les deux camps sont négatifs
+et que l'un l'est moins, il faut l'écrire ainsi et non l'habiller en
+signal d'entrée.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
