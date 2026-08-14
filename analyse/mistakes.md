@@ -359,6 +359,14 @@ présenté comme un bloc se colle dans un terminal.
 **La règle.** Une réponse contient **une** commande, exécutable telle
 quelle dans PowerShell. Le reste est de la prose.
 
+**Deuxième récidive, 23:19.** J'ai montré la ligne HTML 4361 dans un
+bloc de code pour la commenter. Elle a été collée dans PowerShell :
+`The term '<' is not recognized`. Un bloc de code, sur cette machine,
+**est** une commande — c'est le contrat, quelle que soit mon
+intention. Du contenu qui n'est pas exécutable se cite en ligne, ou
+dans un bloc explicitement annoncé comme « à ne pas coller ». Trois
+salves d'erreurs en une soirée pour une règle de mise en forme.
+
 **Récidive le même soir, 23:15.** Une commande de diagnostic s'est
 terminée par un `</parameter>` parasite — un fragment de mon propre
 outillage tombé dans le bloc. Elle a été collée telle quelle, et
