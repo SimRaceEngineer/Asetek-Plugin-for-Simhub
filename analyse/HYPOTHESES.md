@@ -52,9 +52,39 @@ découpe qui n'est pas listée dans ce fichier, on l'ajoute à la liste
 ci-dessous. C'est le seul garde-fou honnête contre le fait de trouver
 après coup la découpe qui gagne.
 
-    Découpes non prévues examinées :
-      - 14/08 14:00 — participation à la séance US (→ H9),
-        trouvée en cherchant H8.  Total : 1
+    Découpes non prévues examinées, journée du 14/08 :
+       1. participation à la séance US            (→ H9)
+       2. coupure du 05/08                        (→ H9 bis)
+       3. type de régime TREND/RANGE/INDETERMINATE
+       4. position dans le range de séance
+       5. bandes de délai disjointes
+       6. porteur × petit setup                   (→ H10)
+       7. sens MEME / CONTRE                      (→ H11, prédite)
+       8. rang dans l'épisode                     (→ H12, H13)
+       9. rang × délai
+      10. rang × sens
+      11. richesse d'épisode × rang               (→ H14)
+      12. setup × camp de séance
+                                              Total : 12
+
+**CONSÉQUENCE, à appliquer rétroactivement.** Douze comparaisons non
+annoncées demandent z ≈ 2,9, pas 1,96. Les t mesurés le 14/08 se
+reclassent :
+
+| résultat | t | verdict à z = 2,9 |
+|---|---|---|
+| riche vs pauvre (H14) | 4,85 | **tient** |
+| hors séance vs séance (H9) | ≫ 3,5 | **tient** |
+| porteur M10-M30 vs H1 (H10) | 4,11 | tient sur le t, **mais 1,5 séance** |
+| x02 sous couverture 60 min | 3,09 | **tient** |
+| x02 rangs 1-4 | 2,86 | **limite, ne tient pas** |
+| contre-sens rangs 1-9 (H11) | 2,82 | **limite, ne tient pas** |
+| bande 0-15 min, tous rangs | 2,57 | **ne tient pas** |
+
+Trois résultats que j'ai présentés comme acquis dans la journée
+passent sous la barre une fois le compteur tenu honnêtement. Ils ne
+sont pas faux — ils sont **non démontrés**, ce qui n'est pas la même
+chose et n'autorise aucune action.
 
 ---
 
