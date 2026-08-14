@@ -595,6 +595,85 @@ de fouille jusqu'à confirmation sur données neuves.**
 
 ---
 
+## H13 — VERDICT : réfutée, et par l'inverse
+
+Le contrôle a tourné le 14/08. **La richesse d'épisode compte, mais
+dans le sens opposé à celui que j'avais supposé.**
+
+```
+episodes a 1-4 entrees    n= 81   +25.04   +2028.09
+episodes a 5-9 entrees    n=180   +12.71   +2288.34
+episodes a 10+ entrees    n=808    -4.18   -3376.93
+```
+
+Monotone décroissant. À **rang fixé**, l'effondrement est net :
+
+```
+rang 1  taille 3-4  +21.68   |  rang 4  taille 3-4  +29.71
+rang 1  taille 5-9  +11.38   |  rang 4  taille 5-9  +16.83
+rang 1  taille 10-19 -4.46   |  rang 4  taille 10-19 +1.07
+rang 1  taille 20+  -32.32   |  rang 4  taille 20+  -15.33
+```
+
+54 € d'écart sur le rang 1, 45 € sur le rang 4. La pente du rang à
+taille fixée ne vaut que +8 à +17, et elle est **négative** dans la
+taille 5-9. **La richesse écrase le rang d'un facteur cinq.**
+
+J'avais lu une pente de rang comme une confirmation ; elle cachait un
+effet de richesse de signe opposé. Dixième instance du motif, la
+mienne.
+
+---
+
+## H14 — Un bon départ est avare
+
+**Énoncé.** Un départ réel déclenche trois ou quatre entrées puis
+laisse courir. Un moteur qui ne cesse plus de tirer signale l'absence
+de départ, pas sa force.
+
+C'est la thèse initiale de l'utilisateur — « un seul départ propre, le
+reste est du FOMO » — remise au bon niveau : le FOMO n'est pas dans le
+**rang** (dans un bon épisode les rangs 1 à 4 font +21 à +33), il est
+dans l'**épisode**.
+
+**Base.**
+
+```
+tailles 1-9   n=261   +16.54/tk   +4316   (52 episodes)
+tailles 10+   n=808    -4.18/tk   -3377   (54 episodes)
+```
+
+21 € d'écart. **Et l'échantillon tient enfin à l'unité qui compte :
+52 épisodes contre 54**, pas une séance et demie comme H10.
+
+**Le problème pratique.** La taille finale n'est pas connue au moment
+d'entrer : les rangs 1-4 des épisodes riches sont déjà négatifs et
+rien ne les signale à l'avance. Ce que le comptage permet, c'est de
+**s'arrêter** — au rang 5 on sait que quatre entrées ont eu lieu.
+Couper à quatre par épisode donnait **+2 696 € au lieu de +940 €** sur
+les tickets rattachés. C'est un compteur, il ne devine rien.
+
+**Ce qui la tue.** L'écart pauvre/riche qui s'annule sur la fenêtre du
+gel, ou qui s'inverse dès qu'on contrôle la durée.
+
+**Ce qui la rendrait vraie par construction — deux pièges ouverts.**
+
+1. **Riche ou simplement long ?** La fusion à 30 min enchaîne les
+   allumages et étire la fenêtre. Il faut séparer *taille*, *durée* et
+   *nombre d'allumages* avant d'attribuer l'effet à la densité.
+2. **Tickets corrélés.** Les `?` des cellules croisées sont mérités ;
+   seul le regroupement porte le résultat, et l'unité reste l'épisode.
+
+**Instrument suivant.** *La richesse se voit-elle tôt ?* Si un épisode
+à vingt entrées en produit six dans ses dix premières minutes, le
+débit précoce prédit la richesse — et on refuse l'épisode entier au
+lieu de le tronquer. Mesurable sur les mêmes données.
+
+**Statut : le résultat le mieux fondé du dossier, et le seul dont
+l'effectif tient à l'unité correcte.**
+
+---
+
 ## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
 
 - **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
