@@ -425,6 +425,38 @@ salves d'erreurs en une soirée pour une seule règle de mise en forme.
 
 ---
 
+## 14/08/2026 23:45 — j'ai lu une troncature comme une absence
+
+**Ce que j'ai fait.** Cherché `_DOCS_MAX` avec
+`Select-String -Path *.py ... | Select-Object -First 10`. Les dix
+lignes rendues venaient toutes de mes propres scripts de patch.
+J'en ai conclu que la constante **n'existait plus** dans
+`repl_web.py`, donc que la restauration de 21:18 avait effacé trois
+patches.
+
+**Le raisonnement faux.** Il y avait exactement dix lignes de scripts
+de patch **avant** celles de `repl_web.py`, par ordre alphabétique de
+nom de fichier. `-First 10` les a toutes consommées. Une liste tronquée
+n'est pas une liste vide, et une absence dans un extrait n'est pas une
+absence dans le fichier.
+
+**La conséquence.** Cinq allers-retours de diagnostic construits sur
+une prémisse fausse — recherche du vrai chargeur, lecture de
+`_gather_static_context`, hypothèse d'un balayage de dossier, puis
+d'une liste en dur. Tout ça pour découvrir en appliquant que
+`patch_repl_docs_v2` répondait « garde déjà posée », que `_DOCS_MAX`
+valait déjà 400 000 et que les 19 documents étaient déjà lus.
+
+Une demi-heure de la nuit de quelqu'un.
+
+**La règle.** **Une limite d'affichage n'est pas un résultat.** Quand
+une recherche sert à prouver une ABSENCE, ne jamais la tronquer :
+compter d'abord (`.Count`), et n'afficher qu'ensuite. Un `-First N` a
+sa place quand on cherche un exemple, jamais quand on conclut « ça
+n'existe pas ».
+
+---
+
 ## 14/08/2026 — deux affirmations fausses, dites avec assurance
 
 **La première.** J'ai attribué le `prompt=205719` du REPL à
