@@ -112,7 +112,7 @@ def sauver(c, t):
     print("Sauvegarde : %s" % s)
 
 
-def bloc(n, mod_os):
+def bloc(n):
     return (
         '# 14/08 21:10 : "(vide / completion=8000/8000 PLAFOND ATTEINT |\n'
         '# prompt=205719)". 130 s de raisonnement, reponse VIDE. Sur un\n'
@@ -131,17 +131,25 @@ def bloc(n, mod_os):
         "def _plafond_reasoner():\n"
         '    """Le plafond de completion du raisonneur. Variable d\n'
         "    environnement %s, defaut _REASONER_DEFAUT.\n"
+        "\n"
+        "    L import est LOCAL a dessein. Une premiere version utilisait\n"
+        "    le module os du niveau superieur ; repl_web ne l importe que\n"
+        "    DANS une fonction, et la page est tombee sur `name '_os' is\n"
+        "    not defined` au chargement. Importer ici rend la fonction\n"
+        "    independante de ce que le module contient.\n"
+        "\n"
         "    Une valeur illisible retombe sur le defaut plutot que de\n"
         '    casser la page."""\n'
+        "    import os as _o\n"
         "    try:\n"
-        '        return int(%s.environ.get("%s", _REASONER_DEFAUT))\n'
+        '        return int(_o.environ.get("%s", _REASONER_DEFAUT))\n'
         "    except (TypeError, ValueError):\n"
         "        return _REASONER_DEFAUT\n"
         "\n"
         "\n"
         'REPL_MAX_TOKENS = {"deepseek": 3000,\n'
         '                   "deepseek_reasoner": _plafond_reasoner()}'
-    ) % (n, VAR, mod_os, VAR)
+    ) % (n, VAR, VAR)
 
 
 def valeur_ast(src):
@@ -176,27 +184,27 @@ def main():
     src = lire(a.fichier)
     print("%s : %d lignes" % (a.fichier, src.count("\n") + 1))
 
-    # Sous quel NOM le module os est-il accessible ici ? repl_web
-    # utilise `import os as _os` a certains endroits ; exiger `import
-    # os` nu ferait refuser le patch sur le seul fichier qu il vise.
-    # On detecte au lieu de supposer -- et on refuse seulement si os
-    # n est accessible sous AUCUN nom, car _plafond_reasoner planterait
-    # alors a l import et la page ne demarrerait plus.
+    # LE GARDE-FOU QUI A ECHOUE, garde ici pour memoire.
+    #
+    # La version precedente cherchait sous quel nom os etait importe et
+    # ecrivait `os.environ` ou `_os.environ` en consequence. Elle
+    # utilisait ast.walk, qui descend DANS les fonctions : elle a trouve
+    # `import os as _os` a l interieur de _ensure_init() et en a conclu
+    # que _os existait au niveau module. Il n y existe pas. La page est
+    # tombee sur `name '_os' is not defined` des le chargement.
+    #
+    # Le controle etait juste dans son intention et faux dans sa portee :
+    # il verifiait que os etait importe QUELQUE PART, pas LA OU J ECRIS.
+    #
+    # Il n y a plus rien a verifier : _plafond_reasoner importe os
+    # elle-meme. On se contente de dire ce qu on voit au niveau module.
     arbre0 = ast.parse(src)
-    mod_os = None
-    for n in ast.walk(arbre0):
-        if isinstance(n, ast.Import):
-            for al in n.names:
-                if al.name == "os":
-                    nom = al.asname or "os"
-                    if mod_os is None or nom == "os":
-                        mod_os = nom
-    if mod_os is None:
-        print("KO : le module os n est importe sous aucun nom dans %s."
-              % a.fichier)
-        print("     _plafond_reasoner en a besoin. Rien n a ete ecrit.")
-        return 1
-    print("  module os accessible sous le nom `%s`." % mod_os)
+    haut = [al.asname or al.name
+            for n in arbre0.body if isinstance(n, ast.Import)
+            for al in n.names if al.name == "os"]
+    print("  os au niveau module : %s"
+          % (", ".join(haut) if haut else "ABSENT -- sans importance,"
+             " la fonction generee l importe elle-meme"))
 
     avant = valeur_ast(src)
     if avant is not None:
@@ -220,12 +228,12 @@ def main():
             print("Rien n a ete ecrit.")
             return 1
         if src.count(A_COMM + A_DUR) == 1:
-            neuf = src.replace(A_COMM + A_DUR, bloc(a.jetons, mod_os), 1)
+            neuf = src.replace(A_COMM + A_DUR, bloc(a.jetons), 1)
             print("  le commentaire perime au-dessus est remplace lui")
             print("  aussi -- il annoncait 8000 comme etant la valeur de")
             print("  COUNCIL_MAX_TOKENS, qui vaut 60000 depuis ce matin.")
         else:
-            neuf = src.replace(A_DUR, bloc(a.jetons, mod_os), 1)
+            neuf = src.replace(A_DUR, bloc(a.jetons), 1)
             print("  ATTENTION : le commentaire perime au-dessus n a pas")
             print("  ete trouve tel quel, il reste en place. Il annonce")
             print("  8000 comme la valeur de COUNCIL_MAX_TOKENS -- c est")
