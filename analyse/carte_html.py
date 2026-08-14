@@ -143,6 +143,35 @@ def calcule(sig, a):
     return donnees, refs, actifs
 
 
+def routes(chemin):
+    """Les routes servies, LUES dans price_action.py au moment de la
+    generation.
+
+    Une liste ecrite en dur ici divergerait le jour ou une route est
+    ajoutee ou renommee -- c est le motif des deux constantes jumelles
+    qui a coute une soiree le 14/08. On la relit, donc elle ne peut pas
+    mentir.
+
+    Les /api/ sont ecartees : ce sont des points de donnees, pas des
+    pages. Si le fichier est introuvable, on rend une barre minimale
+    plutot que rien : une carte sans navigation reste lisible, une
+    carte qui refuse de se generer ne sert a personne."""
+    mini = ["/repl", "/raw", "/rails_trades"]
+    try:
+        src = io.open(chemin, encoding="utf-8", errors="replace").read()
+    except IOError:
+        return mini, False
+    import re as _re
+    vues = _re.findall(r'parsed\.path == "(/[^"]*)"', src)
+    prop = sorted(set(r for r in vues
+                      if r != "/" and not r.startswith("/api/")))
+    return (prop, True) if prop else (mini, False)
+
+
+def etiquette(r):
+    return r.lstrip("/").replace("_", " ").upper()
+
+
 CSS = r"""
 :root { color-scheme: dark; }
 body { background:#0e1116; color:#c9d1d9; margin:0; padding:18px 22px;
@@ -193,6 +222,17 @@ td { width:118px; height:54px; text-align:center; border-radius:4px;
 .chrome a:hover, .chrome button:hover { border-color:#58a6ff; }
 .chrome .quand { color:#7d8590; font-size:12px; margin-left:auto; }
 #etat { font-size:12px; }
+.nav { display:flex; flex-wrap:wrap; gap:4px; margin:0 0 16px;
+       max-height:190px; overflow-y:auto; padding:8px;
+       background:#0d1117; border:1px solid #21262d;
+       border-radius:6px; }
+.nav a { color:#58a6ff; text-decoration:none; font-size:11px;
+         font-weight:bold; padding:3px 7px; border-radius:3px;
+         border:1px solid #21262d; white-space:nowrap; }
+.nav a:hover { border-color:#58a6ff; background:#161b22; }
+.nav a.ici { color:#0d1117; background:#58a6ff;
+             border-color:#58a6ff; }
+.navt { color:#7d8590; font-size:11px; margin:0 0 4px; }
 """
 
 # BRUTE (r""") : ce bloc contient du JavaScript, donc des
@@ -373,6 +413,15 @@ def page(donnees, refs, actifs, zc, a, nsig, nbrut, cellules):
             % (x, " selected" if x == defaut else "", ETI.get(x, x))
             for x in vals)
 
+    liste, lues = routes(a.panneau)
+    nav_titre = ("%d routes lues dans %s"
+                 % (len(liste), a.panneau)) if lues else \
+        ("%s illisible -- navigation minimale" % a.panneau)
+    nav_html = "".join(
+        '<a href="%s"%s>%s</a>'
+        % (r, ' class="ici"' if r == "/profils" else "",
+           etiquette(r)) for r in liste)
+
     js = JS
     js = js.replace("DONNEES", json.dumps(donnees, separators=(",", ":")))
     js = js.replace("REFERENCES", json.dumps(refs, separators=(",", ":")))
@@ -408,6 +457,8 @@ def page(donnees, refs, actifs, zc, a, nsig, nbrut, cellules):
         "<div class=champ><label>unite de temps</label>"
         "<select id=ut>%s</select></div>"
         "</div>"
+        "<p class=navt>%s</p>"
+        "<div class=nav>%s</div>"
         "<div class=entete id=entete></div>"
         "<div class=leg id=leg></div>"
         "<p class=note>Gauche : t = &minus;%.2f. Droite : t = +%.2f. "
@@ -435,6 +486,7 @@ def page(donnees, refs, actifs, zc, a, nsig, nbrut, cellules):
          opts(COTES, "DEPUIS"), opts(actifs, "TOUS"),
          opts(SEANCES, "US"), opts([r or "-" for r in RAILS], "-"),
          opts(("toutes",) + UTS, "toutes"),
+         nav_titre, nav_html,
          zc, zc, cellules, a.min_n, cellules, js)
 
 
@@ -446,6 +498,8 @@ def main():
     p.add_argument("--sigma", type=float, default=pc.SIGMA)
     p.add_argument("--min-n", type=int, default=pc.MIN_N, dest="min_n")
     p.add_argument("--limite", type=int, default=200000)
+    p.add_argument("--panneau", default="price_action.py",
+                   help="fichier ou lire les routes servies")
     p.add_argument("--ouvre", action="store_true",
                    help="ouvre la page dans le navigateur par defaut")
     a = p.parse_args()

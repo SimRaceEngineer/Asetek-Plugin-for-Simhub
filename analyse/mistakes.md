@@ -368,6 +368,19 @@ la barre + un châssis** : retour vers `/`, en-tête qui dit ce qu'on
 regarde et de quand ça date, et bouton copier qui rend le contenu en
 **texte** — pas en HTML, puisque la destination est un modèle.
 
+**Et une troisième fois, 23:52 : la navigation.** Le châssis livré ne
+permettait de revenir qu'au tableau de bord. J'ai d'abord répondu que
+les 177 autres boutons étaient des onglets internes, donc non
+liables — puis j'ai vérifié avant de m'y tenir : `price_action.py`
+sert en réalité **environ 150 routes** hors `/api/`. Presque chaque
+panneau a son adresse. Mon affirmation était fausse et je l'aurais
+tenue pour vraie sans ce contrôle.
+
+La barre est donc **lue dans `price_action.py` à la génération**, pas
+écrite en dur : une liste figée divergerait à la première route
+ajoutée, et c'est le motif des deux constantes jumelles qui a déjà
+coûté une soirée.
+
 **Le piège technique qui va avec.** `navigator.clipboard` exige un
 contexte sûr. La page est servie en `http://` sur un nom de machine
 (`vmi654074:8095`), donc **l'API est absente** — un bouton copier
