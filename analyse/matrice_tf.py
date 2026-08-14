@@ -86,6 +86,13 @@ SEANCES = (("ASIE", 60, 540), ("EUROPE", 540, 930),
            ("US", 930, 1320), ("NUIT", 1320, 60))
 NOMS = [s[0] for s in SEANCES]
 DUREES = (10, 20, 30, 60, 120, 240)
+# LES QUATRE UNITES SURVEILLEES. Tous les tableaux de comparaison
+# portent ces quatre colonnes et rien d autre : c est ce qui permet de
+# lire une ligne d un bout a l autre sans changer de repere. H2 et H4
+# restent dans DUREES pour le papier, mais ils n ont aucune entree
+# fermee et une colonne vide au milieu d une comparaison la rend
+# illisible.
+QUATRE = (10, 20, 30, 60)
 
 
 def seance4(ts):
@@ -200,6 +207,54 @@ def _chemins(o, prefixe="", prof=0):
             continue          # les continus ne se groupent pas tels quels
         else:
             out[nom] = str(v)[:40]
+    return out
+
+
+def setup_de(magic):
+    """Les deux derniers chiffres d un magic a six chiffres.
+
+    Meme regle que x60_onset.setup_de : d[4:] si len == 6, sinon None.
+    Les magics a sept chiffres (H2, H4) rendent None -- ils ne sont pas
+    en live et ne doivent pas etre ranges par erreur dans une colonne.
+    """
+    d = str(int(magic))
+    return d[4:] if len(d) == 6 else None
+
+
+def actif_de(magic):
+    """1 = US30, 2 = US500, 3 = US100. None hors format six chiffres."""
+    d = str(int(magic))
+    if len(d) != 6:
+        return None
+    return {"1": "US30", "2": "US500", "3": "US100"}.get(d[3])
+
+
+def bras_de(magic):
+    d = str(int(magic))
+    return d[:3] if len(d) == 6 else None
+
+
+def entrees_live(ev):
+    """Les entrees x10/x20/x30/x60 avec leur plateau.
+
+    x60_onset ecrit X60_ENTREE pour le setup 60 et X_ENTREE pour les
+    trois autres -- deux noms pour une meme chose, parce qu on a ajoute
+    le miroir sans renommer l existant pour ne pas casser le rapport
+    d origine. On prend donc l UNION, et X60_* est traite comme setup
+    60. C est ecrit ici plutot que devine a la lecture.
+    """
+    out = []
+    for e in ev:
+        q = e.get("quoi")
+        if q == "X60_ENTREE":
+            s = "60"
+        elif q == "X_ENTREE":
+            s = str(e.get("setup") or "?")
+        else:
+            continue
+        d = dict(e)
+        d["setup"] = s
+        out.append(d)
     return out
 
 
