@@ -847,8 +847,51 @@ constaterait un état sans rien éviter.
 3. **Unité.** L'épisode, pas le ticket. 300 tickets sur 25 épisodes
    valent 25 observations.
 
-**Statut : test pré-enregistré, non lancé au moment où ces lignes sont
-écrites.**
+### VERDICT du 14/08 — RÉFUTÉE
+
+```
+0-2 min    n=139   -1.28      10-20 min  n=159   -6.76
+2-5 min    n= 91  -11.92      20-40 min  n= 91  -13.59
+5-10 min   n=130   -1.63      40 min +   n= 28   +1.28  ?
+```
+
+**Aucun ordre.** La prédiction était monotone ; le tableau zigzague —
+2-5 min est le deuxième pire camp, 5-10 min presque le meilleur. Le
+seuil de refus à 10 min donne 4,08 € d'écart, **t = 0,85**.
+
+Témoin (section C) : le rang 1 n'ordonne pas non plus, et toutes ses
+cellules sont sous 17 tickets.
+
+**Le piège n°1 s'est déclenché comme prévu.** Suite médiane : 11 → 6
+tickets quand la latence monte. La troncature mécanique est réelle.
+
+**Le vrai plafond est l'unité.** 67 épisodes, cellules de 5 à 16.
+638 tickets qui pèsent 67 observations. Visible dans la section A
+avant même de lire les résultats.
+
+**Statut : réfutée. Troisième test pré-enregistré mort en une
+commande, compteur inchangé.**
+
+---
+
+## BILAN DE L'INTÉRIEUR DE L'ÉPISODE — 14/08
+
+Quatre angles essayés : le **rang** (H13, réfuté), la **richesse**
+(H14, survit en évitement seulement, t = 2,5), le **débit précoce**
+(H15, réfuté), la **latence** (H16, réfuté).
+
+**Depuis le 5 août, tous les camps de tous ces découpages sont
+négatifs.** Les rangs ≥ 2 font −5,88 €/ticket quelle que soit la
+façon dont on les trie.
+
+Deux choses restent debout, pas une de plus :
+
+1. **Ne pas trader hors séance US** (H9) — le seul edge démontrable.
+2. **Ne pas trader un épisode qui s'emballe** (H14) — direction
+   correcte, sous la barre à t = 2,5.
+
+Les deux sont des règles d'**évitement**. Aucune règle d'entrée n'a
+survécu à la journée.
 
 ---
 
