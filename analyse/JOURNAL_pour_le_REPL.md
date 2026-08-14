@@ -510,16 +510,30 @@ Deux corrections successives :
    vient de se retourner. En ne gardant que les x60 premier entrés,
    le −8,55 devient **−4,90 sur 8 présences**. La moitié de l'effet
    était le miroir du reverse.
-2. Il reste que **« même actif / AVEC » compte zéro présence dans les
-   deux catégories**. Ce n'est pas un échantillon maigre, c'est une
-   impossibilité : on photographie à l'instant où le x60 vient de
-   basculer sur un allumage frais, donc les cellules courtes du même
-   actif tiennent encore la direction d'avant. Elles sont « contre »
-   **par définition de l'instant choisi**.
+2. Le 13/08, « même actif / AVEC » comptait **zéro présence** dans les
+   deux catégories, et j'en avais tiré une **impossibilité** : à
+   l'instant où le x60 bascule sur un allumage frais, les cellules
+   courtes du même actif tiendraient encore la direction d'avant, donc
+   seraient « contre » par définition.
 
-**Le −4,90 n'a donc aucun groupe témoin, et ne conclut rien.** La
-comparaison n'existera qu'en mesurant à la **sortie** du x60, où les
-cellules courtes ont eu le temps de basculer. Non fait à ce jour.
+   **RÉFUTÉ le 14/08.** Le panneau donne « première entrée, même
+   actif : AVEC +9,62 sur **14 présences** contre CONTRE −5,80 sur 9 ».
+   Quatorze présences là où j'affirmais qu'il ne pouvait y en avoir
+   aucune. Le raisonnement était trop fort : un x60 peut s'allumer
+   **dans le sens que les cellules courtes tiennent déjà** — rien ne
+   l'oblige à basculer contre elles. Le zéro du 13/08 était un
+   échantillon de deux jours, pas une propriété de l'instant choisi.
+
+   La leçon vaut plus que le chiffre : une affirmation d'impossibilité
+   se réfute avec une seule observation, alors qu'une affirmation de
+   rareté résiste. Ne pas écrire « impossible » quand on veut dire
+   « jamais vu jusqu'ici ».
+
+**Le −4,90 reste sans groupe témoin utilisable**, mais pour une raison
+plus banale que je ne le croyais : 8 puis 9 présences, c'est trop peu.
+La comparaison à la **sortie** du x60 existe maintenant — AVEC +4,28
+sur 17 contre CONTRE −5,66 sur 10 — et va dans le même sens que celle
+à l'entrée. Deux mesures concordantes, toujours sous le seuil.
 
 À noter, sans conclure : « REVERSE / autre actif / CONTRE » sort à
 **+33,22 sur 10 présences**, la meilleure cellule du tableau. Quand un
@@ -583,6 +597,18 @@ coupée, elle a été **fermée par son propre reverse** vers 16:50, et le
 bras est reparti à l'achat. Le mécanisme a fait son travail, à sa
 date, sans intervention. Ce n'est pas une preuve — c'est un épisode —
 mais il va dans le même sens que les trois mesures de la section 4.
+
+**Un septième, réfuté le 14/08 : la mise à plat de 19:30.** Le panneau
+x60 montrait la séance US à −364,86 sur 5 clôtures, dont deux sorties
+à **19:30:06** — l'heure exacte du `SESSION_FLAT`. J'en ai déduit que
+la pendule coupait des gagnantes, comme le partiel du 207. Vérifié
+dans `events.jsonl` : ces deux positions ont un **MFE négatif**
+(−2,72 et −2,08) pour une MAE de −88. Elles n'ont jamais été en
+profit une seule seconde. La mise à plat n'a rien tronqué : elle a
+arrêté une perdante, et a probablement économisé de l'argent.
+Ce qui reste vrai, c'est que la colonne US repose sur **cinq
+clôtures dont une seule décide du signe** : `M206360` avec une MAE de
+−266,95. Ce n'est pas une séance qui saigne, c'est un ticket.
 
 **Le cinquième, et il n'a pas eu lieu — parce qu'on ne l'a pas fait.**
 Le 13/08 vers 15h45, le conseil a été donné de couper à la main le
