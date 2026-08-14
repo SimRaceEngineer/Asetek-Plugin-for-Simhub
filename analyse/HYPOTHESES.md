@@ -1211,6 +1211,85 @@ indice, pas un feu vert.
 
 ---
 
+## H19 — Le SAR/h M5 des 30 dernières minutes annonce les 30 suivantes
+
+**ÉCRITE LE 14/08 À 19:05, AVANT TOUTE MESURE.** Déclarée d'avance,
+elle n'entre pas dans le compteur du §0.
+
+**D'où elle vient.** Du REPL, à sa première lecture de
+`signal_avance.txt` — un fichier qu'il n'avait jamais chargé, parce que
+`REPL_CTX_MAX` le coupait avant. Il en tire que le SAR/h M5 mesuré sur
+les 30 minutes écoulées est *« la seule mesure monotone dans le sens
+attendu »*, et cite `Q2 −7,59 €/tk` et `Q3 −11,61 €/tk`.
+
+**Pourquoi on ne la prend pas telle quelle.** Trois raisons, dans
+l'ordre de gravité :
+
+1. **Il cite deux quartiles sur quatre.** Une monotonie se juge sur les
+   quatre. Deux points au milieu d'une série ne montrent rien : Q1 et Q4
+   manquent, et ce sont eux qui portent l'écart.
+2. **Seuils et verdict sur le même corpus.** Les bornes de quartile
+   sont calculées sur les données mêmes où l'écart est lu. C'est la
+   définition d'un résultat garanti par sa méthode de calcul — le motif
+   qu'on a rencontré dix fois dans ce dossier.
+3. **`signal_avance.py` le dit lui-même** : il faut couper le corpus en
+   deux. Ce n'est pas fait. Le module annonce sa propre validation et ne
+   l'exécute pas.
+
+### Le test, tel qu'il sera exécuté
+
+**Découpe par DATE, jamais au hasard.** Première moitié des séances →
+calcul des trois bornes de quartile du SAR/h M5. Seconde moitié →
+lecture du résultat par quartile, **avec les bornes de la première
+moitié, figées**. Un tirage aléatoire mettrait des tickets d'une même
+séance des deux côtés : ils ne sont pas indépendants, et la fuite
+suffirait à fabriquer l'effet.
+
+**Prédiction.** Dans la seconde moitié, l'ordre des quatre quartiles est
+celui établi sur la première, et l'écart Q1 vs Q4 dépasse le seuil.
+
+**Critère de réfutation.** H19 est fausse si, sur la seconde moitié,
+l'ordre des quartiles n'est pas monotone, **ou** si l'écart Q1-Q4 a un
+`t < 1,96` (seuil d'une comparaison annoncée d'avance), **ou** si une
+cellule tombe sous 54 observations — auquel cas on n'a rien mesuré du
+tout et on l'écrit ainsi.
+
+### Ce qui la rendrait vraie par construction — à vérifier AVANT de lire
+
+**La fenêtre passée ne doit pas toucher la fenêtre future.** Si le
+SAR/h est calculé sur 30 minutes qui chevauchent, même d'une minute,
+les 30 minutes dont on lit le résultat, ce n'est pas un indicateur
+avancé : c'est le même intervalle lu deux fois. À contrôler dans le
+code avant tout tableau.
+
+**L'unité n'est pas la fenêtre glissante.** Des fenêtres de 30 minutes
+qui se recouvrent produisent des observations corrélées : 200 fenêtres
+glissantes sur 13 séances valent 13 observations, pas 200. Le `n` à
+opposer au seuil est **le nombre de séances distinctes**, et il sera
+affiché à côté de chaque cellule.
+
+**Le sens attendu est un sens d'ABSTENTION.** Les deux quartiles cités
+sont négatifs tous les deux. Si les quatre le sont, H19 ne dit pas
+« entrer quand le SAR/h est bas » — elle dit « ne pas entrer », comme
+H9 et H14. Ce serait le troisième résultat du dossier à ne parler que
+de s'abstenir, et il faudra le dire au lieu de l'habiller en signal.
+
+**Le handicap est connu d'avance.** Couper par date place la seconde
+moitié presque entièrement **après le 5 août**, là où tous les edges
+mesurés disparaissent. Si H19 survit là, elle vaut plus cher que les
+autres ; si elle meurt, on ne saura pas distinguer « fausse » de
+« tuée par la cassure ». Ce sera écrit dans le verdict.
+
+### Ce qu'on ne pré-enregistre PAS, et pourquoi
+
+Le REPL propose une seconde piste : filtrer selon **l'identité du
+premier allumeur** (`M206102, 22 allumages, −78,65 €/fenêtre`). Vingt-
+deux observations. Sous la barre de 54, quelle que soit la moyenne.
+La règle du §0 vaut aussi quand le chiffre nous plaît — cette piste
+attend le gel, elle n'a pas de numéro.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
