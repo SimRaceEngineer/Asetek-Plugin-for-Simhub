@@ -24,7 +24,7 @@ CE QUE LA PREMIERE SORTIE REELLE A DONNE, le 14/08
     sous-population qui aurait survecu a la cassure.
 
     Y compris la seance US : prime de +20,76 sur la reference avant,
-    +3,00 apres -- 86 %% d amplitude perdue. Pour demontrer 3 EUR avec
+    +3,00 apres -- 86 % d amplitude perdue. Pour demontrer 3 EUR avec
     sigma = 60 il faut ~3 400 signaux ; on en a 1 645. Sur les donnees
     post-cassure seules, H9 n est plus demontrable.
 
