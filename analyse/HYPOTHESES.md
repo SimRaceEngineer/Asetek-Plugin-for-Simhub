@@ -359,6 +359,84 @@ deux minutes.
 
 ---
 
+## H10 — Le porteur doit être en avance, pas le plus grand
+
+**Prédiction.** Un petit timeframe (M2, M5) profite de la couverture
+d'un M10-M30, et pas de celle d'un H1. Le H1 qui s'allume est déjà en
+retard pour un scalp.
+
+**Base — mesurée le 14/08, depuis le 05/08 uniquement :**
+
+```
+x02  porte par x10/x20/x30   n= 63   +12.92
+x02  porte par x60           n=144    -7.56
+x05  porte par x10/x20/x30   n= 44   +15.25
+x05  porte par x60           n= 81   -28.47
+```
+
+Regroupé : **+13,89 €/tk sous porteur M10-M30 (107 tickets) contre
+−15,09 sous porteur H1 (225)**. Vingt-neuf euros d'écart, t ≈ 4,1.
+Signe cohérent sur les huit cellules.
+
+**Le mécanisme, qui n'est pas une corrélation.** Le x60 est le seul
+setup non perdant depuis le 05/08 **et** un désastre comme signal de
+couverture. Ce n'est pas contradictoire : quand un H1 s'allume, le
+mouvement est engagé. Le H1 tient jusqu'au reverse et encaisse tout ce
+qui reste ; un M5 qui entre au même instant ne récupère que la queue.
+**Le même trade est bon pour qui tient et mauvais pour qui scalpe.**
+Ça recoupe H1 (« ne pas tronquer les gagnantes ») par l'autre bout, et
+ça réinterprète la bande 30-60 min de x05 à −26,58 : ce n'était pas la
+couverture qui vieillissait, c'était un porteur déjà en retard au
+moment de s'allumer.
+
+**Ce qui la tue.** Les porteurs M10-M30 négatifs, ou le porteur H1
+positif, sur ≥ 10 séances distinctes.
+
+**Ce qui la rendrait vraie par construction — et c'est le point.**
+Les 107 tickets viennent de 43 allumages x10/x20/x30, **tous
+postérieurs au 13/08 13:10**. Une journée et demie. Le t de 4,11
+suppose des tickets indépendants ; des tickets d'une même séance ne le
+sont pas. **L'unité de mesure correcte est la séance, et on en a une
+et demie.** Une bonne session suffirait à tout produire.
+
+**Statut : meilleure hypothèse du dossier, avec un mécanisme et un
+échantillon d'une séance et demie. C'est la cible nommée du gel —
+quinze jours donneront ~200 allumages au lieu de 43. Aucune action
+avant.**
+
+---
+
+## H11 — Le contre-sens survit à la coupure du 5 août
+
+**Prédiction.** Un M5 pris à contre-sens d'un grand récent reste
+nettement pire qu'un M5 dans le même sens, dans le régime actuel.
+
+**Base — depuis le 05/08, fenêtre 60 min :**
+
+```
+x05  SANS          n=385   -10.95
+x05  AVEC-MEME     n= 53    +1.69
+x05  AVEC-CONTRE   n= 72   -23.94
+```
+
+25,63 € d'écart, t ≈ 2,4. `x05 AVEC-MEME` est **la seule cellule
+positive à effectif non trivial de tout le tableau post-05/08**.
+
+Sur x02 : −2,07 contre −0,18, rien. Le sens décide pour le M5, pas
+pour le M2. Deux mécanismes sous le même tableau — pour le M2, la
+présence d'un grand signale un régime (les deux camps battent le
+SANS) ; pour le M5, elle signale une direction.
+
+**Ce qui la tue.** L'écart MEME/CONTRE qui s'annule sur la fenêtre du
+gel, ou qui se retrouve identique sur x01 et x03 — ce qui en ferait un
+effet d'heure et non de direction.
+
+**Statut : la seule règle du dossier qui ait survécu à un changement
+de régime. Prédite par l'utilisateur avant d'être mesurée, ce qui est
+rare ici et compte double.**
+
+---
+
 ## Ce qui n'est PAS une hypothèse et ne le deviendra pas ici
 
 - **Le papier hors séance.** +35,34 €/tk sur M10, +94,82 sur M20,
