@@ -506,6 +506,44 @@ n'existe pas ».
 
 ---
 
+## 15/08/2026 00:35 — un document livre a un modele sans ses garde-fous
+
+**Ce que j'ai fait.** Installe un document relu a chaque question du
+REPL, avec un en-tete qui dit *« s'il contredit un panneau plus ancien
+du contexte, c'est lui qui fait foi »* — et rien d'autre.
+
+**Ce qui s'est passe dans la question suivante.** Le modele a lu la
+carte, trouve la seule cellule post-cassure qui franchit le seuil, et
+ecrit : *« c'est exactement le setup que je dois jouer quand les
+entrees rouvrent lundi : suivre l'US100 contre US30/US500 […] c'est le
+trade a surveiller »*.
+
+**La carte ne contient aucune direction.** Elle agrege les BUY et les
+SELL, elle ne connait aucune paire, et la ligne en question est
+calculee sur `actif TOUS`. `PASALIGNE` veut dire « les trois indices
+ne sont pas alignes », pas « acheter le leader contre les autres ». Le
+passage de l'un a l'autre est une invention complete, et elle est
+arrivee **des la premiere question** posee sur le document.
+
+**Le raisonnement faux — le mien.** J'ai traite l'en-tete comme une
+etiquette de fraicheur. C'est une etiquette d'AUTORITE : « c'est lui
+qui fait foi » invite a s'en servir, et je n'ai rien ecrit sur ce
+qu'il ne dit pas.
+
+**La regle.** **Un document remis a un modele porte ses garde-fous
+dans le document.** Pas dans la conversation, pas dans le fichier
+d'a cote : dans l'en-tete meme. Au minimum, ce que les colonnes ne
+contiennent pas (ici : aucune direction, aucun actif), que le maximum
+d'une enumeration n'est pas une regle, et quelles contraintes
+exterieures s'appliquent (ici : le gel interdit tout changement de
+parametre).
+
+Le contexte des autres panneaux est du texte descriptif ; celui-ci est
+un classement trie par performance. **Un classement invite a choisir
+son sommet.** C'est precisement pour ca qu'il fallait l'accompagner.
+
+---
+
 ## 14/08/2026 — deux affirmations fausses, dites avec assurance
 
 **La première.** J'ai attribué le `prompt=205719` du REPL à
