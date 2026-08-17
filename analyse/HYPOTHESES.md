@@ -2505,3 +2505,48 @@ d'échelle. Si le couple reste de l'ordre de `0,8 / 0,2`, H31 tient. Si
 
 **Aucune décision de trading ne s'appuie sur H31.** Une corrélation
 d'ensemble n'empêche aucune séance de faire exactement le contraire.
+
+### H29 — ANNOTATION DE COUPURE, 17/08/2026 au soir
+
+**Écrite AVANT la coupure du 18/08 00:00**, pour dater le point de
+départ. Elle ne modifie ni les règles, ni les seuils, ni la date de
+rendez-vous du 15 octobre.
+
+**Le chiffre a bougé dans la journée, sur le même échantillon
+in-sample.**
+
+```
+                              tickets    apparies    dA      dB
+17/08 10:25  pre-enregistrement  2 550   1 635 (64,1%)  +4,65   +3,69
+17/08 18:56  meme contrefactuel  2 790   1 764 (63,0%)  +3,75   +3,31
+```
+
+240 tickets de plus, et les deux Δ baissent — A de 19 %, B de 10 %.
+
+**Ce que ça veut dire, et ce que ça ne veut pas dire.** Les deux
+mesures sont **antérieures à la coupure** : aucune des deux n'est le
+test. Ce n'est donc pas une réfutation, et il serait faux de l'écrire.
+
+Mais c'est le comportement attendu d'un effet né du tableau qui le
+juge. Une règle choisie comme la meilleure de dix sur un échantillon
+donné voit son avantage s'éroder dès qu'on ajoute des données sans
+re-choisir le seuil, parce qu'une partie de l'avantage initial était
+la chance d'avoir été la meilleure. Que l'érosion commence **avant même
+la sortie d'échantillon** est une information à garder en tête le
+15 octobre : si le Δ hors échantillon ressort autour de +3, il ne
+faudra pas le lire comme « proche du +4,65 annoncé ».
+
+**La valeur de référence pour le 15/10 reste +4,65 et +3,69**, celles
+du pré-enregistrement. On ne remplace pas une valeur pré-enregistrée
+par une valeur plus récente : ce serait déplacer la cible.
+
+**PROVENANCE — à vérifier.** Les chiffres du 17/08 18:56 ne viennent
+pas d'une lecture directe du fichier : ils sont rapportés par le REPL
+lisant `scalp_orderflow_<date>-<heure>.txt`. Le pré-enregistrement du
+matin, lui, vient de la sortie `20260817-1025` lue directement. Tant
+que la ligne de 18:56 n'est pas relue à la source, elle est notée ici
+comme **rapportée, non vérifiée**.
+
+**Coupure confirmée : tous les tickets clos à partir du 18/08/2026
+00:00.** Le compteur repart de zéro à cet instant ; les 2 790 tickets
+ci-dessus sont tous du côté in-sample.
