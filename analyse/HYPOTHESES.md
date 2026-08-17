@@ -2015,6 +2015,103 @@ théorique : c'est mesuré sur ce dossier.
 
 ---
 
+## H27 — Sortir d'un range par le BAS dit quelque chose du quart d'heure suivant
+
+Écrite le 17/08/2026 à 09:00, **après** avoir vu le tableau. Elle
+porte sur un MOTIF, pas sur la meilleure case — et c'est délibéré.
+
+### Ce qu'on a vu
+
+`breakout_range.py`, 18 journées, 42 597 cycles, pas de 10 s. Sortie
+d'un range défini par le plus haut / plus bas des W minutes
+précédentes, période réfractaire de W, témoin apparié à moins de 10 %
+de la largeur du bord sans le franchir.
+
+Sur 51 cellules, la permutation par blocs de journées donne
+**p = 0,010** : maximum observé 25,3 points, médiane sous H0 13,5,
+seuil 95 % à 20,1.
+
+**Mais ce maximum est `US500 60m BAS` sur 28 événements.** Ce n'est
+pas lui l'hypothèse.
+
+### Le motif, qui est l'hypothèse
+
+Les six meilleurs écarts sont **tous à la baisse**. Les seules valeurs
+négatives sont des cassures **hautes à horizon 120 minutes**. Et
+l'effet est concentré au quart d'heure : à 15 min les écarts sont les
+plus grands, à 120 min ils s'annulent ou s'inversent.
+
+Forme retenue — la plus simple et la plus peuplée, **fenêtre 15 min,
+sens BAS, horizon 15 min**, trois actifs :
+
+| actif | n | continue | témoin | écart |
+|---|---|---|---|---|
+| US100 | 141 | 51,1 % | 38,8 % | **+12,2** |
+| US500 | 141 | 43,3 % | 36,5 % | **+6,8** |
+| US30 | 149 | 45,6 % | 47,3 % | **−1,7** |
+| **cumulé** | **431** | | | **+5,6** |
+
+**L'énoncé.** Une sortie de range par le bas est suivie, quinze
+minutes plus tard, d'un maintien sous le niveau franchi plus souvent
+qu'un simple passage au voisinage de ce niveau, d'au moins **5,6
+points de pourcentage**.
+
+### Pourquoi le témoin est indispensable ici
+
+À la hausse, le taux de base est de **45 à 64 %** : sur ces dix-huit
+journées les indices montent, donc « être encore au-dessus » quinze
+minutes plus tard n'a rien de remarquable. À la baisse il tombe à
+**28 à 50 %**. Sans témoin apparié on aurait conclu que les cassures
+hautes « marchent mieux » — alors qu'elles ne font que suivre la
+dérive de la période.
+
+### Le critère de falsification, et sa date
+
+Écart de deux proportions, p ≈ 0,45, e = 5,6 points :
+
+`n > (1,96 / 0,056)² × p(1−p)` ≈ **303 événements** de ce profil sur
+données neuves.
+
+À 431 événements pour 18 journées, soit ~24 par jour tous actifs
+confondus, les 303 sont atteints en **13 séances, autour du
+30 août 2026**.
+
+**H27 est fausse si**, sur ≥ 303 sorties de range basses postérieures
+au 17/08 (fenêtre 15 min, horizon 15 min), l'écart au témoin apparié
+est ≤ 0, ou si son intervalle de confiance à 95 % contient 0.
+
+### Ce qui la rendrait vraie par construction
+
+**Prendre le maximum au lieu du motif.** `US500 60m BAS` à +25,3 sur
+28 événements est le point le plus sur-ajusté du tableau. Il est exclu
+d'avance : si H27 échoue, on ne se rabat pas dessus.
+
+**Oublier que US30 est négatif.** Deux actifs sur trois portent
+l'effet ; le troisième va dans l'autre sens (−1,7). Le cumul à +5,6
+masque cette dispersion. Si le test réussit globalement mais que US30
+reste négatif, il faudra l'écrire — et non prétendre que « ça marche
+sur les indices ».
+
+**Empiler les fenêtres.** Une cassure de 15 min est souvent aussi une
+cassure de 30 et de 60 : cumuler les trois fenêtres gonflerait n sans
+ajouter d'information indépendante. H27 porte sur **la fenêtre 15 min
+seule**, exprès.
+
+**Confondre continuation et gain.** Le tableau ne contient **aucune
+direction jouable et aucun PnL**. « Le prix est encore sous le niveau
+15 minutes plus tard » ne dit rien de ce qu'aurait rapporté une
+position — ni du point d'entrée, ni du stop, ni du glissement. Le lien
+avec les trades de la stack est une mesure séparée, qui n'a pas été
+faite.
+
+### Ce que H27 n'autorise pas
+
+Aucun changement de paramètre pendant le gel. Elle n'entre en
+concurrence avec aucune abstention : H22, H23 et H26 restent au-dessus
+d'elle dans l'ordre de décision.
+
+---
+
 ## Ce qui ferait abandonner l'exercice
 
 Si, à la fin du gel, aucune cellule du tableau quadruple ne se détache
