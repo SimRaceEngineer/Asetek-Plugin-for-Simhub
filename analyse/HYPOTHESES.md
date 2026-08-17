@@ -2179,3 +2179,62 @@ du bruit une fois le seuil du §0 appliqué, la conclusion à écrire est
 « aucun setup ne se distingue sur cette fenêtre » — pas « il faut
 découper autrement ». Le droit de redécouper s'achète avec des données
 neuves, jamais avec les mêmes.
+
+---
+
+## H28 — Payer l'orderflow SierraChart, ou garder MT5
+
+**Écrite le 17/08 à 10:35, avant d'avoir lu une seule ligne d'un
+`.scid`.** C'est tout l'intérêt : fin août, on décidera avec un critère
+posé à froid plutôt qu'avec l'impression du moment.
+
+### Ce qui est en jeu
+
+La stack calcule un CVD, une absorption et des bursts à partir de MT5.
+Or sur des CFD d'indices, **MT5 ne fournit pas de volume échangé** — il
+fournit un compteur de ticks. Le « delta » qui en sort est une
+inférence, pas une mesure. SierraChart donne `BidVolume` et `AskVolume`
+séparés sur les futures : du volume réel.
+
+Le réel est meilleur par construction. La seule question qui vaut de
+l'argent est : **est-ce que la différence change une décision ?**
+
+### Le critère, en trois conditions dont une seule suffit
+
+On paie si **au moins l'une** est vérifiée :
+
+1. le CVD MT5 se trompe de **signe** plus de **25 %** du temps contre le
+   CVD SierraChart, sur les instants à fort volume ;
+2. le CVD réel prédit le mouvement à +15 min avec un écart au témoin
+   **significativement supérieur** à celui du CVD MT5 — même règle, même
+   témoin apparié, permutation par journée ;
+3. l'orderflow réel montre des événements — publications macro,
+   ouvertures, bursts — que MT5 ne voit **pas du tout**.
+
+Sinon on garde MT5, et l'abonnement va ailleurs.
+
+### Ce qui ne comptera pas comme argument
+
+- « Le réel est forcément mieux. » Vrai et hors sujet : la question est
+  l'écart mesuré, pas la supériorité de principe.
+- Une corrélation élevée entre les deux CVD. Une forte corrélation avec
+  25 % de désaccords de signe reste disqualifiante — c'est le signe qui
+  décide d'un sens de position, pas l'amplitude.
+- Le décalage de dix minutes du flux. Sur de l'historique horodaté il
+  ne coûte rien ; il ne compte que pour du live, ce qui est une autre
+  décision.
+
+### La limite, écrite d'avance
+
+`MNQU26-CME.scid` fait **1 Ko** : il n'y a pas de Nasdaq dans le flux
+disponible. **La rotation tech/value ne sera donc pas validable en
+orderflow réel**, quel que soit le résultat de H28. On testera le CVD
+sur YM et MES ; la jambe qui portait l'hypothèse d'origine reste hors
+d'atteinte, et aucun résultat sur ES/YM ne devra être présenté comme la
+validant.
+
+### Rendez-vous
+
+**Fin août**, après transcription des `.scid` et croisement avec les
+snapshots. Si les trois conditions échouent, la réponse est « on garde
+MT5 » — et c'est une réponse, pas un échec.
