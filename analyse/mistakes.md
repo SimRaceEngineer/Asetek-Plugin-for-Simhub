@@ -819,3 +819,103 @@ MT5. Même résultat pour nous, risque nul pour la stack.
 **La règle.** Quand une demande porte sur un résultat, chercher le
 chemin qui l'atteint sans toucher au vivant. Et ne jamais « réparer »
 un flux dont on n'a pas identifié la cause de la panne.
+
+---
+
+## 17/08/2026 — j'ai réécrit un lecteur `.scid` qui existait déjà
+
+**Ce que j'ai fait.** Passé une matinée à écrire `lire_scid.py`, à
+expliquer à l'utilisateur comment régler SierraChart, et à réclamer un
+export NinjaTrader avant le 22 août.
+
+**Ce qui existait.** Une capture du dossier Drive a montré
+`scid_orderflow.py` et `scid_orderflow_lu.py` (02/08), cinq versions
+d'`orderflow_join`, un `orderflow_panel`, un `ScalpOrderflowExport.cs`,
+deux documents `ROADMAP_` et `INSTALL_ORDERFLOW.md` — et des sorties
+`scalp_orderflow_*.txt` **déposées toutes les quinze minutes**, donc un
+pipeline qui tournait pendant que je demandais comment en construire un.
+
+**Le raisonnement faux.** J'ai traité une question technique comme un
+problème neuf, alors que la première chose à faire était de regarder ce
+qui était déjà là. Personne ne me l'avait caché : je n'ai pas cherché.
+
+**Le mot de l'utilisateur.** « Il ne m'est même pas venu à l'idée que
+tu n'avais pas ce dont tu avais besoin car nous l'avions déjà codé. »
+C'est exact, et ce n'est pas à lui d'y penser.
+
+**Le correctif.** `PROTOCOLE.md`, qui inventorie ce qui existe, et une
+consigne en tête de `CLAUDE.md` : lire ce fichier **avant** d'écrire
+quoi que ce soit, et vérifier qu'une chose n'existe pas avant de la
+construire.
+
+**La règle.** Avant d'écrire un outil, chercher s'il existe. Poser la
+question coûte trente secondes ; la réécrire coûte une matinée, et le
+pire est qu'on ne s'en aperçoit pas.
+
+---
+
+## 17/08/2026 — une plage de dates n'est pas une couverture
+
+**Ce que j'ai dit.** « YM remonte au 2 février : quatre mois de
+recouvrement avec le calendrier, une centaine d'événements
+mesurables. » Puis, devant 22 événements seulement, j'ai accusé le
+calendrier d'être trop court et proposé de le ré-exporter depuis
+janvier.
+
+**Ce qui était vrai.** Le contrat `YMU26` est l'échéance de
+**septembre**. Avant le roulement de mi-juin, le contrat actif était
+`YMM26`. De février à juin, `YMU26` ne cotait presque pas. La médiane
+est de **131 barres d'une minute par jour** pour une moyenne de 471 —
+un future qui cote 23 h devrait en avoir 1 380. La fenêtre réellement
+exploitable faisait deux mois et demi, pas six et demi.
+
+**Le raisonnement faux.** J'ai lu `du 2026-02-02 au 2026-08-17` comme
+une couverture. C'est une **enveloppe**, pas une densité. Le même
+défaut que le pas médian de `cycles.jsonl` : un résumé qui cache la
+distribution.
+
+**Ce que ça aurait coûté.** Un ré-export du calendrier vers janvier —
+du travail pour l'utilisateur — qui n'aurait rien changé, faute de
+prix en face.
+
+**Ce qui l'a attrapé.** Le filtre de séances, écrit pour une autre
+raison, a imprimé « médiane journalière de 131 ». Le chiffre n'était
+pas cherché ; il était affiché.
+
+**La règle.** Une plage de dates ne dit rien de ce qu'elle contient.
+Avant d'annoncer une couverture, mesurer la **densité** — et sur des
+futures, se rappeler qu'un contrat n'est liquide que sur son
+trimestre.
+
+---
+
+## 17/08/2026 — deux façons de mal compter les jours
+
+**La première.** Les horizons `1j / 3j / 5j` avançaient de N jours
+**calendaires**. La colonne `3j` est sortie à **zéro point** : la
+plupart des publications américaines tombent mercredi ou jeudi, et
++3 jours civils atterrit le samedi ou le dimanche.
+
+**La seconde, après correction.** J'ai compté en avançant dans la
+liste des **dates présentes** dans les barres. Les futures CME rouvrent
+le **dimanche soir** : quelques barres suffisent à faire entrer le
+dimanche dans la liste, et +3 crans depuis un mercredi retombait sur ce
+dimanche fantôme, sans barre à 12:30 UTC. Symptôme : `3j` à 10 points
+quand `1j` en avait 22 et `5j` 20.
+
+**Ce qui l'a attrapé.** L'effectif **non monotone**. Il n'existe aucune
+raison légitime pour que l'horizon du milieu ait moins de points que
+ses deux voisins. Ce n'était pas un manque de données, c'était un
+comptage faux.
+
+**Le correctif.** Une séance est une date portant au moins la moitié du
+nombre médian de barres par jour — seuil **mesuré sur la série**,
+affiché dans la sortie.
+
+**La conséquence à retenir.** Cette seule correction a fait passer la
+différence de prix à 5 jours de **+0,066 % à −0,377 %** : changement de
+signe, amplitude triplée. À n = 20, ces nombres bougent avec n'importe
+quelle décision de méthode — ce ne sont pas des mesures.
+
+**Les règles.** Un horizon en jours se compte en séances. Un effectif
+non monotone est un bug, pas un hasard.
