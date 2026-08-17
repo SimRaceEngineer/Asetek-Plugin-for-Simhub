@@ -1301,3 +1301,94 @@ passe par le contexte. Les trois documents sont partis en un appel.
 l'inventaire des outils disponibles. J'ai passé plusieurs échanges à
 planifier un transport de 95 Ko à travers ma propre fenêtre alors
 qu'un outil de la liste faisait exactement ça, gratuitement.
+
+## 17/08/2026 — la règle était écrite dans trois outils, pas dans le quatrième
+
+`refus_continuation.py`, première sortie réelle, trois symboles :
+
+```
+TICK-NYSE     APPROCHE  écart 728   p 0,0005
+MES-continu   APPROCHE  écart  32   p 0,77
+YM-continu    APPROCHE  écart  16   p 0,48
+```
+
+Le **seul** déclencheur détecté était sur le seul symbole qui ne peut
+pas en avoir. Le `delta` de TICK est un compteur monotone — z = +11,7,
+130 séances positives sur 130 — parce qu'un indice n'a pas de carnet.
+Le sommer sur soixante minutes ne mesure pas un flux, ça mesure la
+position dans la journée. Et 323 refus contre 83 continuations, ratio
+inversé par rapport aux deux autres actifs, dit la même chose
+autrement : un oscillateur borné revient toujours, ses cassures
+échouent par construction.
+
+TICK était déjà écarté dans `flux_contre_prix.py`, dans
+`ecart_fenetre.py`, dans `bougie_deux_actifs.py`. J'ai écrit ce
+quatrième outil de zéro et je n'ai repris aucune des exclusions.
+
+**C'est mot pour mot l'entrée que j'avais écrite le matin même** — « une
+règle notée mais appliquée à un seul endroit n'est pas une règle, c'est
+une anecdote ». Elle s'est vérifiée sur elle-même dans la journée.
+
+**La règle, reformulée pour être opérante.** Un outil neuf qui lit les
+mêmes fichiers qu'un outil existant hérite de ses exclusions, ou il
+justifie pourquoi il ne les reprend pas. Écrire de zéro n'est pas
+repartir de zéro.
+
+**Ce qui l'a attrapé.** Rien d'automatique, encore : la lecture de la
+sortie. Le résultat était *trop* isolé — un seul symbole sur trois, et
+justement celui dont on savait déjà tout. Un chiffre qui sort seul est
+d'abord suspect d'être un artefact de son symbole, pas la découverte de
+la journée. C'est la même heuristique qui avait tué le `−1330`.
+
+## 17/08/2026 — un verdict qui ignore une colonne significative
+
+Même sortie, même outil :
+
+```
+YM-continu    VOLUME    écart +2,1   p 0,0005
+```
+
+Les refus se produisent sur un volume nettement supérieur aux
+continuations. Significatif, non circulaire — le volume n'entre pas
+dans la définition de l'issue. **Et le verdict n'en disait pas un mot** :
+sa logique ne regardait qu'approche et décision.
+
+Ce n'est pas le verdict qui contredit sa table, c'est le verdict qui en
+saute une ligne. Troisième variante de la même faute dans la journée,
+après `bruit_par_actif` et `cvd_journalier`. Les deux premières
+disaient le contraire du tableau ; celle-ci se tait sur une de ses
+colonnes, ce qui est plus discret et se corrige moins vite.
+
+**Et la colonne qui, elle, portait un verdict n'aurait pas dû.**
+`DECISION −2120, p 0,0005` mesure le delta de `[t, t+H]` contre une
+issue déterminée en `t+H`. Avec `rho(delta, rendement) = 0,675` mesuré
+le même jour, dire « les refus ont un delta de décision négatif »
+revient à dire « les refus ont un rendement négatif » — leur
+définition. J'ai laissé une quasi-tautologie porter la conclusion
+pendant que la seule colonne informative restait muette.
+
+**La règle.** Avant de faire porter un verdict à une mesure, vérifier
+qu'elle ne contient pas déjà la variable qu'elle prétend expliquer. Une
+fenêtre de mesure qui recouvre la fenêtre de l'issue n'est pas une
+prédiction, c'est une reformulation.
+
+## 17/08/2026 — j'ai déclaré un diagnostic confirmé avant d'en avoir la preuve
+
+Après le redémarrage du 8095, j'ai écrit : « le diagnostic tient de
+bout en bout ». Je le déduisais de la séquence — deux questions en
+échec, puis une réussie après relance.
+
+`Test-Path docs\repl_sortie.log` est revenu **False**. Le garde ne
+s'était pas armé : la sortie du nouveau processus était vivante. Donc
+le REPL aurait probablement fonctionné **sans** mon correctif, et le
+simple redémarrage suffisait. Le correctif n'a rien eu à faire.
+
+**Le raisonnement faux.** J'ai pris une corrélation temporelle — « ça
+marche après le patch » — pour une confirmation causale, alors que le
+patch écrivait précisément un fichier destiné à trancher, et que je
+n'avais pas attendu de le regarder. La preuve était à une commande, et
+j'ai conclu avant.
+
+**La règle.** Quand un correctif embarque son propre témoin, on ne
+conclut pas avant de l'avoir lu. Un « ça marche maintenant » n'est
+jamais un diagnostic : il faut que le témoin dise *par quel chemin*.
