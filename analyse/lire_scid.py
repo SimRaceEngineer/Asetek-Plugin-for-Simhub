@@ -16,7 +16,7 @@ POURQUOI LIRE LE FICHIER PLUTOT QUE L EXPORTER
         record    40 octets, repete jusqu a la fin du fichier
 
             double  horodatage   microsecondes depuis 1899-12-30 UTC
-            float   open, high, low, close
+            float   Open, High, Low, Close
             uint32  NumTrades
             uint32  TotalVolume
             uint32  BidVolume
@@ -30,6 +30,23 @@ POURQUOI LIRE LE FICHIER PLUTOT QUE L EXPORTER
     Copier un fichier ne demande aucune connaissance de SierraChart, ne
     peut pas se tromper de menu, et n oublie aucune colonne. Un export
     graphique, si.
+
+SUR DU TICK, LES CHAMPS OHLC NE VEULENT PAS DIRE OHLC
+
+    L editeur de donnees de SierraChart le montre noir sur blanc sur un
+    enregistrement au tick :
+
+        Open      0          toujours nul
+        High/Ask  7819.25    ce n est pas un plus haut, c est l ASK
+        Low/Bid   7819       ce n est pas un plus bas, c est le BID
+        Last      7819       le prix reellement echange
+
+    Une premiere version prenait `Open` comme ouverture de barre : elle
+    aurait ecrit ZERO dans toute la colonne. L ouverture, le plus haut
+    et le plus bas d une barre se construisent donc a partir de `Close`
+    -- le seul champ qui porte un prix de transaction -- et les deux
+    autres servent a mesurer le SPREAD au moment de l echange, ce
+    qu aucune de nos autres sources ne donne.
 
 CE FICHIER VERIFIE LE FORMAT, IL NE LE SUPPOSE PAS
 
@@ -150,9 +167,9 @@ def schema(chemin, combien):
         n = (taille - h["entete"]) // h["record"]
         print("  %d enregistrements." % n)
         print()
-        print("  %-21s %10s %10s %8s %8s %8s %8s"
-              % ("horodatage", "close", "volume", "trades", "bid", "ask",
-                 "b+a==t"))
+        print("  %-21s %9s %9s %9s %8s %7s %7s %6s"
+              % ("horodatage", "open", "last", "ask-bid", "volume",
+                 "bid", "ask", "b+a=t"))
         f.seek(h["entete"])
         vus = accord = 0
         premiers = []
@@ -163,13 +180,18 @@ def schema(chemin, combien):
                 accord += 1
             if len(premiers) < combien:
                 d = horo(t)
-                premiers.append((d, c, tv, nt, bv, av, bv + av == tv))
+                premiers.append((d, o, c, hi - lo, tv, bv, av,
+                                 bv + av == tv))
             if vus >= 200000:
                 break
-        for d, c, tv, nt, bv, av, ok in premiers:
-            print("  %-21s %10.2f %10d %8d %8d %8d %8s"
+        for d, o, c, sp, tv, bv, av, ok in premiers:
+            print("  %-21s %9.2f %9.2f %9.2f %8d %7d %7d %6s"
                   % (d.strftime("%Y-%m-%d %H:%M:%S") if d else "?",
-                     c, tv, nt, bv, av, "oui" if ok else "NON"))
+                     o, c, sp, tv, bv, av, "oui" if ok else "NON"))
+        print()
+        print("  La colonne `open` doit valoir 0 sur du tick : c est")
+        print("  normal, SierraChart n y met rien. Si elle porte un prix,")
+        print("  le fichier n est PAS au tick.")
         print()
         print("  Sur %d enregistrements lus, bid+ask == total dans %.1f %%"
               % (vus, 100.0 * accord / max(1, vus)))
@@ -205,7 +227,7 @@ def agrege(chemin, dest, pas, saut):
         f.seek(h["entete"])
         g = io.open(dest, "w", encoding="utf-8", newline="")
         g.write("ts;open;high;low;close;trades;volume;bid_vol;ask_vol;"
-                "delta;cvd\n")
+                "delta;cvd;spread_moy\n")
         cle = None
         b = None
         cvd = 0.0
@@ -226,11 +248,20 @@ def agrege(chemin, dest, pas, saut):
                     jour = d.date()
                     cvd = 0.0
                 cle = k
+                # `o` (le champ Open) vaut 0 sur du tick : l ouverture
+                # de la barre est le PRIX ECHANGE du premier
+                # enregistrement, c est-a-dire `c`.
                 b = {"ts": ORIGINE + dt.timedelta(seconds=k * pas),
-                     "o": o, "h": hi, "l": lo, "c": c,
-                     "nt": 0, "tv": 0, "bv": 0, "av": 0, "cvd": 0.0}
-            b["h"] = max(b["h"], hi)
-            b["l"] = min(b["l"], lo)
+                     "o": c, "h": c, "l": c, "c": c,
+                     "nt": 0, "tv": 0, "bv": 0, "av": 0, "cvd": 0.0,
+                     "sp": 0.0, "nsp": 0}
+            # hi = ask, lo = bid : leur difference est le spread au
+            # moment de l echange, pas une amplitude.
+            if hi > 0 and lo > 0 and hi >= lo:
+                b["sp"] += (hi - lo)
+                b["nsp"] += 1
+            b["h"] = max(b["h"], c)
+            b["l"] = min(b["l"], c)
             b["c"] = c
             b["nt"] += nt
             b["tv"] += tv
@@ -245,10 +276,11 @@ def agrege(chemin, dest, pas, saut):
 
 
 def ecris(g, b):
-    g.write("%s;%.2f;%.2f;%.2f;%.2f;%d;%d;%d;%d;%d;%.0f\n"
+    sp = (b["sp"] / b["nsp"]) if b["nsp"] else 0.0
+    g.write("%s;%.2f;%.2f;%.2f;%.2f;%d;%d;%d;%d;%d;%.0f;%.4f\n"
             % (b["ts"].strftime("%Y-%m-%d %H:%M:%S"),
                b["o"], b["h"], b["l"], b["c"], b["nt"], b["tv"],
-               b["bv"], b["av"], b["av"] - b["bv"], b["cvd"]))
+               b["bv"], b["av"], b["av"] - b["bv"], b["cvd"], sp))
     return 1
 
 
