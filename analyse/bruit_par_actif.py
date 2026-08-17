@@ -30,11 +30,35 @@ CE QU ON MESURE : LE RATIO DE VARIANCE
         VR = 1   marche au hasard
         VR > 1   les mouvements PERSISTENT -- il se passe quelque chose
 
-    L echelle ou VR franchit 1 est exactement "l unite ou on commence
-    a voir quelque chose en cas de reverse". Elle n a aucune raison
-    d etre la meme sur trois actifs qui n ont ni la meme volatilite en
-    points, ni les memes volumes, ni la meme facon de faire des
-    spikes.
+    Elle n a aucune raison d etre la meme sur trois actifs qui n ont
+    ni la meme volatilite en points, ni les memes volumes, ni la meme
+    facon de faire des spikes.
+
+DEUX GARDE-FOUS SUR LA LECTURE DE CETTE COURBE
+
+    Le PLANCHER DE COTATION. Aux horizons les plus courts le prix n a
+    bouge que d un tic ou de rien du tout : le mouvement median du
+    US500 a 30 s vaut 0,25 point, c est-a-dire exactement un tic. La
+    variance d une variable qui ne prend que deux valeurs ne mesure
+    plus le marche, elle mesure l arrondi. Tout horizon dont le
+    mouvement median tient en trois tics est marque `plancher` et
+    EXCLU du verdict -- il reste affiche, parce qu on ne cache pas une
+    ligne, mais il ne peut pas designer une echelle.
+
+    UN SEUL POINT NE FAIT PAS UN REGIME. En balayant huit horizons on
+    finit toujours par en trouver un a plus d une erreur type de 1 :
+    c est ce que fait un balayage. On exige donc que l ecart soit
+    CONFIRME par l horizon suivant, dans le meme sens.
+
+CE QUE LE VERDICT DESIGNE
+
+    Pas le premier franchissement -- il depend du plancher et du pas
+    d echantillonnage. L horizon ou le RETOUR EN ARRIERE est le plus
+    net : celui dont le VR s ecarte de 1 vers le bas du plus grand
+    nombre d erreurs types. C est litteralement "l echelle ou on
+    commence a voir quelque chose en cas de reverse", et la colonne
+    `z` du tableau permet de verifier a l oeil que le verdict lit bien
+    la meme chose que la table.
 
 CE QU ON EN FERA
 
@@ -140,6 +164,31 @@ def mediane(v):
     return v[len(v) // 2]
 
 
+def pas_cotation(ecarts):
+    """Le plus petit ecart de prix que l instrument sait exprimer.
+
+    On ne le declare pas en dur : le CSV le contient. On compte tous
+    les ecarts NON NULS d un cycle a l autre et on retient la plus
+    petite valeur qui revient assez souvent pour ne pas etre un
+    accident d arrondi (2 % des ecarts). Un minimum brut se ferait
+    piloter par une seule ligne aberrante."""
+    if not ecarts:
+        return None
+    compte = {}
+    for d in ecarts:
+        v = round(abs(d), 6)
+        if v <= 0:
+            continue
+        compte[v] = compte.get(v, 0) + 1
+    if not compte:
+        return None
+    total = sum(compte.values())
+    for v in sorted(compte):
+        if compte[v] >= total * 0.02:
+            return v
+    return min(compte)
+
+
 def une_journee(px, ks):
     """Pour une journee et un actif : la variance des rendements a
     chaque horizon k, et le mouvement absolu median.
@@ -199,11 +248,20 @@ def main():
     dis("    VR > 1   les mouvements PERSISTENT      -- il se passe")
     dis("             quelque chose")
     dis()
-    dis("  L echelle ou VR franchit 1 est ce que l utilisateur appelle")
-    dis("  \"l unite ou on commence a voir quelque chose en cas de")
-    dis("  reverse\". Elle n a aucune raison d etre la meme sur trois")
-    dis("  actifs qui n ont ni la meme volatilite en points, ni les")
-    dis("  memes volumes, ni la meme facon de faire des spikes.")
+    dis("  On ne retient PAS le premier franchissement de 1 : il depend")
+    dis("  du plancher de cotation et du pas d echantillonnage, pas du")
+    dis("  marche. On retient l horizon ou VR s ecarte le plus de 1 VERS")
+    dis("  LE BAS -- l echelle ou le retour en arriere est le plus net,")
+    dis("  c est-a-dire \"l unite ou on commence a voir quelque chose en")
+    dis("  cas de reverse\". Elle n a aucune raison d etre la meme sur")
+    dis("  trois actifs qui n ont ni la meme volatilite en points, ni")
+    dis("  les memes volumes, ni la meme facon de faire des spikes.")
+    dis()
+    dis("  Deux exigences avant qu un horizon puisse etre retenu : son")
+    dis("  mouvement median doit depasser trois tics (sinon VR mesure")
+    dis("  l arrondi), et son ecart doit etre CONFIRME par l horizon")
+    dis("  suivant (sinon un balayage de huit horizons finit toujours")
+    dis("  par en trouver un).")
     dis()
     dis("  Les rendements se chevauchent : la colonne `entre jours` est")
     dis("  le seul juge de la stabilite de VR, pas le nombre de points.")
@@ -215,13 +273,21 @@ def main():
         dis("-" * LARG)
         dis("ACTIF %s" % actif)
         dis("-" * LARG)
-        dis("  %-9s %8s %10s %12s %14s"
-            % ("horizon", "VR", "entre jours", "|move| med", "cycles"))
+        dis("  %-9s %8s %10s %12s %8s %10s   %s"
+            % ("horizon", "VR", "entre jours", "|move| med", "z",
+               "cycles", "marque"))
         # variance de reference : un cycle, cumulee sur les journees
         par_jour = {}
+        ecarts1 = []
         for j, L in jours.items():
             px = [flt(r.get("%s_bid" % actif)) for r in L]
             par_jour[j] = une_journee(px, [k for k, _ in ks] + [1])
+            for i in range(len(px) - 1):
+                x0, x1 = px[i], px[i + 1]
+                if x0 is not None and x1 is not None:
+                    ecarts1.append(x1 - x0)
+        tic = pas_cotation(ecarts1)
+        plancher = (tic or 0.0) * 3.0
         base = [v[1][0] for v in par_jour.values()
                 if 1 in v and v[1][0] and v[1][0] > 0]
         if not base:
@@ -240,84 +306,118 @@ def main():
             et = math.sqrt(variance(vrs) or 0.0)
             med = mediane([d[k][1] for d in par_jour.values() if k in d])
             npts = sum(d[k][2] for d in par_jour.values() if k in d)
-            lignes.append((m, k, vr, et, med, npts))
-            dis("  %6.1f min %8.2f %10.2f %12.2f %14d"
-                % (m, vr, et, med or 0.0, npts))
-        # Ou VR franchit 1 -- SI le franchissement survit a la
-        # dispersion entre journees.
-        #
-        # En balayant huit horizons on finit toujours par trouver un
-        # passage au-dessus de 1. Sur le banc, une marche au hasard
-        # pure "franchissait" entre 15 et 30 min : VR allait de 0,95 a
-        # 1,08 avec un ecart-type entre journees de 0,22 et 0,39. Un
-        # franchissement noye dans sa propre dispersion n en est pas
-        # un.
-        #
-        # On exige donc que le point AU-DESSUS soit au-dessus de 1 de
-        # plus d une erreur type (ecart-type / racine du nombre de
-        # journees), et que le point EN DESSOUS le soit en dessous de
-        # la meme facon.
-        # Le franchissement peut aller dans LES DEUX SENS, et c est
-        # le sens qui porte le sens.
-        #
-        # Vers le HAUT : les mouvements cessent de se defaire, ils
-        # commencent a persister. Vers le BAS : l inverse -- au-dela de
-        # cette echelle le prix defait ce qu il vient de faire, c est
-        # un regime de range.
-        #
-        # Une premiere version ne cherchait QUE le franchissement vers
-        # le haut. Sur les donnees reelles, les trois actifs partent de
-        # ~1,05 et descendent a ~0,75 : aucun franchissement montant,
-        # donc elle se rabattait sur "VR >= 1 des le premier point, les
-        # mouvements persistent" -- l exact contraire de ce que son
-        # propre tableau affichait. Un verdict qui contredit sa table
-        # est pire qu absent.
-        nj = max(1, len(par_jour))
-        seuil = sens = None
-        for i in range(1, len(lignes)):
-            av, ap = lignes[i - 1], lignes[i]
-            se_av = av[3] / math.sqrt(nj)
-            se_ap = ap[3] / math.sqrt(nj)
-            if av[2] + se_av < 1.0 <= ap[2] - se_ap:
-                seuil, sens = ap, "HAUT"
-                break
-            if av[2] - se_av > 1.0 >= ap[2] + se_ap:
-                seuil, sens = ap, "BAS"
-                break
+            se = et / math.sqrt(max(1, len(par_jour)))
+            z = (vr - 1.0) / se if se > 0 else 0.0
+            au_plancher = plancher > 0 and (med or 0.0) <= plancher
+            lignes.append((m, k, vr, et, med, npts, z, au_plancher))
+            dis("  %6.1f min %8.2f %10.2f %12.2f %8.1f %10d   %s"
+                % (m, vr, et, med or 0.0, z, npts,
+                   "plancher" if au_plancher else ""))
         dis()
-        if seuil and sens == "HAUT":
-            dis("  => VR franchit 1 VERS LE HAUT entre %.1f et %.1f min."
-                % (lignes[lignes.index(seuil) - 1][0], seuil[0]))
-            dis("     Au-dela, les mouvements persistent. Unite de bruit")
-            dis("     retenue : %.1f min, mouvement median %.2f points."
-                % (seuil[0], seuil[4] or 0.0))
-            resume[actif] = (seuil[0], seuil[4])
-        elif seuil and sens == "BAS":
-            dis("  => VR franchit 1 VERS LE BAS entre %.1f et %.1f min."
-                % (lignes[lignes.index(seuil) - 1][0], seuil[0]))
-            dis("     Au-dela de cette echelle le prix DEFAIT ce qu il")
-            dis("     vient de faire : c est un regime de range, et il")
-            dis("     s installe a partir de %.1f min." % seuil[0])
-            dis("     Unite de bruit retenue : %.1f min, mouvement median"
-                " %.2f points." % (seuil[0], seuil[4] or 0.0))
-            resume[actif] = (seuil[0], seuil[4])
-        elif lignes and all(abs(x[2] - 1.0) <= x[3] / math.sqrt(nj)
-                            for x in lignes):
-            dis("  => VR est indiscernable de 1 sur toute la plage : ce")
-            dis("     prix se comporte comme une marche au hasard aux")
-            dis("     echelles regardees. Aucune unite de bruit ne s en")
-            dis("     degage -- et c est une reponse, pas un echec.")
-        elif lignes and lignes[0][2] >= 1.0:
-            dis("  => VR est deja >= 1 des %.1f min : aucune echelle de"
-                % lignes[0][0])
-            dis("     bruit detectable dans la plage examinee. Les")
-            dis("     mouvements persistent des le premier cycle.")
-            resume[actif] = (lignes[0][0], lignes[0][4])
+        dis("  pas de cotation lu dans les donnees : %s ; un horizon dont"
+            % ("%.2f pt" % tic if tic else "indeterminable"))
+        dis("  le mouvement median tient en trois tics (<= %.2f) est"
+            % plancher)
+        dis("  marque `plancher` : il mesure l arrondi, pas le marche.")
+        # LE VERDICT. Quatrieme version de cette logique. Les trois
+        # premieres affirmaient le contraire de leur propre tableau, et
+        # c est la seule raison pour laquelle la colonne `z` existe
+        # maintenant : un verdict doit pouvoir etre verifie a l oeil
+        # sur la ligne qu il commente.
+        #
+        # v1 ne cherchait qu un franchissement VERS LE HAUT. Les trois
+        # actifs descendent : aucun trouve, branche par defaut, verdict
+        # "les mouvements persistent" sous une colonne allant de 1,06 a
+        # 0,76.
+        #
+        # v2 exigeait un point significativement AU-DESSUS de 1 suivi
+        # d un point significativement en dessous. Or les courbes
+        # PARTENT de 1 : aucun couple ne passait, meme branche par
+        # defaut, meme phrase fausse. Une condition plus stricte n est
+        # pas une condition plus prudente.
+        #
+        # v3 prenait le PREMIER horizon a plus d une erreur type de 1.
+        # Il tombait sur 0,5 min pour US30 et US500 -- ou le mouvement
+        # median du US500 vaut 0,25 point, c est-a-dire UN TIC. Le
+        # tampon propose valait donc un tic, et la reserve imprimee dix
+        # lignes plus bas disait deja de ne pas lire cet horizon-la.
+        #
+        # v4 : on ecarte les horizons au plancher de cotation, on exige
+        # que l ecart soit confirme par l horizon suivant, et on
+        # designe non pas le premier ecart mais le PLUS GRAND vers le
+        # bas -- l echelle ou le retour en arriere est le plus net.
+        # Cout assume : le dernier horizon de la plage ne peut jamais
+        # etre confirme, donc jamais retenu.
+        util = [x for x in lignes if not x[7]]
+        conf = None
+        for i in range(len(util) - 1):
+            x, y = util[i], util[i + 1]
+            if x[6] <= -1.0 and y[6] <= -1.0:
+                conf = (x, "DEFAIT")
+                break
+            if x[6] >= 1.0 and y[6] >= 1.0:
+                conf = (x, "PERSISTE")
+                break
+        # le creux : l horizon le plus negatif, confirme par son voisin
+        creux = None
+        for i in range(len(util) - 1):
+            x = util[i]
+            if x[6] <= -1.0 and util[i + 1][6] <= -1.0:
+                if creux is None or x[6] < creux[6]:
+                    creux = x
+        dis()
+        # "Rien de mesurable" et "rien d ecarte" ne sont pas la meme
+        # reponse. Sur le banc, un actif dont TOUS les horizons
+        # tenaient sous trois tics recevait la phrase "VR reste a moins
+        # d une erreur type de 1" au-dessus d une colonne allant de
+        # 0,47 a 0,18. C est la quatrieme fois que ce fichier ecrit une
+        # phrase que sa propre table contredit ; celle-la a ete
+        # attrapee sur banc et pas en production.
+        if len(util) < 2:
+            dis("  => NON MESURABLE sur cette plage. %d horizon(s) sur %d"
+                % (len(util), len(lignes)))
+            dis("     seulement echappent au plancher de cotation : a")
+            dis("     toutes les autres echelles le mouvement median tient")
+            dis("     en trois tics de %.2f pt, donc VR y mesure l arrondi."
+                % (tic or 0.0))
+            dis("     Les valeurs de VR affichees ci-dessus sont reelles")
+            dis("     mais ininterpretables ; il faut des horizons plus")
+            dis("     longs pour cet actif, pas une autre statistique.")
+        elif creux is not None:
+            dis("  => Le retour en arriere est le plus net a %.1f min :"
+                % creux[0])
+            dis("     VR = %.2f, soit %.1f erreurs types SOUS 1. A cette"
+                % (creux[2], creux[6]))
+            dis("     echelle le prix DEFAIT ce qu il vient de faire.")
+            dis("     Unite de bruit : %.1f min, mouvement median %.2f pts."
+                % (creux[0], creux[4] or 0.0))
+            if plancher > 0 and (creux[4] or 0.0) <= plancher + (tic or 0.0):
+                dis("     ATTENTION : ce mouvement median n est qu a un tic")
+                dis("     au-dessus du plancher (%.2f). Le verdict tient a"
+                    % plancher)
+                dis("     un cran de quantification. A ne pas transformer en")
+                dis("     tampon sans l avoir revu sur des horizons plus")
+                dis("     longs, ou sur des barres plutot que des cycles.")
+            if conf and conf[0][0] != creux[0]:
+                dis("     (Premier ecart confirme : %.1f min, z = %.1f,"
+                    % (conf[0][0], conf[0][6]))
+                dis("     %s. Ce n est pas lui qu on retient.)" % conf[1])
+            resume[actif] = (creux[0], creux[4], "defait")
+        elif conf and conf[1] == "PERSISTE":
+            dis("  => Aucun horizon ne montre de retour en arriere")
+            dis("     confirme. En revanche VR est au-dessus de 1 des")
+            dis("     %.1f min (z = %.1f), confirme par l horizon suivant :"
+                % (conf[0][0], conf[0][6]))
+            dis("     les mouvements PERSISTENT. Ce n est pas une echelle")
+            dis("     de bruit, c est son contraire -- aucun tampon n en")
+            dis("     sort.")
         else:
-            dis("  => VR reste < 1 sur toute la plage : les mouvements se")
-            dis("     defont jusqu a %.0f min. L unite de bruit est"
-                % lignes[-1][0] if lignes else 0)
-            dis("     au-dela de ce qu on regarde ici.")
+            dis("  => VR reste a moins d une erreur type de 1, ou son")
+            dis("     ecart n est jamais confirme par l horizon suivant,")
+            dis("     sur toute la plage hors plancher : indiscernable")
+            dis("     d une marche au hasard aux echelles regardees.")
+            dis("     Aucune unite de bruit ne s en degage -- et c est une")
+            dis("     reponse, pas un echec.")
 
     dis()
     dis("=" * LARG)
@@ -326,11 +426,13 @@ def main():
     if not resume:
         dis("  Aucune echelle determinee -- pas de tampon a proposer.")
     else:
-        dis("  %-8s %10s %14s" % ("actif", "echelle", "|move| median"))
+        dis("  %-8s %10s %14s %12s"
+            % ("actif", "echelle", "|move| median", "regime"))
         for actif in actifs:
             if actif in resume:
-                dis("  %-8s %8.1f min %12.2f pts"
-                    % (actif, resume[actif][0], resume[actif][1] or 0.0))
+                dis("  %-8s %8.1f min %12.2f pts %12s"
+                    % (actif, resume[actif][0], resume[actif][1] or 0.0,
+                       resume[actif][2]))
         dis()
         dis("  Une cassure ne comptera que si le prix depasse le bord du")
         dis("  range de plus de k fois ce mouvement median, avec k")

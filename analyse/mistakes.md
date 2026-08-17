@@ -60,6 +60,17 @@ plus bas.
   Extraire la convention du fichier, la rendre à l'identique.
 - **Une limite d'affichage n'est pas un résultat.** Pour prouver une
   absence : compter d'abord, afficher ensuite. Jamais `-First N`.
+- **Un verdict se lit dans la colonne qu'il commente.** S'il est
+  calculé par un chemin que le tableau ne montre pas, il finira par
+  dire le contraire du tableau — et personne ne le verra. La colonne
+  qui décide doit être imprimée.
+- **Une branche par défaut n'est pas un fourre-tout.** « Rien de
+  mesurable » et « rien de significatif » sont deux réponses
+  différentes ; les faire tomber dans le même `else` produit une
+  phrase fausse au-dessus de chiffres justes.
+- **Sous le plancher de cotation, une statistique mesure l'arrondi.**
+  Un mouvement médian d'un tic n'est pas un petit mouvement, c'est
+  l'absence de mesure.
 
 ---
 
@@ -633,3 +644,63 @@ deux ne « passe » un seuil.
 
 **La règle.** « Rien ne passe le seuil » est une information, pas une
 conclusion. Le livrable est la carte du compromis, pas le verdict.
+
+---
+
+## 17/08/2026 — quatre versions d'un verdict qui contredisait sa table
+
+**Ce que j'ai fait.** `bruit_par_actif.py` imprime une colonne de
+ratios de variance par horizon, puis une phrase qui la résume. Trois
+versions de suite, la phrase a dit le contraire de la colonne.
+
+- **v1** ne cherchait qu'un franchissement de 1 **vers le haut**. Les
+  trois actifs descendent : rien trouvé, branche par défaut, verdict
+  « les mouvements persistent » imprimé sous une colonne allant de
+  1,06 à 0,76.
+- **v2** cherchait dans les deux sens, mais exigeait un point
+  significativement **au-dessus** de 1 suivi d'un point
+  significativement en dessous. Or les courbes *partent* de 1 : aucun
+  point n'est significativement au-dessus, donc aucun couple ne
+  qualifiait, et la même branche par défaut reprenait la main avec la
+  même phrase fausse. Une condition plus stricte n'est pas une
+  condition plus prudente : elle rend juste la mauvaise réponse plus
+  souvent.
+- **v3** prenait le premier horizon à plus d'une erreur type de 1.
+  Elle désignait 0,5 min pour US30 et US500 — où le mouvement médian
+  du US500 vaut **0,25 point, soit un tic**. Le tampon proposé valait
+  un tic de cotation, et la RÉSERVE imprimée dix lignes plus bas dans
+  le même fichier disait déjà de ne pas lire cet horizon-là. J'avais
+  écrit le garde-fou et je ne l'avais pas branché.
+
+**Ce que ça aurait coûté.** Ce tampon devait entrer dans la définition
+de cassure de `breakout_range.py`. Un tampon d'un tic, c'est un tampon
+nul : on aurait « ajouté un filtre de bruit » qui ne filtre rien, et
+mesuré ensuite l'effet du filtre.
+
+**Le correctif (v4).** Trois changements, dont deux sont des aveux :
+
+1. Une colonne **`z`** est imprimée à côté de VR. Le verdict ne peut
+   plus être calculé par un chemin invisible : la valeur qui décide est
+   sur la ligne.
+2. Les horizons dont le mouvement médian tient en **trois tics** sont
+   marqués `plancher` et exclus du verdict. Le tic n'est pas déclaré en
+   dur, il est **lu dans les données** (plus petit écart non nul
+   représentant au moins 2 % des écarts).
+3. L'écart doit être **confirmé par l'horizon suivant** — en balayant
+   huit horizons on en trouve toujours un — et on retient non pas le
+   premier mais le **plus grand vers le bas**, l'échelle où le retour
+   en arrière est le plus net. C'est ça, la question posée.
+
+**Ce qui l'a attrapé.** Trois journées synthétiques : une marche au
+hasard pure, une série sous le plancher, une série à retour en
+arrière. La marche au hasard a rendu « indiscernable », la série sous
+le plancher a rendu « VR reste à moins d'une erreur type de 1 » —
+**faux, sa colonne allait de 0,47 à 0,18**. Quatrième phrase contredite
+par sa propre table, attrapée au banc et pas en production, d'où la
+branche NON MESURABLE. La branche PERSISTE, elle, n'avait jamais été
+exécutée : je l'ai déclenchée avec une quatrième série avant de
+déposer.
+
+**Les règles.** Un verdict se lit dans la colonne qu'il commente. Une
+branche par défaut n'est pas un fourre-tout. Sous le plancher de
+cotation, une statistique mesure l'arrondi.
