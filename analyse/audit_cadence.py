@@ -143,8 +143,20 @@ def lis_ts(chemin, colonne, sep, echantillon, maxi):
     return out, n, None
 
 
-def analyse(ts):
-    """Ordre, intervalles, trous. Rien d autre."""
+def analyse(ts, facteur):
+    """Ordre, intervalles, trous. Rien d autre.
+
+    UN TROU EST RELATIF A LA SOURCE, PAS A UNE CONSTANTE. La premiere
+    version ecrivait `d > 60.0` en dur. Sur un flux a 10 s c est
+    raisonnable ; sur snapshots.csv, qui tourne a trois minutes, CHAQUE
+    intervalle normal depassait 60 s, donc tout comptait comme trou et
+    la part utile sortait a 0 % pour les vingt et une journees. Le
+    fichier n y etait pour rien : c est le seuil qui etait faux.
+
+    Un trou est donc un intervalle qui depasse `facteur` fois le pas
+    median DE CETTE SOURCE-LA. Le seuil retenu est affiche, parce qu un
+    seuil calcule qu on ne montre pas ne vaut pas mieux qu un seuil
+    invente."""
     if len(ts) < 3:
         return None
     ecarts, desordre = [], 0
@@ -156,13 +168,15 @@ def analyse(ts):
         ecarts.append(d)
     if not ecarts:
         return None
+    p50 = quantile(ecarts, 0.5) or 0.0
+    seuil = facteur * p50 if p50 > 0 else 60.0
     tri = sorted(ts)
     couvert = (tri[-1] - tri[0]).total_seconds()
-    trous = [d for d in ecarts if d > 60.0]
+    trous = [d for d in ecarts if d > seuil]
     utile = couvert - sum(trous)
     return {"n": len(ts), "desordre": desordre,
-            "p50": quantile(ecarts, 0.5), "p90": quantile(ecarts, 0.9),
-            "max": max(ecarts), "gros": len(trous),
+            "p50": p50, "p90": quantile(ecarts, 0.9),
+            "max": max(ecarts), "gros": len(trous), "seuil": seuil,
             "couvert": couvert, "utile": max(0.0, utile),
             "debut": tri[0], "fin": tri[-1]}
 
@@ -172,16 +186,17 @@ def ligne(nom, a, echantillon):
         dis("  %-12s %s" % (nom, "trop peu de lignes pour juger"))
         return
     part = (a["utile"] / a["couvert"] * 100.0) if a["couvert"] > 0 else 0.0
-    dis("  %-12s %7d %8d %7.0f %7.0f %8.0f %6d %8.1f %8.1f %6.0f%%   %s"
+    dis("  %-12s %7d %8d %7.0f %7.0f %8.0f %8.0f %6d %8.1f %8.1f %6.0f%%   %s"
         % (nom, a["n"], a["desordre"], a["p50"], a["p90"], a["max"],
-           a["gros"], a["couvert"] / 3600.0, a["utile"] / 3600.0, part,
+           a["seuil"], a["gros"], a["couvert"] / 3600.0,
+           a["utile"] / 3600.0, part,
            a["debut"].strftime("%H:%M") + "-" + a["fin"].strftime("%H:%M")))
 
 
 def entete():
-    dis("  %-12s %7s %8s %7s %7s %8s %6s %8s %8s %6s   %s"
-        % ("jour", "n", "desordre", "p50 s", "p90 s", "max s", ">60s",
-           "couvert", "utile", "part", "plage"))
+    dis("  %-12s %7s %8s %7s %7s %8s %8s %6s %8s %8s %6s   %s"
+        % ("jour", "n", "desordre", "p50 s", "p90 s", "max s", "seuil s",
+           "trous", "couvert", "utile", "part", "plage"))
 
 
 def bilan(nom, tout, echantillon):
@@ -212,6 +227,8 @@ def main():
                    help="une ligne sur N dans snapshots.csv")
     p.add_argument("--max-lignes", type=int, default=200000,
                    help="plafond de lignes retenues par journee")
+    p.add_argument("--facteur", type=float, default=5.0,
+                   help="un trou = plus de N fois le pas median")
     a = p.parse_args()
     voulus = set(x.strip() for x in a.jours.split(",")) if a.jours else None
 
@@ -225,8 +242,15 @@ def main():
     dis("  convertissent avec un pas median, ce qui est faux des qu il")
     dis("  y a des trous.")
     dis()
-    dis("  `utile` = duree couverte MOINS la somme des trous de plus de")
-    dis("  60 s. Le rapport utile/couvert est le seul chiffre qui")
+    dis("  `utile` = duree couverte MOINS la somme des TROUS, un trou")
+    dis("  etant un intervalle depassant %.0f fois le pas median DE LA"
+        % a.facteur)
+    dis("  SOURCE. Un seuil fixe a 60 s -- ce que faisait la premiere")
+    dis("  version -- classait chaque intervalle normal de snapshots")
+    dis("  (pas de trois minutes) comme un trou, et sortait 0 %% de part")
+    dis("  utile sur vingt et une journees saines.")
+    dis()
+    dis("  Le rapport utile/couvert est le seul chiffre qui")
     dis("  decide : au-dessus de 90 %, une fenetre temporelle a un sens ;")
     dis("  a 40 %, la journee est un gruyere.")
     dis()
@@ -254,7 +278,7 @@ def main():
             if err:
                 dis("  %-12s %s" % (j, err))
                 continue
-            r = analyse(ts)
+            r = analyse(ts, a.facteur)
             ligne(j, r, 1)
             if r:
                 tout_c.append(r)
@@ -288,7 +312,7 @@ def main():
             if err:
                 dis("  %-12s %s" % (j, err))
                 continue
-            r = analyse(ts)
+            r = analyse(ts, a.facteur)
             ligne(j, r, a.echantillon)
             if r:
                 tout_s.append(r)
