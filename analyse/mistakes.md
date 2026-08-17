@@ -89,6 +89,12 @@ plus bas.
 - **Une règle notée mais appliquée à un seul endroit n'est pas une
   règle**, c'est une anecdote — la reporter dans cette liste fait
   partie du correctif.
+- **Toujours afficher ce qu'un filtre GARDE**, pas seulement ce qu'il
+  jette. Un seuil d'occurrences sélectionne les événements *fréquents*,
+  pas les *importants* — l'inverse de ce qu'on croit.
+- **Vérifier qu'un témoin reste un témoin.** Si les fenêtres
+  d'événement couvrent une fraction importante de la période, la
+  comparaison est devenue une comparaison de périodes.
 
 ---
 
@@ -937,3 +943,51 @@ quelle décision de méthode — ce ne sont pas des mesures.
 
 **Les règles.** Un horizon en jours se compte en séances. Un effectif
 non monotone est un bug, pas un hasard.
+
+---
+
+## 17/08/2026 — un filtre qui sélectionne le contraire de ce qu'on croit
+
+**Ce que j'ai fait.** Pour normaliser une surprise macro, j'ai exigé
+au moins quatre occurrences du même événement — sinon l'écart-type se
+calcule sur deux points. Statistiquement défendable.
+
+**Ce que ça gardait.** Vérification faite en l'imprimant :
+
+```
+EIA Crude Oil Stocks Change    11 evenement(s)
+Initial Jobless Claims         11 evenement(s)
+```
+
+22 = 11 + 11. **Deux séries hebdomadaires, et rien d'autre.** Zéro CPI,
+zéro NFP, zéro Fed — tous à trois occurrences sur un export de trois
+mois, tous écartés.
+
+**Le raisonnement faux.** Un seuil d'occurrences ne sélectionne pas les
+événements **importants**, il sélectionne les événements **fréquents**.
+Ce sont deux notions opposées en macro : les poids lourds sont
+mensuels, les broutilles sont hebdomadaires.
+
+**La conséquence.** Un tableau intitulé « réaction aux surprises
+macro », calculé correctement, contrôlé par un témoin apparié, et
+mesurant en réalité la réaction du S&P aux **stocks de pétrole**. Je
+l'aurais présenté tel quel : rien dans la sortie ne disait le
+contraire.
+
+**Ce qui l'a attrapé.** Rien d'automatique. J'affichais la liste des
+événements ÉCARTÉS et pas celle des RETENUS. En lisant les écartés —
+CPI, NFP, ISM, chômage, tous à 3 — j'ai déduit ce qui pouvait rester.
+Le correctif est d'imprimer les deux listes.
+
+**Et un second défaut, révélé par le premier.** Onze événements
+hebdomadaires avec un horizon de 5 séances couvrent **55 séances sur
+106**. Le groupe « surprises » et le groupe témoin se partagent alors
+la période moitié-moitié : on ne compare plus événement contre
+non-événement, mais **une moitié du calendrier à l'autre**. Le témoin
+apparié cesse d'être un témoin dès que les événements sont assez
+fréquents pour paver la période.
+
+**Les règles.** Toujours afficher ce qu'un filtre GARDE, pas seulement
+ce qu'il jette. Et vérifier qu'un témoin reste un témoin : si les
+fenêtres d'événement couvrent une fraction importante de la période,
+la comparaison est devenue une comparaison de périodes.
