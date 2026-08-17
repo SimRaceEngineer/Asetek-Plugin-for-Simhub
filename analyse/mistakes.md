@@ -71,6 +71,24 @@ plus bas.
 - **Sous le plancher de cotation, une statistique mesure l'arrondi.**
   Un mouvement médian d'un tic n'est pas un petit mouvement, c'est
   l'absence de mesure.
+- **Avant d'écrire un outil, chercher s'il existe.** Poser la question
+  coûte trente secondes ; le réécrire coûte une matinée, et le pire est
+  qu'on ne s'en aperçoit pas. `PROTOCOLE.md` est là pour ça.
+- **Une plage de dates n'est pas une couverture.** C'est une
+  enveloppe, pas une densité — mesurer ce qu'elle contient avant
+  d'annoncer un effectif. Sur des futures, un contrat n'est liquide que
+  sur son trimestre.
+- **Un horizon en jours se compte en SÉANCES**, jamais en jours
+  calendaires — et une séance se définit par sa densité de barres, pas
+  par sa présence dans une liste de dates.
+- **Un effectif non monotone est un bug.** Si l'horizon du milieu a
+  moins de points que ses deux voisins, on compte mal ; ce n'est pas un
+  manque de données.
+- **Quand on corrige un seuil inventé, chercher ses frères** dans le
+  même fichier avant de refermer.
+- **Une règle notée mais appliquée à un seul endroit n'est pas une
+  règle**, c'est une anecdote — la reporter dans cette liste fait
+  partie du correctif.
 
 ---
 
