@@ -2104,6 +2104,66 @@ position — ni du point d'entrée, ni du stop, ni du glissement. Le lien
 avec les trades de la stack est une mesure séparée, qui n'a pas été
 faite.
 
+### AMENDEMENT du 17/08 à 09:20 — trois hypothèses, pas une
+
+**Le cumulé à +5,6 est retiré.** Il moyenne trois comportements dont
+un va à contresens ; une moyenne de choses différentes ne décrit
+aucune d'elles.
+
+L'objection, formulée par l'utilisateur : *« chaque asset a son
+comportement et on le sait. Le plus volatil en points est l'US30, mais
+les volumes sont sur SPX et US100, et le SPX est le plus dur à
+transformer en range — c'est lui qui fait tout perdre à la stack. Il y
+a des notions de bruit à prendre en compte par actif : les bougies,
+les spikes sont totalement différents de l'un à l'autre. »*
+
+Elle est confirmée par nos propres mesures, que j'avais lues sans en
+tirer la conséquence : `cassure_par_actif.py` donne au 5 août
+**−29,45 € par signal sur US500** (p = 0,005), −12,82 sur US30,
+**−6,38 sur US100 dont la rupture n'est même pas détectable**
+(p = 0,382). Trois régimes, pas un.
+
+**Cet amendement est écrit AVANT toute nouvelle donnée.** Aucune
+mesure postérieure au 17/08 n'a été consultée ; c'est un argument a
+priori sur l'unité d'analyse, pas un ajustement au vu d'un résultat.
+La distinction est ce qui sépare une pré-inscription corrigée d'un
+sauvetage.
+
+**H27a — US100.** Écart observé +12,2 points sur 141 événements.
+Seuil : `n > (1,96/0,122)² × p(1−p)` ≈ **64 événements** neufs. À ~7,8
+par séance : **environ 8 séances, autour du 27 août**.
+
+**H27b — US500.** Écart observé +6,8 sur 141. Seuil : **≈ 206
+événements** neufs. À ~7,8 par séance : **environ 26 séances, autour
+du 22 septembre**. C'est loin, et c'est le prix d'un effet deux fois
+plus petit.
+
+**H27c — US30, le témoin négatif.** Écart observé **−1,7**. On ne
+pré-enregistre pas un effet ici : on pré-enregistre son ABSENCE.
+**H27c est fausse si US30 montre, sur ≥ 206 événements neufs, un écart
+positif dont l'intervalle de confiance exclut 0.** Si c'est le cas,
+c'est l'ensemble du motif qu'il faudra revoir — pas ajouter US30 aux
+gagnants.
+
+Les trois sont mesurées séparément et **ne se confirment pas l'une
+l'autre** : trois indices corrélés à 90 % ne fournissent pas trois
+échantillons indépendants.
+
+### Ce qui manque encore, et qui vient de la même objection
+
+L'événement est aujourd'hui défini sans **unité de bruit propre à
+l'actif** : franchir le bord d'un range d'un centième de point compte
+autant que le franchir de dix points. Sur l'actif le plus agité en
+points, tout franchissement est du bruit ; sur le plus calme, aucun ne
+l'est. La correction est un **tampon exprimé dans le bruit propre de
+chaque actif** — par exemple k fois la variation médiane par cycle,
+avec k balayé comme un axe de la grille et non choisi.
+
+Tant que ce tampon n'existe pas, H27a/b/c portent sur des événements
+dont la définition avantage mécaniquement les actifs calmes. C'est
+écrit ici pour que le verdict, quel qu'il soit, soit lu avec cette
+réserve.
+
 ### Ce que H27 n'autorise pas
 
 Aucun changement de paramètre pendant le gel. Elle n'entre en
