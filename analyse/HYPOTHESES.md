@@ -2238,3 +2238,75 @@ validant.
 **Fin août**, après transcription des `.scid` et croisement avec les
 snapshots. Si les trois conditions échouent, la réponse est « on garde
 MT5 » — et c'est une réponse, pas un échec.
+
+---
+
+## H29 — Les deux règles d'abstention du contrefactuel orderflow
+
+**Pré-enregistrée le 17/08 à 10:45**, à partir de la sortie
+`scalp_orderflow_20260817-1025.txt` du pipeline existant (153 481
+barres orderflow depuis le 29/04, 2 550 tickets rails, 1 635 appariés
+à une barre Ninja).
+
+Ces deux règles sont **les mieux classées du contrefactuel**. Elles ne
+sont pas de moi : elles sortent d'un tableau déjà calculé. Ce que
+j'ajoute ici, c'est la seule chose qui leur manquait — **une date de
+coupure et un critère de réfutation écrits avant la suite**.
+
+### Les deux règles, avec le chiffre qu'elles doivent reproduire
+
+| | testables | retirés | PnL/signal avant | après | Δ annoncé |
+|---|---|---|---|---|---|
+| **A — flux CARNAGE ou MOU (ER < 0,40)** | 1 635 | 1 212 (74 %) | −0,97 € | +3,68 € | **+4,65** |
+| **B — heures 09h–11h** | 2 550 | 757 (30 %) | −0,97 € | +2,72 € | **+3,69** |
+
+La règle A ne s'applique qu'aux tickets appariés à une barre Ninja —
+**64 % du total**, et **zéro sur US100**, qui n'a aucune donnée
+SierraChart. La règle B s'applique à tout le monde : elle ne demande
+qu'une horloge.
+
+### Pourquoi elles ne prouvent rien en l'état
+
+Elles sont nées des 2 550 tickets qu'elles jugent. Le document le dit
+lui-même : *in-sample*, contrefactuel naïf (retirer un trade ne change
+rien au reste), et un Δ sur moins de 30 signaux est du bruit. Un
+tableau qui classe dix règles par Δ **trouvera toujours une première**,
+même sur du hasard — c'est le motif qu'on documente depuis trois
+semaines.
+
+### La coupure
+
+**Tous les tickets clos à partir du 18/08/2026 00:00.** Ceux d'avant
+ont servi à écrire les règles ; ils ne peuvent pas les tester.
+
+### Ce qui compterait comme confirmation
+
+Sur les tickets postérieurs, **la même règle appliquée telle quelle**
+doit rendre un Δ positif. Pas « le même Δ » — un intervalle qui
+contient +4,65 serait déjà remarquable.
+
+Combien de signaux ? Avec σ ≈ 60 € et un effet de +4,65 €/signal :
+n > (1,96 × 60 / 4,65)² ≈ **640 signaux évalués**. Au rythme observé
+(2 550 tickets sur 110 jours, soit ~23/jour), c'est **~28 jours de
+trading** → **rendez-vous le 15 octobre**, avec un regard intermédiaire
+au 15 septembre qui ne servira qu'à vérifier que la mesure tourne, pas
+à conclure.
+
+### Ce qui compterait comme réfutation
+
+- Δ ≤ 0 sur les tickets postérieurs : la règle ne survit pas à sa
+  sortie d'échantillon.
+- Δ > 0 pour B mais ≤ 0 pour A : l'heure suffisait, et l'orderflow
+  n'apportait rien — ce qui **répondrait aussi à H28** sur
+  l'abonnement SierraChart, par la négative.
+- Δ > 0 pour les deux mais A ≈ B : elles retirent les mêmes trades,
+  l'orderflow est redondant avec l'horloge. À vérifier par le
+  recouvrement des ensembles retirés, pas par les seuls Δ.
+
+### Ce que H29 n'autorise pas
+
+Aucun changement de paramètre avant le 15 octobre. Ces règles ne sont
+pas appliquées, elles sont **observées**. Et le calcul du Δ doit être
+refait par le même code, sans re-choisir le seuil de 0,40 ni la plage
+horaire — les re-choisir sur les données nouvelles annulerait
+exactement ce que ce pré-enregistrement sert à protéger.
