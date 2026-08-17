@@ -1,58 +1,62 @@
 # -*- coding: utf-8 -*-
 r"""
 assembler_docs.py -- recoller les ajouts du 17/08 dans les trois
-documents de reference
+documents de reference, ou dire pourquoi il ne le fait pas
 
   python assembler_docs.py --montre
   python assembler_docs.py
 
-CE QU IL FAIT
+TROIS FICHIERS, PAS SEPT
 
-    La journee a produit six fragments a concatener :
+    La premiere version en attendait sept -- `mistakes_ajout_17-08_b`,
+    `_c`, `_d`, `hypothese_H30`, `_annotation`, `H31`, plus le
+    protocole. Sept pieces a emboiter dans le bon ordre pour trois
+    documents, c est une source d embrouilles fabriquee de toutes
+    pieces.
 
-        mistakes_ajout_17-08_b.md          -> mistakes.md
-        mistakes_ajout_17-08_c.md          -> mistakes.md
-        mistakes_ajout_17-08_d.md          -> mistakes.md
-        PROTOCOLE_ajout_17-08.md           -> PROTOCOLE.md
-        hypothese_H30.md                   -> HYPOTHESES.md
-        hypothese_H30_annotation.md        -> HYPOTHESES.md
-        hypothese_H31.md                   -> HYPOTHESES.md
+    La cause etait reelle -- le Drive refuse de remplacer un fichier,
+    donc chaque ajout de la journee a du prendre un nom neuf -- mais
+    elle n excusait pas de laisser l assemblage a la charge du
+    lecteur. Les fragments sont desormais consolides a la source :
 
-    Les faire a la main, c est six occasions de se tromper d ordre, d
-    en oublier un, ou de coller deux fois le meme. C est precisement le
-    geste manuel qu on s interdit depuis ce matin.
+        mistakes_17-08.md      -> mistakes.md
+        PROTOCOLE_17-08.md     -> PROTOCOLE.md
+        HYPOTHESES_17-08.md    -> HYPOTHESES.md
 
-L ORDRE COMPTE
+    Les sept anciens fragments sont perimes. Ils restent sur le Drive
+    parce qu on ne peut pas les effacer, pas parce qu ils servent.
 
-    `hypothese_H30_annotation.md` n a de sens qu apres `hypothese_H30`,
-    et `hypothese_H31.md` contient la RESOLUTION de cette annotation
-    avant d introduire H31. L ordre est donc fixe dans ce fichier, pas
-    laisse au tri alphabetique.
+IL CHERCHE LES CIBLES, IL NE LES DEVINE PAS
 
-IL NE PEUT PAS COLLER DEUX FOIS
+    `mistakes.md` n est pas forcement a cote du script. On descend donc
+    l arborescence depuis `--racine` pour le trouver.
 
-    Chaque fragment porte un titre distinctif. Avant d ecrire, on
-    cherche ce titre dans la cible : s il y est deja, le fragment est
-    saute et c est dit. Relancer l assembleur autant de fois qu on veut
-    ne change rien.
+    ET S IL Y EN A DEUX, IL S ARRETE. Deux `mistakes.md` sur une
+    machine, c est deja l historique coupe en deux ; choisir
+    silencieusement l un des deux acheverait le travail. Les chemins
+    sont affiches et c est a l humain de trancher, avec `--cible`.
+
+IL NE PEUT PAS COLLER DEUX FOIS, NI A MOITIE
+
+    Chaque fichier consolide porte plusieurs titres distinctifs. Avant
+    d ecrire :
+
+        tous les titres presents   -> deja colle, on saute
+        aucun                      -> a coller
+        certains seulement         -> COLLAGE PARTIEL ANTERIEUR, on
+                                      refuse et on dit lesquels
+
+    Le troisieme cas est le seul dangereux : recoller par-dessus
+    dupliquerait la moitie du texte. On prefere s arreter.
 
 IL NE CREE AUCUN FICHIER
 
-    Si `mistakes.md` est introuvable, il ne le cree pas : il le
-    signale. Creer un second `mistakes.md` a cote du vrai couperait
-    l historique en deux sans que personne ne le voie -- et un
-    historique coupe en silence est pire que pas d historique.
+    Si une cible est introuvable, il le dit et passe. Creer un second
+    `mistakes.md` a cote du vrai couperait l historique sans que
+    personne ne le voie.
 
-    Les trois cibles sont cherchees dans le dossier courant puis dans
-    `analyse\`. Aucun autre fichier n est touche.
-
-SAUVEGARDE
-
-    Chaque cible modifiee est copiee en `<nom>.avant_17-08` avant
-    ecriture, une seule fois.
-
-LECTEUR SEUL SUR LE RESTE DE LA STACK. N ouvre en ecriture que
-mistakes.md, PROTOCOLE.md et HYPOTHESES.md.
+LECTEUR SEUL SUR LE RESTE DE LA STACK. N ouvre en ecriture que les
+trois cibles nommees ci-dessus.
 """
 import argparse
 import io
@@ -61,35 +65,41 @@ import shutil
 import sys
 
 SOURCE = os.path.join("G:", os.sep, "My Drive", "ScalpEA")
+RACINE = os.path.join("C:", os.sep, "Users", "Administrator")
 
-# (fragment, cible, titre qui prouve qu il est deja colle)
-# L ORDRE DE CETTE LISTE EST L ORDRE DE COLLAGE. Ne pas trier.
+# Dossiers ou il est inutile de descendre.
+SAUTE = ("node_modules", ".git", "__pycache__", "AppData", "Windows",
+         "Program Files", "Program Files (x86)", ".vs", "venv",
+         "site-packages", "MarketDepthData", "ChartbookGroups")
+
+# (fragment consolide, cible, titres qui prouvent qu il est colle)
 PLAN = [
-    ("mistakes_ajout_17-08_b.md", "mistakes.md",
-     "## 17/08/2026 — `c > 0`"),
-    ("mistakes_ajout_17-08_c.md", "mistakes.md",
-     "## 17/08/2026 — un résultat significatif"),
-    ("mistakes_ajout_17-08_d.md", "mistakes.md",
-     "## 17/08/2026 — j'ai lu une heure"),
-    ("PROTOCOLE_ajout_17-08.md", "PROTOCOLE.md",
-     "## 6 bis. La branche macro est CLOSE"),
-    ("hypothese_H30.md", "HYPOTHESES.md",
-     "## H30 — Le NFP pousse le Dow"),
-    ("hypothese_H30_annotation.md", "HYPOTHESES.md",
-     "### H30 — ANNOTATION du 17/08/2026"),
-    ("hypothese_H31.md", "HYPOTHESES.md",
-     "## H31 — Les prix bougent ensemble"),
+    ("mistakes_17-08.md", "mistakes.md",
+     ["## 17/08/2026 — `c > 0`",
+      "## 17/08/2026 — un résultat significatif",
+      "## 17/08/2026 — j'ai lu une heure"]),
+    ("PROTOCOLE_17-08.md", "PROTOCOLE.md",
+     ["## 6 bis. La branche macro est CLOSE",
+      "## 8. Ce que SierraChart donne"]),
+    ("HYPOTHESES_17-08.md", "HYPOTHESES.md",
+     ["## H30 — Le NFP pousse le Dow",
+      "### H30 — ANNOTATION du 17/08/2026",
+      "## H31 — Les prix bougent ensemble"]),
 ]
 
-CIBLES = ("mistakes.md", "PROTOCOLE.md", "HYPOTHESES.md")
 
-
-def trouve_cible(nom, dossiers):
-    for d in dossiers:
-        c = os.path.join(d, nom) if d else nom
-        if os.path.isfile(c):
-            return c
-    return None
+def cherche(nom, racine):
+    """Tous les exemplaires de `nom` sous `racine`. TOUS, pas le
+    premier : deux exemplaires est une information, pas un detail."""
+    trouves = []
+    for base, dossiers, fichiers in os.walk(racine):
+        dossiers[:] = [d for d in dossiers
+                       if d not in SAUTE and not d.startswith(".")]
+        if nom in fichiers:
+            trouves.append(os.path.join(base, nom))
+        if len(trouves) > 8:
+            break
+    return trouves
 
 
 def lis(chemin):
@@ -98,58 +108,95 @@ def lis(chemin):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--source", default=SOURCE,
-                   help="dossier des fragments")
-    p.add_argument("--montre", action="store_true",
-                   help="dit ce qu il ferait et n ecrit rien")
+    p.add_argument("--source", default=SOURCE)
+    p.add_argument("--racine", default=RACINE,
+                   help="ou chercher les documents cibles")
+    p.add_argument("--cible", action="append", default=[],
+                   help="chemin explicite d une cible, repetable ; "
+                        "sert quand la recherche en trouve plusieurs")
+    p.add_argument("--montre", action="store_true")
     a = p.parse_args()
 
-    dossiers = ["", "analyse", os.path.join("..", "analyse")]
-    ou = {}
+    forces = {}
+    for c in a.cible:
+        forces[os.path.basename(c)] = c
+
     print("=" * 78)
     print("ASSEMBLAGE DES AJOUTS DU 17/08")
     print("=" * 78)
-    print("  source des fragments : %s" % a.source)
-    print()
-    for nom in CIBLES:
-        c = trouve_cible(nom, dossiers)
-        ou[nom] = c
-        print("  %-16s %s" % (nom, c if c else "INTROUVABLE"))
-    manquantes = [n for n in CIBLES if not ou[n]]
-    if manquantes:
-        print()
-        print("  Ces cibles sont introuvables : %s" % ", ".join(manquantes))
-        print("  Elles ne seront PAS creees. Creer un second fichier a")
-        print("  cote du vrai couperait l historique en deux sans que")
-        print("  personne ne le voie.")
+    print("  fragments : %s" % a.source)
+    print("  recherche : %s" % a.racine)
     print()
 
-    # --- inventaire ------------------------------------------------
+    ou, ambigus = {}, []
+    for _, cible, _ in PLAN:
+        if cible in forces:
+            ou[cible] = forces[cible]
+            print("  %-16s %s   (impose)" % (cible, ou[cible]))
+            continue
+        t = cherche(cible, a.racine)
+        if len(t) == 1:
+            ou[cible] = t[0]
+            print("  %-16s %s" % (cible, t[0]))
+        elif not t:
+            ou[cible] = None
+            print("  %-16s INTROUVABLE sous %s" % (cible, a.racine))
+        else:
+            ou[cible] = None
+            ambigus.append((cible, t))
+            print("  %-16s %d EXEMPLAIRES :" % (cible, len(t)))
+            for x in t:
+                print("  %-16s   %s" % ("", x))
+
+    if ambigus:
+        print()
+        print("  PLUSIEURS EXEMPLAIRES TROUVES. Rien ne sera ecrit sur")
+        print("  ces cibles-la. Deux documents du meme nom sur une")
+        print("  machine, c est deja un historique coupe en deux :")
+        print("  choisir silencieusement l un des deux l acheverait.")
+        print("  Designer le bon avec --cible \"chemin\\complet.md\".")
+
+    print()
     print("-" * 78)
-    print("  %-34s %-16s %s" % ("fragment", "cible", "etat"))
+    print("  %-24s %-16s %s" % ("fragment", "cible", "etat"))
     print("-" * 78)
-    a_faire = []
-    for frag, cible, titre in PLAN:
+    a_faire, partiels = [], []
+    for frag, cible, titres in PLAN:
         src = os.path.join(a.source, frag)
         dst = ou.get(cible)
         if not os.path.isfile(src):
             etat = "fragment absent"
         elif not dst:
-            etat = "cible introuvable"
-        elif titre in lis(dst):
-            etat = "deja colle"
+            etat = "cible non resolue"
         else:
-            etat = "A COLLER (%d octets)" % os.path.getsize(src)
-            a_faire.append((src, dst, frag))
-        print("  %-34s %-16s %s" % (frag[:34], cible, etat))
+            t = lis(dst)
+            presents = [x for x in titres if x in t]
+            if len(presents) == len(titres):
+                etat = "deja colle"
+            elif presents:
+                etat = "COLLAGE PARTIEL (%d/%d)" % (len(presents),
+                                                    len(titres))
+                partiels.append((frag, presents))
+            else:
+                etat = "A COLLER (%d octets)" % os.path.getsize(src)
+                a_faire.append((src, dst, frag))
+        print("  %-24s %-16s %s" % (frag[:24], cible, etat))
     print("-" * 78)
-    print()
 
+    if partiels:
+        print()
+        print("  COLLAGE PARTIEL DETECTE. Ces fragments sont deja la")
+        print("  pour partie -- probablement colles a la main. Recoller")
+        print("  par-dessus dupliquerait le reste du texte, donc on")
+        print("  s arrete. Deja present :")
+        for frag, presents in partiels:
+            for x in presents:
+                print("    %-24s %s" % (frag[:24], x))
+
+    print()
     if not a_faire:
-        print("  Rien a faire : tout est deja en place, ou les fragments")
-        print("  ne sont pas la. Relancer ce script ne change rien --")
-        print("  c est voulu.")
-        return 0
+        print("  Rien a coller. Relancer ce script ne change rien.")
+        return 0 if not (ambigus or partiels) else 1
 
     if a.montre:
         print("  %d fragment(s) seraient colles. Rien n a ete ecrit."
@@ -157,7 +204,6 @@ def main():
         print("  Relancer sans --montre pour ecrire.")
         return 0
 
-    # --- collage ---------------------------------------------------
     sauvees = set()
     for src, dst, frag in a_faire:
         if dst not in sauvees:
@@ -166,28 +212,22 @@ def main():
                 shutil.copy2(dst, sauv)
                 print("  sauvegarde : %s" % sauv)
             sauvees.add(dst)
-        texte = lis(src)
         avant = os.path.getsize(dst)
         with io.open(dst, "a", encoding="utf-8") as f:
             if not lis(dst).endswith("\n"):
                 f.write("\n")
-            f.write("\n" + texte.rstrip() + "\n")
-        print("  %-34s -> %s (%d -> %d octets)"
-              % (frag[:34], dst, avant, os.path.getsize(dst)))
+            f.write("\n" + lis(src).rstrip() + "\n")
+        print("  %-24s -> %s (%d -> %d octets)"
+              % (frag[:24], dst, avant, os.path.getsize(dst)))
 
     print()
     print("%d fragment(s) colles." % len(a_faire))
     print()
-    print("A VERIFIER, ET C EST RAPIDE :")
-    print("  - la fin de HYPOTHESES.md doit contenir H30, puis son")
-    print("    ANNOTATION, puis sa RESOLUTION, puis H31 -- dans cet")
-    print("    ordre. Si l ordre est autre, un fragment avait deja ete")
-    print("    colle a la main auparavant.")
+    print("A VERIFIER :")
+    print("  - HYPOTHESES.md doit finir sur H30, son ANNOTATION, sa")
+    print("    RESOLUTION, puis H31 -- dans cet ordre.")
     print("  - mistakes.md doit finir sur `le verdict contredit sa")
     print("    table, deuxieme fois dans la journee`.")
-    print()
-    print("Relancer ce script est sans effet : chaque fragment est")
-    print("reconnu a son titre et saute s il est deja present.")
     return 0
 
 
