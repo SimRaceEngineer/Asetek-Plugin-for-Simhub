@@ -257,19 +257,47 @@ def main():
         # plus d une erreur type (ecart-type / racine du nombre de
         # journees), et que le point EN DESSOUS le soit en dessous de
         # la meme facon.
+        # Le franchissement peut aller dans LES DEUX SENS, et c est
+        # le sens qui porte le sens.
+        #
+        # Vers le HAUT : les mouvements cessent de se defaire, ils
+        # commencent a persister. Vers le BAS : l inverse -- au-dela de
+        # cette echelle le prix defait ce qu il vient de faire, c est
+        # un regime de range.
+        #
+        # Une premiere version ne cherchait QUE le franchissement vers
+        # le haut. Sur les donnees reelles, les trois actifs partent de
+        # ~1,05 et descendent a ~0,75 : aucun franchissement montant,
+        # donc elle se rabattait sur "VR >= 1 des le premier point, les
+        # mouvements persistent" -- l exact contraire de ce que son
+        # propre tableau affichait. Un verdict qui contredit sa table
+        # est pire qu absent.
         nj = max(1, len(par_jour))
-        seuil = None
+        seuil = sens = None
         for i in range(1, len(lignes)):
             av, ap = lignes[i - 1], lignes[i]
             se_av = av[3] / math.sqrt(nj)
             se_ap = ap[3] / math.sqrt(nj)
             if av[2] + se_av < 1.0 <= ap[2] - se_ap:
-                seuil = ap
+                seuil, sens = ap, "HAUT"
+                break
+            if av[2] - se_av > 1.0 >= ap[2] + se_ap:
+                seuil, sens = ap, "BAS"
                 break
         dis()
-        if seuil:
-            dis("  => VR franchit 1 entre %.1f et %.1f min."
+        if seuil and sens == "HAUT":
+            dis("  => VR franchit 1 VERS LE HAUT entre %.1f et %.1f min."
                 % (lignes[lignes.index(seuil) - 1][0], seuil[0]))
+            dis("     Au-dela, les mouvements persistent. Unite de bruit")
+            dis("     retenue : %.1f min, mouvement median %.2f points."
+                % (seuil[0], seuil[4] or 0.0))
+            resume[actif] = (seuil[0], seuil[4])
+        elif seuil and sens == "BAS":
+            dis("  => VR franchit 1 VERS LE BAS entre %.1f et %.1f min."
+                % (lignes[lignes.index(seuil) - 1][0], seuil[0]))
+            dis("     Au-dela de cette echelle le prix DEFAIT ce qu il")
+            dis("     vient de faire : c est un regime de range, et il")
+            dis("     s installe a partir de %.1f min." % seuil[0])
             dis("     Unite de bruit retenue : %.1f min, mouvement median"
                 " %.2f points." % (seuil[0], seuil[4] or 0.0))
             resume[actif] = (seuil[0], seuil[4])
