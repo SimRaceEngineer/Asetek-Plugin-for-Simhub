@@ -752,3 +752,70 @@ un trou n'est pas une fenêtre élargie, c'est une absence de mesure.
 converti doit être mesuré, pas déduit. Une fenêtre se définit en temps,
 jamais en nombre de lignes. Et l'ordre d'un fichier se vérifie, il ne
 se suppose pas.
+
+---
+
+## 17/08/2026 — un seuil en dur, une heure après avoir écrit qu'il ne faut pas
+
+**Ce que j'ai fait.** Dans `audit_cadence.py`, un trou était défini par
+`d > 60.0`, écrit en dur. Sur `cycles.csv` (pas ~10 s) c'est
+raisonnable. Sur `snapshots.csv`, qui tourne à **trois minutes**,
+*chaque intervalle normal* dépasse 60 s : tous ont été comptés comme
+trous, la part utile est sortie à **0 % sur les vingt et une
+journées**, et le verdict a présenté comme inutilisable une source
+parfaitement régulière.
+
+**Le raisonnement faux.** J'ai écrit l'outil en pensant à la source que
+je connaissais, et je l'ai pointé sur une source dont j'ignorais la
+cadence — c'est précisément ce que l'outil était censé découvrir. Le
+seuil supposait la réponse à la question posée.
+
+**Ce qui aggrave le cas.** Une heure plus tôt, dans le même fichier,
+j'avais remplacé un « finit avant 18 h » en dur par une médiane
+mesurée, et j'avais écrit la règle. Je l'ai appliquée à une fonction et
+pas à sa voisine. Une règle notée mais appliquée à un seul endroit
+n'est pas une règle, c'est une anecdote.
+
+**La conséquence.** Failli conclure « snapshots est inexploitable » —
+alors que c'est la seule source à 21 journées, avec les prix, les
+positions et le PnL. La bascule de base de travail se jouait sur ce
+chiffre.
+
+**Le correctif.** Un trou = plus de cinq fois le **pas médian de la
+source elle-même**, et le seuil retenu est **affiché dans le tableau**.
+Un seuil calculé qu'on ne montre pas ne vaut pas mieux qu'un seuil
+inventé.
+
+**La règle.** Quand on corrige un seuil inventé, chercher ses frères
+dans le même fichier avant de refermer.
+
+---
+
+## 17/08/2026 — ce que j'ai refusé de faire, et pourquoi
+
+**La demande.** « Si tu dois corriger les flux pour qu'on log toutes
+les 10 s jusqu'à début septembre, fais-le si on obtient un meilleur
+flux d'information. »
+
+**Pourquoi je n'ai pas modifié le flux existant.** Je ne sais pas ce
+qui cause les trous de `cycles.jsonl`, et les deux causes possibles
+appellent des actions opposées :
+
+- si la période est celle de la **boucle du moteur** — ce que suggère
+  le fait que les seules journées régulières (95-100 % de part utile)
+  soient les journées de **marché fermé** — alors forcer 10 s revient à
+  toucher la boucle de trading pendant le gel ;
+- si c'est l'**écriture** qui saute, le correctif est inoffensif.
+
+Agir avant de savoir, c'est parier sur du code vivant. Le gel interdit
+ce pari, et la demande dit « si on obtient un meilleur flux » — donc
+elle porte sur le résultat, pas sur la méthode.
+
+**Ce que j'ai fait à la place.** Un collecteur **indépendant** qui
+interroge le panneau en lecture seule et écrit son propre fichier. Il
+ne modifie aucun module, ne redémarre aucun service, n'approche pas
+MT5. Même résultat pour nous, risque nul pour la stack.
+
+**La règle.** Quand une demande porte sur un résultat, chercher le
+chemin qui l'atteint sans toucher au vivant. Et ne jamais « réparer »
+un flux dont on n'a pas identifié la cause de la panne.
