@@ -48,8 +48,8 @@ LE PIEGE QUE CE SCRIPT EXISTE POUR EVITER
 
 L ENUMERATION EST CALIBREE PAR PERMUTATION
 
-    On regarde 3 horizons x 3 tranches de tenues x 2 sens x 4 actifs
-    = 72 cellules. Le maximum de 72 differences est grand meme sans
+    On regarde 3 horizons x 3 tranches de tenues x 2 sens x 3 actifs
+    = 54 cellules. Le maximum de 72 differences est grand meme sans
     aucun effet. On rebat donc les JOURNEES en bloc -- les cycles d une
     meme journee ne sont pas independants -- on refait toute la
     recherche, --tirages fois, et la p-valeur porte sur le MAXIMUM.
@@ -57,6 +57,36 @@ L ENUMERATION EST CALIBREE PAR PERMUTATION
     C est la methode validee le 15/08 par cassure_par_actif.py : sur
     des donnees sans rupture, le maximum d une recherche vaut deja 1,5
     a 3.
+
+CE QUE LES DONNEES REELLES ONT DIT DU CADRAGE (15/08)
+
+    18 journees, 42 597 cycles, pas median 10 s -- donc les horizons
+    valent 3, 10 et 30 minutes. Et 6 403 cassures : environ 113 par
+    actif et par journee, soit une toutes les trois minutes et demie.
+
+    Ce ne sont donc PAS des sorties de range. `nearest_top` est le
+    niveau le plus PROCHE, souvent a quelques points : le prix le
+    traverse sans arret. L evenement reste bien defini, mais il faut
+    l appeler par son nom -- un franchissement de niveau proche.
+
+    C est la colonne `tenues` qui separe le bruit du reste : un niveau
+    tenu 20 fois ou plus est bien plus proche de ce qu on appelle une
+    cassure en regardant un graphique. La table les distingue.
+
+BANC DE VALIDATION (15/08, donnees fabriquees)
+
+    16 journees x 1500 cycles, avec une derive injectee APRES chaque
+    cassure haussiere : +0,45 sur US100, 0,00 sur US500, -0,45 sur
+    US30. Resultat :
+
+        US100 HAUT   92 a 100 % de continuation
+        US500 HAUT   51 a  59 %
+        temoin        8 a  45 % selon l horizon
+        p = 0,032
+
+    Et aucune difference entre les trois tranches de tenues (93 %,
+    95 %, 93 %) -- aucune dependance aux tenues n avait ete injectee,
+    l outil n en invente pas.
 
 LES DEUX QUESTIONS QUI JUSTIFIENT LE SCRIPT
 
@@ -221,25 +251,40 @@ def grille(jours, actifs, cass, temo, a):
     return out
 
 
-def permute(jours, actifs, a, alea):
+def echantillonne(lot, plafond, alea):
+    """Un tirage sans remise, si la liste depasse le plafond.
+
+    Les temoins se comptent par dizaines de milliers -- 132 753 sur les
+    18 journees. Or on n en tire qu une PROPORTION : a 3 000 tirages,
+    l erreur type d un taux est deja sous le point de pourcentage, et
+    en garder quinze fois plus ne rend pas le chiffre plus juste, ca
+    multiplie seulement le temps de la permutation par quinze.
+
+    Le plafond est affiche dans la sortie : un echantillonnage qu on ne
+    voit pas est un mensonge par omission."""
+    if plafond <= 0 or len(lot) <= plafond:
+        return lot, False
+    return alea.sample(lot, plafond), True
+
+
+def permute(jours, actifs, cass, temo, a, alea):
     """La distribution du maximum d ecart SOUS L HYPOTHESE QU UNE
     CASSURE NE CHANGE RIEN.
 
-    On rebat l ordre des JOURNEES et on refait toute la recherche. Les
-    evenements gardent leur structure interne ; ce qui change, c est la
-    journee dans laquelle on va chercher la continuation."""
+    On rebat l ordre des JOURNEES et on va chercher la continuation
+    dans une AUTRE journee. Les evenements, eux, ne bougent pas : ils
+    sont passes en argument et calcules UNE SEULE FOIS.
+
+    Une premiere version les recalculait a chaque tirage alors qu ils
+    ne dependent pas du tirage. Sur le banc a 7 200 cycles ca ne se
+    voyait pas ; sur les 42 597 cycles reels, 300 tirages auraient
+    tourne des heures. Un banc trop petit ne montre pas les couts."""
     noms = list(jours.keys())
     maxs = []
     for _ in range(a.tirages):
         melange = list(noms)
         alea.shuffle(melange)
         corr = dict((noms[k], jours[melange[k]]) for k in range(len(noms)))
-        cass, temo = {}, {}
-        for actif in ACTIFS:
-            c, t = evenements(jours, actif, a.proche)
-            # on garde les evenements, mais on va chercher la suite
-            # dans une AUTRE journee : c est ca, l hypothese nulle.
-            cass[actif], temo[actif] = c, t
         g = grille(corr, ACTIFS, cass, temo, a)
         maxs.append(max((abs(x["ecart"]) for x in g), default=0.0))
     return sorted(maxs)
@@ -252,6 +297,9 @@ def main():
     p.add_argument("--proche", type=float, default=1.0,
                    help="temoin : distance au niveau, en medianes")
     p.add_argument("--min-n", type=int, default=30, dest="min_n")
+    p.add_argument("--max-temoins", type=int, default=3000,
+                   dest="max_temoins",
+                   help="plafond de temoins par actif ; 0 = tous")
     p.add_argument("--tirages", type=int, default=TIRAGES)
     p.add_argument("--graine", type=int, default=GRAINE)
     p.add_argument("--schema", action="store_true")
@@ -283,8 +331,12 @@ def main():
 
     alea = random.Random(a.graine)
     cass, temo = {}, {}
+    reduits = False
     for actif in ACTIFS:
-        cass[actif], temo[actif] = evenements(jours, actif, a.proche)
+        c, t = evenements(jours, actif, a.proche)
+        t, red = echantillonne(t, a.max_temoins, alea)
+        reduits = reduits or red
+        cass[actif], temo[actif] = c, t
 
     if a.schema:
         print("%d journees, %d cycles." % (len(jours), ncyc))
@@ -326,6 +378,14 @@ def main():
         dis("  %-6s %5d cassures (%d haut, %d bas), %5d temoins"
             % (actif, len(cass[actif]), h, len(cass[actif]) - h,
                len(temo[actif])))
+    if reduits:
+        dis()
+        dis("  Temoins ECHANTILLONNES a %d par actif (tirage sans remise,"
+            % a.max_temoins)
+        dis("  graine %d). A cet effectif l erreur type d un taux est sous"
+            % a.graine)
+        dis("  le point ; en garder plus ne gagne rien et coute la")
+        dis("  permutation. `--max-temoins 0` pour les garder tous.")
 
     g = grille(jours, ACTIFS, cass, temo, a)
     if not g:
@@ -350,7 +410,7 @@ def main():
     dis()
     dis("  Permutation : %d tirages, journees rebattues en bloc."
         % a.tirages)
-    nul = permute(jours, ACTIFS, a, alea)
+    nul = permute(jours, ACTIFS, cass, temo, a, alea)
     au = sum(1 for x in nul if x >= obs - 1e-12)
     pv = (au + 1.0) / (a.tirages + 1.0)
     dis("    ecart maximum observe   : %.1f points" % obs)
