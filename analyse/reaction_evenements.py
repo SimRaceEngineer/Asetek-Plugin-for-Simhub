@@ -408,6 +408,31 @@ def main():
     dis("  %d normalises, %d ecartes (moins de %d occurrences du meme"
         % (len(normalises), ecartes, a.mini_occurrences))
     dis("  evenement, ou surprises toutes identiques).")
+    # CE QUE LE FILTRE GARDE, ET PAS SEULEMENT CE QU IL JETTE.
+    #
+    # Le seuil d occurrences ne selectionne pas les evenements
+    # IMPORTANTS, il selectionne les evenements FREQUENTS. Les
+    # hebdomadaires (jobless claims, stocks de petrole) passent avec
+    # une douzaine d occurrences ; les mensuels lourds -- CPI, NFP,
+    # Fed, ISM -- sont a trois et tombent tous.
+    #
+    # Un tableau intitule "reaction aux surprises macro" peut donc ne
+    # contenir que des stocks de petrole. Il faut le VOIR, pas le
+    # deduire.
+    gardes = {}
+    for x in normalises:
+        gardes[x["ev"]] = gardes.get(x["ev"], 0) + 1
+    if gardes:
+        dis()
+        dis("  CE QUI RESTE REELLEMENT DANS LA MESURE :")
+        for nom, n in sorted(gardes.items(), key=lambda k: -k[1]):
+            dis("    %-46s %d evenement(s)" % (nom[:46], n))
+        dis()
+        dis("  Le seuil d occurrences ne garde pas les evenements les")
+        dis("  plus IMPORTANTS mais les plus FREQUENTS. Si cette liste")
+        dis("  ne contient que des series hebdomadaires, le tableau qui")
+        dis("  suit ne parle pas des surprises macro au sens ou on")
+        dis("  l entend -- quel que soit le soin mis a le calculer.")
     dis()
     dis("  La normalisation se fait par evenement : 0,1 point sur le")
     dis("  CPI et 0,1 point sur le NFP ne sont pas comparables.")
