@@ -416,7 +416,7 @@ def main():
         dis("  americaine et on l appellerait un effet macro.")
 
         dis()
-        dis("  PRIX -- en %% depuis l instant de publication")
+        dis("  PRIX -- en % depuis l instant de publication")
         dis("  %-8s %8s %10s %10s %10s"
             % ("horizon", "n", "surprises", "temoin", "difference"))
         cles = ["%dmin" % m for m in MINUTES] + ["%dj" % j for j in JOURS]
