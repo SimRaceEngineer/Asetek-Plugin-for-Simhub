@@ -214,7 +214,7 @@ def prix_a(serie, cible, tolerance, rend_index=False):
     return best[1] if not rend_index else best[2]
 
 
-def reaction(serie, t0, horizons_min, horizons_j, tol):
+def reaction(serie, t0, horizons_min, horizons_j, tol, jours=None):
     """Deux reactions par horizon : le PRIX en %, et le DELTA cumule.
 
     Le prix dit ou ca va. Le delta dit qui pousse. Les deux peuvent
@@ -227,11 +227,43 @@ def reaction(serie, t0, horizons_min, horizons_j, tol):
         return None
     base = serie[i0][1]
     out = {}
-    for lab, delai, t in ([("%dmin" % m, tol, dt.timedelta(minutes=m))
-                           for m in horizons_min]
-                          + [("%dj" % j, tol * 20, dt.timedelta(days=j))
-                             for j in horizons_j]):
-        i1 = prix_a(serie, t0 + t, delai, rend_index=True)
+    # Les horizons en JOURS se comptent en SEANCES, pas en jours
+    # calendaires. Une premiere version ajoutait des jours civils : la
+    # colonne `3j` sortait a ZERO point, parce que la plupart des
+    # publications US tombent mercredi ou jeudi et que +3 jours civils
+    # atterrit le samedi ou le dimanche. Le marche etant ferme, aucune
+    # barre n existait dans la tolerance.
+    #
+    # `jours` est la liste triee des dates REELLEMENT presentes dans les
+    # barres. Avancer de N dans cette liste, c est avancer de N seances,
+    # ce qui saute les week-ends et les feries sans avoir a les
+    # declarer.
+    cibles = [("%dmin" % m, tol, t0 + dt.timedelta(minutes=m))
+              for m in horizons_min]
+    for j in horizons_j:
+        c = None
+        if jours:
+            d0 = t0.date()
+            k = None
+            lo, hi = 0, len(jours) - 1
+            while lo < hi:
+                mid = (lo + hi) // 2
+                if jours[mid] < d0:
+                    lo = mid + 1
+                else:
+                    hi = mid
+            if lo < len(jours) and jours[lo] == d0 and lo + j < len(jours):
+                k = jours[lo + j]
+            if k:
+                c = dt.datetime(k.year, k.month, k.day,
+                                t0.hour, t0.minute, t0.second)
+        cibles.append(("%dj" % j, tol * 20, c))
+    for lab, delai, cible in cibles:
+        if cible is None:
+            out[lab] = None
+            out["d_" + lab] = None
+            continue
+        i1 = prix_a(serie, cible, delai, rend_index=True)
         if i1 is None or i1 <= i0:
             out[lab] = None
             out["d_" + lab] = None
@@ -429,10 +461,11 @@ def main():
         dis("  %-8s %8s %10s %10s %10s"
             % ("horizon", "n", "surprises", "temoin", "difference"))
         cles = ["%dmin" % m for m in MINUTES] + ["%dj" % j for j in JOURS]
-        r_ev = [reaction(serie, e["t"], MINUTES, JOURS, a.tolerance)
-                for e in dans]
-        r_tm = [reaction(serie, t, MINUTES, JOURS, a.tolerance)
-                for t in temoins]
+        jours_b = sorted(set(x[0].date() for x in serie))
+        r_ev = [reaction(serie, e["t"], MINUTES, JOURS, a.tolerance,
+                         jours_b) for e in dans]
+        r_tm = [reaction(serie, t, MINUTES, JOURS, a.tolerance,
+                         jours_b) for t in temoins]
         r_ev = [x for x in r_ev if x]
         r_tm = [x for x in r_tm if x]
         for k in cles:
