@@ -95,7 +95,50 @@ RECORD = 40
 # dates en 1970 ou en 2170, ce qui se voit -- mais un decalage de
 # quelques heures ne se verrait pas, d ou le --schema.
 ORIGINE = dt.datetime(1899, 12, 30, 0, 0, 0)
-FMT = "<d4f4I"
+
+# DEUX ENCODAGES POSSIBLES DE L HORODATAGE, ET ON NE CHOISIT PAS.
+#
+# Une premiere version lisait le champ comme un `double`. Sur un
+# fichier reel, TOUTES les dates sont sorties a 1899-12-30 00:00:00 :
+# SierraChart stocke un ENTIER 64 bits de microsecondes, et le motif
+# binaire d un entier de 4e15 relu comme un flottant donne un nombre
+# denormalise quasi nul. L erreur ne plantait pas -- elle rendait un
+# million de lignes horodatees a la meme seconde.
+#
+# Les versions historiques utilisaient un flottant en JOURS. On essaie
+# donc les deux sur le premier enregistrement et on garde celle qui
+# rend une date plausible. Le choix est affiche.
+FMT_Q = "<q4f4I"          # entier 64 bits, microsecondes
+FMT_D = "<d4f4I"          # flottant, jours
+
+
+def _micro(v):
+    return ORIGINE + dt.timedelta(microseconds=v)
+
+
+def _jours(v):
+    return ORIGINE + dt.timedelta(days=v)
+
+
+ENCODAGES = (("entier 64 bits, microsecondes", FMT_Q, _micro),
+             ("flottant, jours", FMT_D, _jours))
+PLAUSIBLE = (dt.datetime(1990, 1, 1), dt.datetime(2100, 1, 1))
+
+
+def detecte(f, taille_h, taille_r):
+    """Lit le premier enregistrement et essaie les deux encodages."""
+    f.seek(taille_h)
+    brut = f.read(taille_r)
+    if len(brut) < taille_r:
+        return None
+    for nom, fmt, conv in ENCODAGES:
+        try:
+            d = conv(struct.unpack(fmt, brut)[0])
+        except (struct.error, OverflowError, OSError, ValueError):
+            continue
+        if PLAUSIBLE[0] <= d <= PLAUSIBLE[1]:
+            return nom, fmt, conv
+    return None
 
 LARG = 100
 
@@ -117,14 +160,14 @@ def entete(f):
             "version": version}, None
 
 
-def horo(micro):
+def horo(v, conv):
     try:
-        return ORIGINE + dt.timedelta(microseconds=micro)
+        return conv(v)
     except (OverflowError, OSError, ValueError):
         return None
 
 
-def records(f, taille_r, saut=0):
+def records(f, taille_r, fmt, saut=0):
     """Un generateur sur les enregistrements. On lit par blocs pour ne
     pas faire un appel systeme par record : un .scid au tick peut faire
     plusieurs Go."""
@@ -138,7 +181,7 @@ def records(f, taille_r, saut=0):
             n += 1
             if saut and n % saut:
                 continue
-            yield struct.unpack(FMT, brut[i:i + taille_r])
+            yield struct.unpack(fmt, brut[i:i + taille_r])
 
 
 def schema(chemin, combien):
@@ -164,7 +207,17 @@ def schema(chemin, combien):
             print("  millions de lignes plausibles et fausses. Envoyez-moi")
             print("  ces deux nombres et j adapte le lecteur.")
             return 1
+        enc = detecte(f, h["entete"], h["record"])
+        if not enc:
+            print()
+            print("  ARRET. Aucun des deux encodages d horodatage connus")
+            print("  ne rend une date plausible sur le premier")
+            print("  enregistrement. Ne rien decoder plutot que de rendre")
+            print("  un million de lignes datees de 1899.")
+            return 1
+        nom_enc, fmt, conv = enc
         n = (taille - h["entete"]) // h["record"]
+        print("  horodatage        : %s" % nom_enc)
         print("  %d enregistrements." % n)
         print()
         print("  %-21s %9s %9s %9s %8s %7s %7s %6s"
@@ -173,13 +226,13 @@ def schema(chemin, combien):
         f.seek(h["entete"])
         vus = accord = 0
         premiers = []
-        for r in records(f, h["record"]):
+        for r in records(f, h["record"], fmt):
             t, o, hi, lo, c, nt, tv, bv, av = r
             vus += 1
             if bv + av == tv:
                 accord += 1
             if len(premiers) < combien:
-                d = horo(t)
+                d = horo(t, conv)
                 premiers.append((d, o, c, hi - lo, tv, bv, av,
                                  bv + av == tv))
             if vus >= 200000:
@@ -189,9 +242,12 @@ def schema(chemin, combien):
                   % (d.strftime("%Y-%m-%d %H:%M:%S") if d else "?",
                      o, c, sp, tv, bv, av, "oui" if ok else "NON"))
         print()
-        print("  La colonne `open` doit valoir 0 sur du tick : c est")
-        print("  normal, SierraChart n y met rien. Si elle porte un prix,")
-        print("  le fichier n est PAS au tick.")
+        print("  Sur `open` et `ask-bid` : selon la source du symbole,")
+        print("  SierraChart met soit Open=0 avec High=ask et Low=bid")
+        print("  (MES), soit les quatre champs egaux au prix echange et")
+        print("  ask-bid a 0 (YM). Les deux sont du tick valide -- seul")
+        print("  `spread_moy` sera vide dans le second cas. Ce qui")
+        print("  tranche, c est bid+ask == total, pas la forme des OHLC.")
         print()
         print("  Sur %d enregistrements lus, bid+ask == total dans %.1f %%"
               % (vus, 100.0 * accord / max(1, vus)))
@@ -224,6 +280,10 @@ def agrege(chemin, dest, pas, saut):
         if h["entete"] != ENTETE or h["record"] != RECORD:
             return None, ("tailles inattendues (%d / %d)"
                           % (h["entete"], h["record"]))
+        enc = detecte(f, h["entete"], h["record"])
+        if not enc:
+            return None, "encodage d horodatage inconnu"
+        _, fmt, conv = enc
         f.seek(h["entete"])
         g = io.open(dest, "w", encoding="utf-8", newline="")
         g.write("ts;open;high;low;close;trades;volume;bid_vol;ask_vol;"
@@ -233,9 +293,9 @@ def agrege(chemin, dest, pas, saut):
         cvd = 0.0
         jour = None
         n = 0
-        for r in records(f, h["record"], saut):
+        for r in records(f, h["record"], fmt, saut):
             t, o, hi, lo, c, nt, tv, bv, av = r
-            d = horo(t)
+            d = horo(t, conv)
             if d is None:
                 continue
             k = int((d - ORIGINE).total_seconds() // pas)
