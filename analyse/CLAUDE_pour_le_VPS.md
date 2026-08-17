@@ -10,6 +10,36 @@ d'un incident réel, daté, sur cette machine.
 
 ---
 
+
+## À LIRE AVANT DE COMMENCER — dans cet ordre, à chaque session
+
+Trois fichiers, et aucun n'est optionnel. Le 17/08, faute de les avoir
+lus, une matinée est partie à réécrire un lecteur `.scid` et à réclamer
+un export d'orderflow — alors qu'un pipeline complet tournait déjà,
+joignait l'orderflow aux tickets réels depuis le 29 avril, et
+produisait un contrefactuel en euros.
+
+1. **ce fichier** — les règles de la machine et les interdits ;
+2. **`PROTOCOLE.md`** — **ce qui existe déjà** : les sources avec leurs
+   défauts mesurés, la table des fuseaux horaires, les outils, les
+   panneaux, les rendez-vous en cours. C'est le fichier qui empêche de
+   reconstruire l'existant ;
+3. **`mistakes.md`** — ce qui a déjà été cassé, et les règles qui en
+   sont nées.
+
+Puis seulement : relire la conversation en cours.
+
+**Ne rien écrire avant d'avoir vérifié dans `PROTOCOLE.md` que ça
+n'existe pas.** Poser la question à l'utilisateur coûte trente
+secondes ; réécrire un outil existant coûte une matinée, et le pire est
+qu'on ne s'en aperçoit pas.
+
+`PROTOCOLE.md` se tient à jour **à chaque ajout** de source, d'outil ou
+de convention — au même titre que `mistakes.md` se tient à jour à
+chaque erreur.
+
+---
+
 ## Ce qu'est cette machine
 
 Un VPS Windows Server qui fait tourner une stack de scalping en

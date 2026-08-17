@@ -1,0 +1,290 @@
+# PROTOCOLE.md — l'état du dispositif, pour ne pas le redécouvrir
+
+**À lire AVANT toute analyse, en même temps que `mistakes.md`.**
+
+`mistakes.md` dit ce qu'il ne faut pas refaire. Ce fichier dit **ce qui
+existe déjà**. Le 17/08, faute de ce document, une matinée entière est
+partie à réécrire un lecteur `.scid` et à réclamer un export
+d'orderflow — alors qu'un pipeline complet tournait, joignait
+l'orderflow aux tickets réels depuis le 29 avril, et produisait déjà
+un contrefactuel en euros. Ce fichier existe pour que ça n'arrive plus.
+
+**Tenu à jour à chaque ajout de source, d'outil ou de convention.**
+
+---
+
+## 1. Les sources, avec ce qu'elles valent RÉELLEMENT
+
+Chaque ligne porte une mesure, pas une intention.
+
+### `docs\buddha\<jour>\cycles.jsonl[.gz]`
+
+Instantané complet du moteur par cycle. 352 000 caractères/ligne,
+~1,8 Go/jour. **18 journées**, dont 17 en `.gz`.
+
+- transcrit par **`extraire_cycles.py`** → `cartes\cycles\cycles_<jour>.csv`
+  (70 colonnes, 36 959 cycles, 4,8 Go lus en 662 s)
+- **INUTILISABLE POUR TOUTE FENÊTRE GLISSANTE.** L'audit du 17/08
+  donne une **part utile médiane de 48 %**, un pas médian allant de
+  **6 s à 3 181 s selon la journée**, et des trous de plusieurs heures.
+  Les seules journées régulières (95-100 %) sont celles de **marché
+  fermé** : le flux se troue quand la stack travaille.
+- ce qu'il est seul à porter : les **états du moteur** — `bb_etat`,
+  `fr_canal`, `fr_fb`, `fr_ev`, `piege_side`, `ib_etat`, `biais`, et à
+  la racine `alignment` / `leader` / `weakest`.
+
+### `docs\buddha\<jour>\snapshots.csv`
+
+**90 fichiers, 1,9 Go, 21 journées, cadence ~190 s (trois minutes).**
+Des milliers de colonnes, des lignes de plusieurs centaines de milliers
+de caractères.
+
+Porte ce que `cycles` n'a pas :
+
+```
+volume_profile.poc / vah / val / bid_position
+market_laws.<actif>.M1 / M3 / M5 / M15.va_poc
+vp_daily.* / vp_rolling.*  (poc, pov_vol, total_vol, price_vs_poc)
+futures_heatmap.poc / max_vol / total_vol
+cvd_strength.M1 / M3 / M5 / score
+tick_micro.absorption / reversal_prob / burst_* / bid_velocity_*
+volcan_m3.v1 / v2 / day_max  (body, volume, direction, heure)
+pulse.delta_5min / delta_30min
+positions.n / n_buy / n_sell / open_pnl / day_pnl
+```
+
+- transcrit par **`extraire_snapshots.py`** (sélection par motif de nom,
+  module `csv` obligatoire — un split sur la virgule décale les
+  colonnes sur les champs contenant du texte)
+- **le POC est déjà calculé par la stack.** On le lit, on ne le
+  reconstruit pas.
+
+### `docs\churn_trades\churn_trades.jsonl` (+ archive)
+
+**36 Mo. C'est la seule source en euros.** Clés :
+
+```
+asset  dir  entry_ts  entry_price  close_ts  close_reason
+pnl_eur  mae_eur  mae_pts  mfe_eur  mfe_pts  volume  ticket  magic  pid
+churn_entry  entry_captured_live
+```
+
+Toute mesure qui ne finit pas ici finit en points d'indice, c'est-à-dire
+en rien.
+
+### `C:\SierraChart\Data\*.scid` — orderflow réel
+
+Binaire : en-tête 56 octets, enregistrements de 40 octets.
+
+```
+horodatage   ENTIER 64 BITS, microsecondes depuis 1899-12-30, en UTC
+Open High Low Close   4 flottants
+NumTrades TotalVolume BidVolume AskVolume   4 entiers
+```
+
+- **`BidVolume` / `AskVolume` séparés** — ce que MT5 ne peut pas donner
+  (sur CFD d'indices MT5 fournit un volume de *ticks*, son delta est
+  une inférence).
+- lu par **`lire_scid_v3.py`**. Les versions v1/v2 lisaient
+  l'horodatage comme un flottant : toutes les dates sortaient à
+  `1899-12-30`. v3 **détecte** l'encodage.
+- **`YMU26-CBOT.scid`** : 57 Mo, 1,42 M enregistrements, **depuis le
+  2 février 2026**. `MESU26-CME.scid` : 1,1 Go.
+- **`MNQU26-CME.scid` fait 1 Ko : PAS DE NASDAQ.** Toute hypothèse de
+  rotation tech/value est invalidable en orderflow réel.
+- la forme des OHLC dépend du symbole : MES met `Open=0`, `High=ask`,
+  `Low=bid` ; YM met les quatre égaux au prix échangé. **Ce qui tranche
+  la nature tick, c'est `bid + ask == total`**, pas la forme des OHLC.
+- réglages SierraChart : `Intraday Data Storage Time Unit = 1 Tick`,
+  `Maximum Historical Intraday Days = 186`.
+
+### Calendrier économique MT5
+
+- exporté par **`export_calendrier.mq5`** (script MQL5, lecteur seul,
+  aucune fonction de trading — le paquet Python `MetaTrader5` n'expose
+  pas le calendrier)
+- relu par **`lire_calendrier.py`**
+- **4 247 événements** juin→octobre, dont **261 `HIGH`**, 168 US
+- **77 des 168 US HIGH n'ont pas de surprise calculable** (actual ou
+  forecast absent) — près de la moitié
+- **le `forecast` MT5 n'est pas fiable partout** : CPI y/y du 12/08,
+  MT5 annonce 2,7 quand TradingEconomics donne 3,4 pour un actual de
+  3,4. Le prix tranche en faveur de TE. **Confronter à une seconde
+  source avant qu'une surprise serve à décider.**
+
+### `news_feed.json`
+
+Flux TradingView live (poll 45 s, ~198 items). **Aucune archive** :
+rien du 12/08 n'est récupérable. Ne pas compter dessus pour dater un
+événement passé.
+
+### Pipeline orderflow existant — LE PLUS AVANCÉ, ET LE PLUS FACILE À OUBLIER
+
+```
+scid_orderflow.py / scid_orderflow_lu.py    lecture .scid
+orderflow_join.py / _v3 / _v4 / _v5         jointure orderflow × tickets
+orderflow_panel.py / _v2                    panneau
+ScalpOrderflowExport.cs                     export NinjaTrader
+ROADMAP_ORDERFLOW.md / INSTALL_ORDERFLOW.md
+```
+
+Sorties : **`scalp_orderflow_<date>-<heure>.txt` déposées sur le Drive
+toutes les quinze minutes**, ~19 Ko.
+
+Ce qu'il produit déjà (état du 17/08 10:25) :
+
+- **153 481 barres orderflow, du 29/04 au 17/08**, assets US30 + US500
+- **2 550 tickets rails, 1 635 appariés à une barre Ninja (64,1 %)**
+- dix tableaux croisés **en euros** : churn × qualité de flux, setup ×
+  événement, heure × ER, régime des trois indices, cohésion,
+  confluence rails × HLC par timeframe
+- un **contrefactuel** classant les règles d'abstention par Δ =
+  PnL/signal après − avant
+
+Les meilleures lignes de ce contrefactuel (pré-enregistrées en **H29**) :
+
+| règle | retirés | Δ /signal |
+|---|---|---|
+| flux CARNAGE ou MOU (ER < 0,40) | 1 212 / 1 635 (74 %) | **+4,65** |
+| heures 09h–11h | 757 / 2 550 (30 %) | **+3,69** |
+| ABSORPTION | 47 (3 %) | **−0,07** |
+
+L'absorption, qu'on citait comme prometteuse, est la seule règle du
+tableau qui **détruit** de la valeur.
+
+---
+
+## 2. LES HORLOGES — la table à consulter avant tout croisement
+
+Trois sources, trois fuseaux. Deux heures d'écart passent inaperçues
+et faussent tout.
+
+| source | fuseau | correction vers l'heure des cycles |
+|---|---|---|
+| `cycles.csv`, `snapshots.csv`, `churn_trades` | machine VPS = **UTC+2** | référence |
+| calendrier MT5 (`CalendarValueHistory`) | serveur broker = **UTC+3** | **− 1 h** |
+| SierraChart `.scid` | **UTC** | **+ 2 h** |
+| TradingEconomics (sélecteur du site) | UTC+2 | aucune |
+
+**Vérifié, pas déduit** : après correction, **20 CPI américains sur 20**
+tombent à 14:30 — l'heure de publication réelle. Tout nouveau
+croisement doit refaire ce type de contrôle sur un repère connu.
+
+Attention : `14:30` est aussi l'heure d'ouverture de la fenêtre
+d'**initial balance** du moteur. Le bloc de changements d'état à cette
+seconde est une **horloge**, pas un événement de marché : il revient
+6 jours sur 18.
+
+---
+
+## 3. Le protocole de mesure — non négociable
+
+1. **Une fenêtre se définit en TEMPS, jamais en nombre de lignes.**
+   Rejeter toute fenêtre dont la durée réelle dépasse le double de la
+   durée voulue : elle enjambe un trou.
+2. **Trier par horodatage avant de mesurer.** Les CSV contiennent des
+   lignes qui reculent dans le temps.
+3. **Témoin apparié obligatoire.** Sans lui on mesure la tendance de la
+   période et on l'appelle un effet.
+4. **Permutation par JOURNÉE** pour le p. L'unité d'observation est la
+   journée : les cycles d'une même journée ne sont pas indépendants.
+5. **Pré-enregistrement dans `HYPOTHESES.md`** avec date de rendez-vous
+   et critère de réfutation, AVANT de mesurer.
+6. **Règle de comptage §0** : n > (z·σ/e)², avec σ ≈ 60 € — une
+   estimation, pas une constante.
+7. **Un seuil se mesure, il ne s'invente pas.** Pas de « plus de 60 s »,
+   pas de « avant 18 h » : un multiple du pas médian de la source, et
+   le seuil retenu est affiché.
+8. **Le format se lit dans les données** (`--schema`, `--colonnes`,
+   en-tête du fichier), jamais dans un souvenir.
+9. **Le résultat final est en euros.** Les points d'indice ne décident
+   de rien.
+10. **Un balayage trouve toujours un maximum.** Le maximum d'une
+    recherche sous H0 vaut déjà 1,5 à 3 : calibrer par permutation sur
+    le MAXIMUM, pas sur la cellule choisie.
+
+---
+
+## 4. Les panneaux
+
+Convention documentée dans **`NOTES_panneaux.md`**. En résumé :
+
+- 178 boutons, **177 en `showTab('id')`** (onglets en page), **1 seul en
+  `window.open('/route','_blank')`**
+- le tableau de bord **se recharge toutes les 5 s** → une page
+  interactive doit être une **route**, pas un onglet
+- **un panneau = une route + un bouton.** L'un sans l'autre vaut zéro.
+- **aucune convention de couleur** n'existe (~60 couleurs distinctes) :
+  sur une interface qui existe, on **recopie**, on ne conçoit pas
+- routage dans `price_action.py` (`_do_GET_impl`), cascade de
+  `if parsed.path == "/x":`, **indentation 12 espaces**, chaque branche
+  finit par `return`. Les `<div class="tab">` sont à **4 espaces**.
+- redémarrage : **deux étapes** — arrêter par pid, attendre le
+  superviseur. Un service supervisé ne se relance pas à la main.
+
+---
+
+## 5. Les interdits — sur cette machine, sans exception
+
+1. Ne jamais `Stop-Process -Name python` : ça tue les traders.
+2. Ne jamais lancer `price_action.py` **sans `PA_ROLE=panel`**
+   (`_run_trading = _pa_role != "panel"`).
+3. Ne jamais approcher `terminal64.exe`. Un script MQL5 est lancé **par
+   l'utilisateur**, jamais par moi, et ne contient aucune fonction de
+   trading.
+4. Ne jamais modifier un `regles_gelees_v*.py`.
+5. Ne jamais agir sur un processus hors d'une liste explicite.
+6. **Ne jamais « réparer » un flux dont on n'a pas identifié la cause
+   de la panne.** Quand une demande porte sur un résultat, chercher le
+   chemin qui l'atteint sans toucher au vivant (ex. `collecteur_10s.py`,
+   qui interroge le panneau en lecture seule au lieu de modifier le
+   logger).
+
+Contraintes de travail : **une commande par prompt**, livraison par
+`G:\My Drive\ScalpEA\` (le push GitHub est refusé, 403 — politique du
+dépôt), et le Drive **n'autorise pas le remplacement** d'un fichier :
+d'où les suffixes `_v2`, `_v3`.
+
+---
+
+## 6. Les outils, et à quoi ils servent
+
+| outil | ce qu'il fait |
+|---|---|
+| `extraire_cycles.py` | cycles.jsonl(.gz) → CSV/jour, 70 colonnes |
+| `extraire_snapshots.py` | snapshots.csv → CSV/jour, volume/POC/CVD |
+| `audit_cadence.py` | **à lancer avant toute mesure** : désordre, trous, part utile |
+| `lire_scid_v3.py` | `.scid` → barres avec delta et CVD |
+| `export_calendrier.mq5` | calendrier MT5 → CSV (heure + importance) |
+| `lire_calendrier.py` | calendrier remis à l'heure des cycles, surprise |
+| `journal_etats.py` | blocs synchrones, durée de séjour des labels |
+| `autopsie_choc.py` | autopsie d'une bougie, signature, recherche arrière |
+| `breakout_range.py`, `bruit_par_actif.py`, `cassure_par_actif.py`, `rotation_tech_value.py` | mesures — **toutes à revoir : fenêtres comptées en lignes** |
+| `collecteur_10s.py` | flux indépendant à 10 s, lecture seule du panneau |
+
+**Durées de séjour mesurées** (17/08) — ce qui décrit un régime et ce
+qui n'en décrit pas : `piege_side` 616 s, `bb_etat` 221 s, `fr_canal`
+139 s, `fr_fb` 110 s, **`biais` 78 s**, `fr_ev` 73 s, `alignment` 67 s,
+**`leader` 54 s**. Un label qui bascule toutes les minute ne peut pas
+servir de condition d'entrée sans lissage — et personne n'a décidé
+lequel.
+
+---
+
+## 7. Les rendez-vous en cours
+
+| hypothèse | échéance | sujet |
+|---|---|---|
+| H22 | 18/08 | — |
+| H26 | 20/08 | pas de consensus M15 |
+| H23, H25 | 26/08 | — |
+| H27a | 27/08 | US100, +12,2 sur 141 |
+| H27 | 30/08 | sortie de range par le bas |
+| H24 | 01/09 | séance US, gap M1 plat |
+| H27b | 22/09 | US500, n ≈ 206 |
+| **H28** | fin août | payer SierraChart, ou non |
+| **H29** | **15/10** | les deux règles d'abstention, hors échantillon |
+
+**Coupure H29 : tous les tickets clos à partir du 18/08 00:00.** Aucun
+changement de paramètre sur ces règles d'ici là — elles sont
+**observées**, pas appliquées.
