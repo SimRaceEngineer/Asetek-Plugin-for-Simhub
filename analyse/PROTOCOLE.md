@@ -98,6 +98,68 @@ NumTrades TotalVolume BidVolume AskVolume   4 entiers
 - réglages SierraChart : `Intraday Data Storage Time Unit = 1 Tick`,
   `Maximum Historical Intraday Days = 186`.
 
+
+### `C:\SierraChart\Data\*.scid` -- ATTENTION AU CYCLE DE VIE DU CONTRAT
+
+Trois fichiers seulement dépassent 1 Mo (état du 17/08) :
+
+| fichier | taille | ce que c'est |
+|---|---|---|
+| `MESU26-CME.scid` | **1 074 Mo** | Micro E-mini S&P 500 → notre US500 |
+| `TICK-NYSE.scid` | **304 Mo** | indice TICK NYSE — largeur de marché |
+| `YMU26-CBOT.scid` | 54 Mo | Micro Dow → notre US30 |
+
+**Le piège : `U26` est l'échéance de SEPTEMBRE.** Avant le roulement
+de mi-juin, le contrat actif était `M26` (juin). Un `.scid` couvrant
+« février à août » est donc trompeur — le contrat n'est liquide que
+sur son trimestre.
+
+Mesuré sur YM : **médiane de 131 barres d'une minute par jour**, pour
+une moyenne de 471. Un future qui cote 23 h devrait en avoir ~1 380.
+La fenêtre réellement exploitable fait deux mois et demi, pas six.
+
+Conséquence : **étendre le calendrier vers le passé ne sert à rien
+sans les échéances antérieures** (`YMM26`, `MESM26`, `YMH26`…), qui ne
+sont pas en stock. SierraChart sait les télécharger
+(`Chart > Download Historical Data`), mais ça ne se fait pas tout
+seul. Le raboutage en contrat continu est la pratique standard.
+
+**Pas de Nasdaq** : `MNQU26-CME.scid` fait 1 Ko.
+
+### `TICK-NYSE.scid` -- la largeur de marché, jamais exploitée
+
+Nombre d'actions en hausse moins en baisse à l'instant T. **Aucune
+autre source ne porte ça.** C'est ce qui distingue « le S&P monte
+parce que trois valeurs le portent » de « le S&P monte parce que tout
+monte » — c'est-à-dire la question de bipolarisation, mesurée au lieu
+d'être déduite de l'écart US30/US100.
+
+### Exports MQL5 vers `Common\Files` -- un pipeline live inconnu
+
+`%APPDATA%\MetaQuotes\Terminal\Common\Files\` contient :
+
+- **`futures_<SYMBOLE>_M1.csv`** — une quinzaine de fichiers (~1,3 Ko)
+  **réécrits toutes les minutes** : US2000, EURUSD, GBPUSD, USDJPY,
+  NGAS, et une douzaine d'actions. Fenêtre glissante, pas d'historique.
+- **`hama_kama_crosses.csv`** — 3,7 Mo.
+- **`docs\rsi_50_crosses\<jour>\snapshots.csv`** — un arbre de
+  snapshots **distinct** de `docs\buddha\`, 0,75 à 2,3 Mo par
+  journée, remontant au moins au 08/08.
+
+Aucun des trois n'était connu avant le 17/08. Contenu non inventorié.
+
+### Où le calendrier MT5 n'est PAS
+
+Cinq recherches ont échoué le 17/08 : pas de `*calend*.csv` sous
+`AppData\MetaQuotes`, pas de gros CSV correspondant dans
+`Common\Files`, rien par contenu (`TimeGMT`, `evenement`). Le fichier
+produit par `export_calendrier.mq5` **n'est pas retrouvable sur la
+machine** sous un nom identifiable.
+
+Contournement en place : **`calendrier_HIGH.csv` sur le Drive** — les
+261 événements HIGH extraits de l'export d'origine, en-tête compris.
+C'est ce fichier que `reaction_evenements.py` lit.
+
 ### Calendrier économique MT5
 
 - exporté par **`export_calendrier.mq5`** (script MQL5, lecteur seul,
@@ -199,7 +261,13 @@ seconde est une **horloge**, pas un événement de marché : il revient
    en-tête du fichier), jamais dans un souvenir.
 9. **Le résultat final est en euros.** Les points d'indice ne décident
    de rien.
-10. **Un balayage trouve toujours un maximum.** Le maximum d'une
+10. **Un horizon en jours se compte en SÉANCES**, jamais en jours
+    calendaires : +3 jours civils depuis un mercredi tombe le samedi.
+    Et une séance est une date portant assez de barres — les futures
+    CME rouvrent le dimanche soir et créent des séances fantômes.
+11. **Un effectif non monotone est un bug**, pas un hasard : si `3j` a
+    moins de points que `1j` et `5j`, on compte mal.
+12. **Un balayage trouve toujours un maximum.** Le maximum d'une
     recherche sous H0 vaut déjà 1,5 à 3 : calibrer par permutation sur
     le MAXIMUM, pas sur la cellule choisie.
 
@@ -261,6 +329,8 @@ d'où les suffixes `_v2`, `_v3`.
 | `autopsie_choc.py` | autopsie d'une bougie, signature, recherche arrière |
 | `breakout_range.py`, `bruit_par_actif.py`, `cassure_par_actif.py`, `rotation_tech_value.py` | mesures — **toutes à revoir : fenêtres comptées en lignes** |
 | `collecteur_10s.py` | flux indépendant à 10 s, lecture seule du panneau |
+| `reaction_evenements.py` | calendrier × orderflow : prix ET delta cumulé, six horizons, témoin apparié, mode `--verifie` |
+| `patch_seances.py` | correctif du comptage des séances pour l'outil ci-dessus |
 
 **Durées de séjour mesurées** (17/08) — ce qui décrit un régime et ce
 qui n'en décrit pas : `piege_side` 616 s, `bb_etat` 221 s, `fr_canal`
