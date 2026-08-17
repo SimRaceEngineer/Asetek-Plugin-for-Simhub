@@ -704,3 +704,51 @@ déposer.
 **Les règles.** Un verdict se lit dans la colonne qu'il commente. Une
 branche par défaut n'est pas un fourre-tout. Sous le plancher de
 cotation, une statistique mesure l'arrondi.
+
+---
+
+## 17/08/2026 — « 90 cycles = 15 minutes », et c'était faux depuis le début
+
+**Ce que j'ai fait.** Tous mes outils sur `cycles.jsonl` définissent une
+fenêtre en **nombre de cycles**, converti en minutes avec un pas médian
+de 10 s : `k = round(minutes * 60 / pas_median)`. Quatre fichiers
+reposent dessus — `breakout_range.py`, `bruit_par_actif.py`,
+`rotation_tech_value.py`, `autopsie_choc.py`.
+
+**Le raisonnement faux.** J'ai pris une **médiane** pour une
+**garantie**. Un pas médian de 10 s dit que la moitié des intervalles
+font 10 s. Il ne dit rien des autres, et surtout rien des trous.
+
+**Comment ça s'est vu.** L'autopsie du 12/08 a imprimé sa propre
+réfutation : ancre à `13:22:22`, ligne marquée `<-- fin de fenetre`
+(90 cycles plus loin) à **`15:22:24`**. Deux heures annoncées comme
+quinze minutes. Le compte de lignes était juste ; la durée, fausse. Je
+ne l'ai vu que parce que la trajectoire imprimait les horodatages —
+si j'avais affiché des indices, ça passait.
+
+**La conséquence.** Toutes les amplitudes, tous les ratios de variance
+et toutes les cassures calculés sur ces fenêtres comparent des durées
+différentes entre elles. Ce ne sont pas des mesures bruitées, ce sont
+des mesures **incommensurables** : deux « fenêtres de 15 min » peuvent
+durer 15 min et 2 h. Les 22 événements de divergence et leur colonne
+« différence » sont à jeter en l'état.
+
+**Deux défauts frères, trouvés dans la foulée.**
+- Ma colonne `debut`/`fin` prenait la première et la dernière **ligne**
+  du fichier, en supposant l'ordre. Plusieurs journées affichent
+  `début 23:59 / fin 23:58` : les lignes ne sont pas triées. Il faut le
+  min et le max, pas le premier et le dernier.
+- Aucun de mes outils ne trie par horodatage avant de mesurer.
+
+**Le correctif.** `audit_cadence.py` d'abord — mesurer l'horloge avant
+de mesurer le marché : désordre, p50/p90 des intervalles, plus grand
+trou, et surtout **part utile** = durée couverte moins la somme des
+trous de plus de 60 s. Ensuite, remplacer partout « fenêtre de k
+lignes » par « fenêtre de W secondes », avec **rejet** de toute fenêtre
+dont la durée réelle dépasse le double de W — une fenêtre qui enjambe
+un trou n'est pas une fenêtre élargie, c'est une absence de mesure.
+
+**Les règles.** Une médiane n'est pas une garantie : ce qui est
+converti doit être mesuré, pas déduit. Une fenêtre se définit en temps,
+jamais en nombre de lignes. Et l'ordre d'un fichier se vérifie, il ne
+se suppose pas.
