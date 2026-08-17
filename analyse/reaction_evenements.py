@@ -461,7 +461,33 @@ def main():
         dis("  %-8s %8s %10s %10s %10s"
             % ("horizon", "n", "surprises", "temoin", "difference"))
         cles = ["%dmin" % m for m in MINUTES] + ["%dj" % j for j in JOURS]
-        jours_b = sorted(set(x[0].date() for x in serie))
+        # Les SEANCES, pas les dates presentes. Les futures CME
+        # rouvrent le DIMANCHE SOIR : une poignee de barres suffit a
+        # faire apparaitre le dimanche dans la liste des dates, et
+        # avancer de trois crans depuis un mercredi tombait alors sur
+        # ce dimanche fantome, qui n a aucune barre a 12:30 UTC. La
+        # colonne 3j sortait a 10 points quand 1j en avait 22 et 5j 20
+        # -- un effectif non monotone, signe qu on compte mal.
+        #
+        # On ne garde donc que les dates portant au moins la moitie du
+        # nombre median de barres par jour. Le seuil est MESURE sur la
+        # serie, pas invente.
+        par_date = {}
+        for x in serie:
+            d = x[0].date()
+            par_date[d] = par_date.get(d, 0) + 1
+        cpt = sorted(par_date.values())
+        med_j = cpt[len(cpt) // 2] if cpt else 0
+        jours_b = sorted(d for d, n in par_date.items()
+                         if n >= max(1, med_j // 2))
+        dis("  %d date(s) dans les barres, %d retenues comme SEANCES"
+            % (len(par_date), len(jours_b)))
+        dis("  (au moins %d barres, soit la moitie de la mediane"
+            % max(1, med_j // 2))
+        dis("  journaliere de %d). Les reouvertures du dimanche soir en"
+            % med_j)
+        dis("  sont exclues : elles n ont pas de barre a l heure des")
+        dis("  publications.")
         r_ev = [reaction(serie, e["t"], MINUTES, JOURS, a.tolerance,
                          jours_b) for e in dans]
         r_tm = [reaction(serie, t, MINUTES, JOURS, a.tolerance,
