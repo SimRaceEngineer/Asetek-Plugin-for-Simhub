@@ -1227,3 +1227,77 @@ quatre cases, le verdict compte quatre cases.
 **Le contre-poids.** Le défaut était visible parce que la table était
 imprimée à côté du verdict. Un outil qui n'aurait affiché que sa
 conclusion aurait passé le contrôle.
+
+## 17/08/2026 — j'ai corrigé un `print`, pas la sortie
+
+Le REPL DeepSeek du 8095 rendait, **tous les jours** :
+
+```
+DEEPSEEK reasoner · 7.8s → (vide / ValueError: I/O operation on closed file.)
+```
+
+Le 12/08 j'avais déjà rencontré cette exception. Je l'avais corrigée
+dans `_ensure_init` de `repl_web` — l'endroit où elle se **voyait**.
+Elle est ressortie six jours plus tard dans `council_shadow._call_model`,
+c'est-à-dire ailleurs, pour la même raison.
+
+**La cause n'était pas dans le REPL.** Trois lanceurs coexistent et ne
+lancent pas le 8095 pareil :
+
+```
+Superviseur.ps1:203       -RedirectStandardOutput + -RedirectStandardError
+Gardien-Stack.ps1:258     aucune redirection
+Redemarrer-Stack.ps1:164  aucune redirection
+```
+
+Sans redirection, le processus hérite de la console de son parent. Le
+gardien est une tâche planifiée `/SC MINUTE /MO 5` lancée
+`-WindowStyle Hidden` : elle naît, relance ce qui manque, puis meurt.
+Sa console meurt avec elle, et le 8095 qu'elle vient de lancer garde
+un descripteur fermé. **Le même code marche ou ne marche pas selon qui
+l'a relancé** — et comme le gardien passe toutes les cinq minutes,
+c'est presque toujours lui qui gagne après un incident.
+
+**La règle.** Corriger une faute à son point d'impact ne la corrige
+pas : il y a autant de points d'impact que de `print` dans le
+processus, et on ne les épuise jamais. Quand la même exception
+réapparaît ailleurs, ce n'est pas une récidive, c'est la preuve qu'on
+n'avait pas touché la cause.
+
+**Le corollaire, plus large que le REPL.** Le gardien relance aussi
+les **traders** avec cette même sortie morte. Tout `print` chez eux
+lève la même exception, et rien ne l'écrit nulle part.
+
+## 17/08/2026 — un correctif qui emprunte les imports de sa cible
+
+`patch_repl_sortie.py` insère un bloc dans `repl_web.py`, un fichier
+que je ne peux pas lire. Première version : le bloc se servait de `io`,
+`os` et `datetime` **supposés présents** en tête de la cible.
+
+Au banc, l'en-tête horodaté du journal n'a pas été écrit. `NameError`
+sur `datetime`, avalé par le `except` qui protège justement cette
+écriture. Le correctif fonctionnait à 90 % et perdait sa trace
+d'audit en silence.
+
+**La règle.** Du code injecté dans un fichier qu'on ne peut pas lire
+ne doit rien lui emprunter. Il refait ses imports sous des noms privés.
+
+**Ce qui l'a attrapé** : le banc, pas la relecture. Et il ne l'a
+attrapé que parce que le banc **affichait le journal produit** au lieu
+de se contenter de vérifier que le patch s'appliquait.
+
+## 17/08/2026 — j'ai déclaré perdu ce qui partait en un appel
+
+`git push` refusé, API GitHub refusée : les trois documents de
+référence n'existaient que dans un conteneur éphémère. J'ai annoncé
+qu'il faudrait les monter sur le Drive en gzip + base64, ~95 000
+caractères à réémettre à la main, avec le risque qu'un seul caractère
+faux détruise l'archive entière.
+
+`SendUserFile` prend un **chemin** et livre le fichier. Aucun octet ne
+passe par le contexte. Les trois documents sont partis en un appel.
+
+**La règle.** Avant de bâtir un contournement coûteux, faire
+l'inventaire des outils disponibles. J'ai passé plusieurs échanges à
+planifier un transport de 95 Ko à travers ma propre fenêtre alors
+qu'un outil de la liste faisait exactement ça, gratuitement.
