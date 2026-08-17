@@ -119,10 +119,14 @@ from datetime import datetime, timedelta
 DOSSIER = os.path.join("cartes", "scid")
 GRAINE = 20260817
 
-# Les journees citees par l utilisateur. Elles sont MARQUEES dans la
-# liste des evenements, pas traitees a part : si elles sont ordinaires,
+# Les journees remarquees a l oeil. Elles sont MARQUEES dans la liste
+# des evenements, jamais traitees a part : si elles sont ordinaires,
 # elles doivent se perdre au milieu des autres.
-CITEES = ("2026-08-05", "2026-08-12", "2026-08-17")
+#
+# Reglables par --jours, parce qu une liste en dur vieillit. Le 14/08
+# a ete ajoute apres coup -- c est exactement pour ca qu elle ne doit
+# pas etre en dur.
+CITEES = "2026-08-05,2026-08-12,2026-08-14,2026-08-17"
 
 FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
            "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M:%S")
@@ -376,7 +380,11 @@ def main():
                         "bruit minute median du jour")
     p.add_argument("--sens", choices=("haut", "bas"), default="haut")
     p.add_argument("--tirages", type=int, default=2000)
+    p.add_argument("--jours", default=CITEES,
+                   help="dates a MARQUER dans la table, separees par des "
+                        "virgules ; elles ne sont pas traitees a part")
     a = p.parse_args()
+    cites = tuple(x.strip() for x in a.jours.split(",") if x.strip())
 
     dis("=" * 78)
     dis("REFUS DE CONTINUATION -- le carnet prevenait-il, ou decrivait-il ?")
@@ -446,12 +454,16 @@ def main():
     dis("=" * 78)
     dis("LES JOURNEES CITEES, PARMI LES AUTRES")
     dis("=" * 78)
-    dis("  Trois journees remarquees a l oeil sont trois journees")
-    dis("  VECUES. Si elles se perdent au milieu de quarante, elles n")
-    dis("  avaient rien de special et la regularite est ailleurs.")
+    dis("  Marquees : %s" % ", ".join(cites))
+    dis()
+    dis("  Des journees remarquees a l oeil sont des journees VECUES.")
+    dis("  Si elles se perdent au milieu de quarante, elles n avaient")
+    dis("  rien de special et la regularite est ailleurs. Elles ne sont")
+    dis("  ni exclues ni privilegiees : elles sont comptees comme les")
+    dis("  autres, et seulement signalees ici.")
     dis()
     for sym in sorted(tout):
-        vus = [e for e in tout[sym] if str(e["jour"]) in CITEES]
+        vus = [e for e in tout[sym] if str(e["jour"]) in cites]
         if not vus:
             dis("  %-16s aucune tentative ces jours-la." % sym)
             continue
