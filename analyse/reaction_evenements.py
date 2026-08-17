@@ -95,6 +95,11 @@ JOURS = (1, 3, 5)
 
 _ECHO = []
 
+# Compte les fenetres ecartees parce qu elles enjambent un raccord de
+# contrat. Une exclusion silencieuse serait aussi trompeuse que
+# l erreur qu elle corrige.
+_ECARTES_BASE = [0]
+
 
 def dis(s=""):
     _ECHO.append(s)
@@ -185,7 +190,11 @@ def lis_barres(dossier):
                 c = flt(r.get("close"))
                 d = flt(r.get("delta"))
                 if t and c and c > 0:
-                    serie.append((t, c, d if d is not None else 0.0))
+                    # 4e element : le contrat d origine, vide si la
+                    # serie n est pas un raccord. Ajoute a la fin pour
+                    # que serie[i][1] et serie[i][2] restent valides.
+                    serie.append((t, c, d if d is not None else 0.0,
+                                  (r.get("contrat") or "").strip()))
         if len(serie) > 100:
             serie.sort(key=lambda x: x[0])
             out[nom[3:-4]] = serie
@@ -265,6 +274,17 @@ def reaction(serie, t0, horizons_min, horizons_j, tol, jours=None):
             continue
         i1 = prix_a(serie, cible, delai, rend_index=True)
         if i1 is None or i1 <= i0:
+            out[lab] = None
+            out["d_" + lab] = None
+            continue
+        # Une fenetre a cheval sur DEUX echeances ne mesure pas un
+        # mouvement de marche : elle mesure la base entre contrats,
+        # plusieurs points d indice d un coup. Les prix du raccord ne
+        # sont pas ajustes -- c est un choix -- donc c est ici qu on
+        # protege la mesure.
+        if len(serie[i0]) > 3 and serie[i0][3] and \
+                serie[i0][3] != serie[i1][3]:
+            _ECARTES_BASE[0] += 1
             out[lab] = None
             out["d_" + lab] = None
             continue
@@ -556,6 +576,14 @@ def main():
     dis("=" * LARG)
     dis("CE QUE CA NE DIT PAS")
     dis("=" * LARG)
+    if _ECARTES_BASE[0]:
+        dis()
+        dis("  %d fenetre(s) ecartee(s) parce qu elles enjambaient un"
+            % _ECARTES_BASE[0])
+        dis("  raccord d echeance. Les prix du raccord ne sont pas")
+        dis("  ajustes : une telle fenetre aurait mesure la base entre")
+        dis("  contrats et non un mouvement de marche.")
+        dis()
     dis("  Aucun p-value : il viendra par permutation par journee")
     dis("  quand l effectif le permettra, pas avant.")
     dis("  Aucun euro : ce sont des rendements d indice. Le lien au")
