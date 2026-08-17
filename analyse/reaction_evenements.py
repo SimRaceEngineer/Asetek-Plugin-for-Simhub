@@ -44,6 +44,11 @@ LA CHAINE DES FUSEAUX -- LE POINT LE PLUS FRAGILE
     convertit, et montre l heure obtenue cote prix. Si ce n est pas
     12:30 UTC, on s arrete.
 
+    Verite de terrain gratuite : le BLS publie son calendrier officiel
+    (bls.gov/schedule/news_release/cpi.htm) -- CPI a 08:30 ET, dates
+    listees jusqu en decembre. C est un meilleur ancrage que n importe
+    quelle inference.
+
 CE QU ON MESURE
 
     surprise = actual - forecast, puis NORMALISEE par evenement :
@@ -55,6 +60,10 @@ CE QU ON MESURE
     Reaction a SIX horizons : 15 / 30 / 60 minutes, puis 1 / 3 / 5
     jours. Les trois premiers testent ma lecture, les trois derniers
     la sienne.
+
+    Et DEUX grandeurs par horizon : le PRIX en %, et le DELTA CUMULE
+    (contrats a l achat moins a la vente). Le prix dit ou ca va, le
+    delta dit qui pousse.
 
 LE TEMOIN APPARIE
 
