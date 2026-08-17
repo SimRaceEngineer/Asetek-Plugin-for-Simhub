@@ -124,7 +124,34 @@ sont pas en stock. SierraChart sait les télécharger
 (`Chart > Download Historical Data`), mais ça ne se fait pas tout
 seul. Le raboutage en contrat continu est la pratique standard.
 
-**Pas de Nasdaq** : `MNQU26-CME.scid` fait 1 Ko.
+#### Le périmètre RÉEL du forfait, vérifié le 17/08
+
+Ce qui a des données (`C:\SierraChart\Data\`) :
+
+| symbole | taille | période liquide |
+|---|---|---|
+| `MESM26-CME` | **2,1 Go** | mi-mars → mi-juin |
+| `MESU26-CME` | 1,1 Go | mi-juin → aujourd'hui |
+| `YMU26-CBOT` | 55 Mo | mi-juin → aujourd'hui |
+| `TICK-NYSE` | 311 Mo | — |
+
+Ce qui est **vide (1 Ko)** — testé, pas supposé :
+
+- **`MNQM26`, `MNQU26`, `NQM26`** → **aucun Nasdaq, sur aucune
+  échéance.** La rotation tech/value restera invalidable en orderflow
+  réel.
+- **`SPM26-CME`** → le E-mini *plein format* est vide aussi. **Le
+  forfait ne couvre que les micros.**
+- **`MESU25`, `YMU25`** → aucun contrat 2025. L'historique s'arrête
+  aux échéances de l'année en cours, et `MESH26` (mars) n'apparaît
+  même plus dans la liste des symboles.
+- **`$INX`, `$OEX`, `$DOWI`, `SPX500`** → les indices *cash* sont
+  classés « Cash Indexes (End of Day) » : pas d'intraday, donc jamais
+  de `.scid`.
+
+**Conclusion : cinq mois de S&P micro liquide (mi-mars → août), et
+rien d'autre.** C'est le plafond, il ne bougera pas sans changer de
+forfait. Inutile d'y revenir.
 
 ### `TICK-NYSE.scid` -- la largeur de marché, jamais exploitée
 
