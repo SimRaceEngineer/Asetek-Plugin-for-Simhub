@@ -3016,3 +3016,106 @@ paierait deux tests pour une information et demie.
 À corriger dans l'outil : RENDU doit être déclaré **dérivé** et sorti
 du décompte. Le reste tient — TAILLE et SPREAD sont indépendants de
 tout à 2-15 %.
+
+---
+
+## H35 — Un repère du S&P marque-t-il un niveau sur le Dow ?
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026, AVANT toute mesure. NON
+MESURÉE — reportée sur décision de l'utilisateur, « c'est à voir une
+fois le reste bien ancré ». Écrite maintenant précisément pour que le
+jour où on la mesure, l'énoncé et la règle de décision soient
+antérieurs aux données.**
+
+### D'où elle vient
+
+L'utilisateur, 18/08 : *« lorsque j'ai mis le script us500 sur us30 on
+a vu la correspondance en temps [...] il y a des rapprochements et on
+pourrait avoir créé les momentums de supports et résistances »*.
+
+L'indicateur généré pour MES a été collé sur un graphique du Dow. Les
+instants de repère y tombent visiblement au même endroit.
+
+### Ce que cette correspondance ne peut pas être
+
+**Elle ne peut pas porter sur les prix.** MES cote 7 826 quand US500
+cote 7 757 ; le Dow cote 46 000. Seuls les INSTANTS traversent d'un
+symbole à l'autre — c'est déjà la raison pour laquelle
+`pine_reperes.py` n'exporte que des `timestamp("UTC", ...)`.
+
+**Et l'observation visuelle est, en l'état, la prédiction de
+l'hypothèse nulle.** Deux contrats qui échangent la même séance ont
+leurs minutes extrêmes aux mêmes heures :
+
+```
+YM-continu   13:00 UTC  18,2 %   22:00 UTC  11,8 %   (uniforme 4,3 %)
+MES-continu  13:00 UTC   8,3 %
+```
+
+Trente pour cent des repères de YM tiennent dans deux heures sur
+vingt-trois. Deux listes d'instants tirées de cette distribution se
+« correspondent » sans qu'aucune information ne passe de l'une à
+l'autre. **La coïncidence temporelle est ici le témoin, pas le
+résultat.**
+
+### Ce que H31 fait attendre — et pourquoi ça rend l'énoncé intéressant
+
+H31, mesurée le 17/08 sur 2 565 blocs : `rho PRIX 0,800`,
+`rho DELTA 0,209`. Les prix des deux indices bougent ensemble, leurs
+flux beaucoup moins.
+
+Un repère est un **événement de flux**. Si les flux sont dissociés, un
+repère de MES ne devrait rien marquer de particulier sur YM au-delà de
+l'horloge. **L'hypothèse contredit donc un résultat déjà mesuré** — ce
+qui est exactement ce qu'on veut d'un énoncé pré-enregistré : il peut
+perdre. S'il gagne, il dit que les événements extrêmes coïncident alors
+que le flux ordinaire ne coïncide pas, ce qui n'est pas la même chose
+que 0,209 et vaudrait cher.
+
+### L'énoncé, GELÉ
+
+**Un niveau tracé sur le Dow à l'instant d'un repère du S&P survit plus
+longtemps qu'un niveau tracé sur le Dow à partir d'une bougie
+ORDINAIRE prise à la même minute de séance un autre jour.**
+
+Et sa réciproque, mesurée séparément : repère de YM, niveau sur MES.
+Les deux sens comptent comme deux tests.
+
+### Comment elle se mesure — l'outil existe déjà
+
+`survie_niveaux.py` fait exactement ce calcul à un symbole près. Il
+faut lui séparer deux rôles aujourd'hui confondus :
+
+```
+--reperes-de   symbole ou les repères sont détectés
+--niveaux-sur  symbole ou le niveau est posé et sa survie mesurée
+```
+
+Le témoin reste apparié **à la même minute de séance**, sur le symbole
+porteur du niveau. Aucun autre paramètre n'est ajouté ; le seuil de
+détection et le centile ne bougent pas.
+
+### La règle de décision, écrite avant les données
+
+- `p >= 0,05` sur les deux sens : le regroupement n'ajoute rien, et on
+  l'écrit sans essayer un troisième découpage.
+- `p < 0,05` dans un seul sens : intéressant, mais **asymétrique** —
+  à ne pas raconter comme une symétrie. Le sens gagnant est noté tel
+  quel.
+- `p < 0,05` dans les deux : passage obligatoire par la coupe du §10,
+  exploration sur les 2/3 anciens, confirmation en une seule passe sur
+  le tiers récent jamais regardé.
+
+Et dans tous les cas, **la distance médiane au prix est lue avec le
+résultat** : un niveau qui survit parce qu'il est loin n'est pas un
+repère.
+
+### Ce que ça ne dira pas, quoi qu'il arrive
+
+Le mot « momentum » de la formulation d'origine décrit un mécanisme —
+quelque chose qui pousse. Une survie en minutes ne contient aucun
+mécanisme, aucun sens, aucun euro. Elle dit qu'un niveau n'a pas été
+touché ; elle ne dit ni pourquoi, ni s'il fallait s'y opposer.
+
+**Un support tenu parce que personne ne le regarde et un support
+défendu donnent la même mesure.**
