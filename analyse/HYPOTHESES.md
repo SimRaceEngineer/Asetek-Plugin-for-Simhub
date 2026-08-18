@@ -3702,3 +3702,110 @@ je veux dire « le signe annoncé ».
 
 Ni euro, ni sens, ni stop. Un range qui se complète ne dit pas ce que
 le prix a fait entre-temps — or c'est entre-temps qu'un stop se prend.
+
+---
+
+## H39 — Un niveau S/R né sur une bougie repère est-il plus souvent revu ?
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026, AVANT écriture de l'outil et
+AVANT toute jointure. Premier énoncé de la journée qui relie le flux à
+un objet déjà utilisé par la stack en production.**
+
+### La distinction qui la rend possible
+
+L'utilisateur, 18/08 : *« sr est bcp plus éloignés qu'intraday zones.
+intraday sert à l'intraday quand sr servent à prévoir des niveaux déjà
+vus et revus »*.
+
+J'avais confondu les deux. Leur durée de rétention le disait pourtant :
+
+```
+intraday_zones_held.log     32 heures, purge par open(..., "w")
+volume_sr_levels.csv        3 semaines constatees (29/07 -> 18/08)
+                            "rolling 1 year" annonce ligne 25
+```
+
+### Les données, telles qu'elles sont
+
+```
+timestamp,asset,type,price_level,close_price,volume,volume_ratio,
+volume_vs_avg,kernel_high,kernel_mid,kernel_low,channel_position_pct,
+bar_time,touch_count,last_touch,last_touch_price
+```
+
+Deux colonnes suffisent et **aucune conversion de prix n'est
+nécessaire** :
+
+```
+bar_time      la MINUTE de la bougie qui a cree le niveau
+touch_count   le nombre de fois ou il a ete revu
+```
+
+`US100` est écarté : nous n'avons d'orderflow que pour MES et YM. Reste
+`US500 <-> MES-continu` et `US30 <-> YM-continu`.
+
+### LE FUSEAU, calibré AVANT de regarder les repères
+
+Les horodatages viennent de MT5, donc de l'heure du serveur du
+courtier ; nos `of_*.csv` sont en UTC. **Un décalage de deux ou trois
+heures ferait échouer la jointure en silence** — zéro coïncidence, et
+la conclusion « rien » alors qu'on aurait comparé 10:51 à 08:51.
+
+```
+INTERDIT : choisir le decalage qui maximise les coincidences avec nos
+           reperes. Ce serait choisir la reponse.
+
+IMPOSE  : le decalage est estime sur le PROFIL D ACTIVITE HORAIRE des
+          deux series -- volume par heure d un cote, trades par heure
+          de l autre -- et retenu comme celui qui aligne leurs pics.
+          Il est IMPRIME et GELE avant que le premier repere soit lu.
+```
+
+Si aucun décalage entier ne fait ressortir un alignement net, on
+s'arrête là : une jointure temporelle sur un fuseau incertain ne vaut
+rien.
+
+### L'énoncé, GELÉ
+
+**Les niveaux S/R dont la minute de création coïncide avec une bougie
+repère finissent avec un `touch_count` moyen plus élevé que ceux nés à
+une minute ordinaire.**
+
+### La statistique, et pourquoi PAS la médiane
+
+`touch_count` prend de petites valeurs entières — 0, 6, 14, 15 sur les
+quatre lignes vues. **Une médiane y serait dégénérée**, comme la survie
+en minutes ce matin. Le primaire est donc la **différence des
+MOYENNES**, `p` par permutation de l'étiquette repère/ordinaire à
+l'intérieur de chaque journée.
+
+### Le garde-fou, déclaré avant la mesure
+
+```
+SI  moins de 20 % des niveaux ont touch_count >= 1
+OU  moins de 30 niveaux tombent sur une minute repere
+ALORS le test est declare SANS PUISSANCE, et le `p` n est ni calcule
+      ni lu. On attend que le CSV grandisse.
+```
+
+Trois semaines de S/R contre cinq mois de repères : le nombre de
+niveaux croisables est la première chose que l'outil imprimera, avant
+tout calcul.
+
+### La règle de décision
+
+- **garde-fou déclenché** → on attend, on ne conclut pas.
+- **US500 et US30 `p < 0,05`, signe conforme** → résultat, à confirmer.
+- **un seul des deux** → asymétrique, noté tel quel.
+- **aucun des deux** → rien à cette profondeur d'historique ; à rejouer
+  quand le CSV aura six mois, pas avant.
+
+**Confirmation datée en avant : le 20/10/2026**, sur les niveaux créés
+après le 18/08/2026 — le fichier grandit tout seul, donc l'échantillon
+de confirmation se constitue sans rien faire.
+
+### Ce que ça ne dira pas
+
+Qu'un niveau soit revu ne dit pas qu'il tient, ni qu'il rapporte. Et la
+causalité reste hors de portée : un niveau né dans un moment
+d'activité est peut-être simplement né là où le prix passait beaucoup.
