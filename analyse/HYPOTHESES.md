@@ -3516,3 +3516,100 @@ après avoir vu lequel marche. Il est noté, pas commencé.
 Ni euro, ni stop, ni sens d'entrée. « Le range se complète » ne dit ni
 en combien de temps, ni ce que le prix a fait entre-temps — or c'est
 entre-temps qu'un stop se prend.
+
+---
+
+## H37 — RÉSULTAT : le test SATURE, il ne peut rien discriminer
+
+**Mesurée le 18/08/2026 en EXPLORATION (§10), `terrain_range.py`,
+coupe à 71 séances sur MES et 72 sur YM. Le tiers récent n'a PAS été
+regardé.**
+
+```
+                              REPERE    TEMOIN
+MES-continu  71 seances, 1390 reperes
+  bougies sorties du range      1376      1376
+  R median (points)             1,75      1,75
+  declenchent (>= 50 %)         1346      1370
+  aboutissent (>= 100 %)        1327      1355
+  P(100 % | 50 %)              98,6 %    98,9 %
+  ecart -0,3 pp    p = 0,3838
+
+YM-continu   72 seances,  670 reperes
+  bougies sorties du range       518       518
+  R median (points)            82,00     29,50
+  declenchent (>= 50 %)          503       518
+  aboutissent (>= 100 %)         494       514
+  P(100 % | 50 %)              98,2 %    99,2 %
+  ecart -1,0 pp    p = 0,0835
+```
+
+### Le test ne dit rien, et ce n'est pas un résultat nul
+
+`P(100 % | 50 %)` vaut **98 à 99 % des deux côtés.** Le conditionnement
+était censé sélectionner : il ne sélectionne rien, parce que
+pratiquement tout aboutit. Sans conditionner du tout, MES donne déjà
+1327 / 1376 = **96,4 %**.
+
+Une statistique à 98,6 contre 98,9 n'a aucun pouvoir de séparation.
+**Ce n'est pas « l'hypothèse est fausse », c'est « la mesure est
+dégénérée »** — même famille que la médiane d'entiers d'il y a trois
+heures, et je ne l'ai pas vue venir non plus.
+
+### Pourquoi elle sature : nous ne mesurons pas l'objet décrit
+
+```
+R median du repere, MES : 1,75 point
+```
+
+Un intervalle de 1,75 point sur le S&P est **repassé dans les dix jours
+avec quasi-certitude**, repère ou pas. La saturation était arithmétique
+avant d'être empirique.
+
+Or l'énoncé d'origine dit : *« SI ELLES SONT TRES GRANDES elles forment
+un range »*. Nous avons mesuré le repère **médian**, qui sur une barre
+d'une minute n'est pas grand du tout.
+
+**C'est le décalage central de toute la journée**, et il est
+maintenant nommé : l'utilisateur décrit un range **visible à l'écran**
+— une grosse bougie de 15 minutes ou d'une heure — et toute ma
+machinerie travaille sur des barres d'une minute où le range médian
+vaut moins de deux points. Nous ne parlions pas du même objet.
+
+### Ce que la coupe du §10 vient de sauver
+
+Le tiers récent n'a pas été regardé. Re-spécifier la statistique et
+relancer sur les deux tiers anciens reste donc légitime — c'est
+exactement ce que la coupe protège, et c'est la première fois
+aujourd'hui qu'elle sert.
+
+Ce qui aurait été perdu sans elle : après H36 lancée sur l'intégralité,
+une re-spécification n'aurait plus eu aucun terrain vierge.
+
+### Deux notes à ne pas perdre
+
+**L'appariement des ranges.** Sur YM, `R median` vaut 82,00 côté repère
+contre 29,50 côté témoin — le témoin garde SON range, comme l'énoncé le
+prévoyait. C'est cohérent avec l'énoncé mais ça rend les deux
+conditionnels non comparables à géométrie égale. À trancher dans la
+re-spécification.
+
+**Le signe.** Les deux écarts sont NÉGATIFS, à p = 0,38 et 0,08. C'est
+du bruit, et il ne faut pas y lire une confirmation de H36 : les deux
+mesures portent sur des objets différents.
+
+### La re-spécification, à geler avant de relancer
+
+Trois pistes, dont la première est celle que l'utilisateur avait
+proposée de lui-même :
+
+1. **Agréger en barres de 5 minutes** avant de calculer les dimensions.
+   Le range devient celui d'un objet visible.
+2. **Conditionner sur la taille** : ne garder que les repères dont R est
+   dans le décile haut de leur séance.
+3. **Apparier les ranges** entre repère et témoin, comme la distance
+   l'a été dans H36.
+
+Aucune n'est lancée. Elles se gèlent d'abord, et une seule sera
+retenue — trois variantes essayées après un échec, ce serait le
+repêchage que la coupe est censée empêcher.
