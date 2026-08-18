@@ -1497,3 +1497,52 @@ Et une seconde, propre à cette machine :
 parce que je traitais ça comme un défaut d'attention. C'en était un de
 convention : tant que « citer » et « exécuter » ont la même apparence,
 l'accident n'attend qu'une variable non vide.
+
+## 18/08/2026 — un détecteur aveugle du côté où vit le phénomène
+
+**Ce que j'ai fait.** `bougies_reperes.py` signale une minute quand
+elle **dépasse** le centile 99 de sa séance, sur l'une des six
+dimensions. Une seule queue, la haute, sur les six.
+
+**Ce que ça rate.** La moitié des phénomènes qu'on cherche vivent en
+bas :
+
+```
+ABSORPTION      RENDU bas    beaucoup de flux, peu d'amplitude
+petits ordres   TAILLE bas   "beaucoup de petits ordres pressés"
+compression     AMPLEUR bas  le prix ne bouge plus du tout
+```
+
+**La preuve était dans ma propre sortie.** Les vingt-cinq minutes les
+plus marquées de MES ont presque toutes un `RENDU` entre **0,1 et
+0,5** — ce sont des minutes absorbées, et pas une n'est signalée pour
+ça. Elles passent par VITESSE, AMPLEUR et PRESSION. Le phénomène que
+l'utilisateur décrivait depuis le début était dans mes chiffres, à
+l'écran, et mon détecteur ne savait pas le nommer.
+
+**C'est la faute de `bruit_par_actif` v1, à l'identique**, consignée le
+17/08 : *« ne cherchait qu'un franchissement de 1 vers le haut. Les
+trois actifs descendent : rien trouvé. »* Troisième fois qu'une
+recherche unilatérale rate ce qu'elle cherchait, dans trois outils
+différents.
+
+**La règle, reformulée pour être utilisable.** Un seuil sur une
+distribution a **deux** côtés. Avant d'en écrire un, dire lequel des
+deux porte le phénomène — et si la réponse est « je ne sais pas »,
+prendre les deux. Une queue unique n'est pas plus prudente, elle est
+aveugle de moitié.
+
+**Ce qui l'a attrapé.** La lecture de la table, pas le code. Les
+`RENDU 0,1` alignés dans la colonne de droite sautaient aux yeux dès
+qu'on regardait les chiffres au lieu des libellés. Encore une fois
+c'est d'avoir imprimé la table à côté du verdict qui a sauvé la
+mesure.
+
+**Le correctif.** `patch_queues.py` : chaque dimension teste ses deux
+bornes, le libellé porte le sens — `VITE+` rapide, `TAIL-` petits
+ordres, `REND-` absorbé. Et une table des repères par heure, parce que
+la même sortie a montré autre chose : **treize des vingt-cinq minutes
+les plus marquées de YM tombent à 13:30 UTC exactement**, l'ouverture
+du cash NYSE. Ce n'est pas un événement, c'est une horloge — le piège
+déjà écrit au §2 du protocole à propos de 14:30 et de l'initial
+balance.
