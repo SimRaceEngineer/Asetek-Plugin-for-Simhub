@@ -1514,6 +1514,22 @@ parce que je traitais ça comme un défaut d'attention. C'en était un de
 convention : tant que « citer » et « exécuter » ont la même apparence,
 l'accident n'attend qu'une variable non vide.
 
+**COROLLAIRE, 18/08 — la commande composée.** Deux fois dans la même
+journée, une ligne de la forme `copy "G:\...\outil.py" .; python
+outil.py --options` a été collée **amputée de sa première moitié** :
+`refus_continuation.py` hier soir, `pine_reperes.py` ce matin. Deux
+allers-retours perdus, et le message d'erreur — `No such file or
+directory` — désigne le fichier, pas la cause.
+
+Ce n'est pas un défaut de lecture. Une ligne longue se sélectionne mal,
+et l'œil s'arrête sur `python`, qui est la partie qui *fait* quelque
+chose. **Une ligne qu'on ne peut copier qu'en entier finit par être
+copiée à moitié.**
+
+La règle : **le transfert et l'exécution sont deux commandes**, quitte
+à faire deux échanges. Même famille que l'entrée ci-dessus — c'est la
+mise en forme qui porte le contrat, pas mon intention.
+
 ## 18/08/2026 — un détecteur aveugle du côté où vit le phénomène
 
 **Ce que j'ai fait.** `bougies_reperes.py` signale une minute quand
