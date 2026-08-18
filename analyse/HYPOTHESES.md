@@ -3411,3 +3411,108 @@ Ni euro, ni sens. « Plus souvent touché » ne dit pas de quel côté, ni
 s'il fallait s'y opposer. Une heure agitée n'est pas une heure
 rentable — elle est aussi celle où un stop est le plus facilement
 pris.
+
+---
+
+## H37 — La bougie repère est un TERRAIN : 50 % du range appelle les 100 %
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026. Énoncé de l'utilisateur,
+transcrit avant toute mesure. Cette statistique n'a JAMAIS été calculée
+— aucun de mes outils ne l'approche, donc la coupe du §10 est
+disponible et sera appliquée.**
+
+### L'énoncé, dans les mots de l'utilisateur
+
+*« si elles sont très grandes elles forment un range que le marché soit
+évitera soit restera et souvent au moins pour la moitié de ce range. si
+> 50 % alors la proba qu'on aille revisiter les 100 % de la bougie sont
+immenses. [...] le rôle de ces bougies est de marquer le terrain, donc
+un pullback même 10 j après est tout à fait logique avant de
+complètement annuler ce seuil. [...] les institutionnels fonctionnant
+par palier, ce n'est pas du tout étonnant que certains niveaux soient
+plus défendus que d'autres. »*
+
+### Ce qui change par rapport à tout ce que j'ai mesuré
+
+Trois choses, et chacune corrige un défaut des mesures du jour :
+
+1. **L'objet n'est pas un niveau, c'est un RANGE** — l'intervalle
+   `[bas, haut]` de la bougie. Je mesurais un trait ; le sujet est une
+   zone.
+2. **L'horizon n'est pas la séance.** « Même 10 jours après. » Mes deux
+   outils censuraient à la fin de séance, ce qui rendait l'objet
+   invisible par construction.
+3. **La mesure est CONDITIONNELLE.** Ce n'est pas « le range est-il
+   revisité », c'est **« sachant qu'il l'a été à 50 %, l'est-il à
+   100 % »**. C'est une probabilité conditionnelle, pas une fréquence.
+
+### Les définitions, GELÉES
+
+```
+RANGE   = [bas, haut] de la bougie repere, hauteur R = haut - bas
+SENS    = le cote par lequel le prix s en va apres la bougie
+RETOUR  = plus grand recouvrement atteint APRES etre sorti du range,
+          en fraction de R, sur les 10 JOURS DE BOURSE suivants
+          (pas de bornage a la seance)
+
+DECLENCHEMENT   RETOUR >= 50 %
+ABOUTISSEMENT   RETOUR >= 100 %  (le bord oppose est atteint)
+```
+
+**L'énoncé mesuré :**
+
+```
+P( RETOUR >= 100 % | RETOUR >= 50 % )
+```
+
+### Le témoin, obligatoire
+
+Une bougie ordinaire produit elle aussi un range, plus petit, et le
+prix y revient aussi. **Sans second terme on mesurerait « le prix
+revient sur ses pas ».**
+
+Témoin : bougie ordinaire, **même minute de séance, autre jour**, et
+son propre range. Même conditionnement, même horizon de 10 jours.
+
+Et parce que R diffère beaucoup entre repère et témoin — c'est le
+piège qui a tué la mesure précédente — **la sortie imprime R médian des
+deux côtés.** Si le conditionnel repère l'emporte uniquement parce que
+son R est plus grand, ce n'est pas une propriété du repère.
+
+### La coupe du §10, APPLIQUÉE cette fois
+
+```
+EXPLORATION   les 2/3 les plus anciens des seances disponibles
+CONFIRMATION  le tiers le plus recent, JAMAIS regarde avant,
+              UNE SEULE PASSE, apres que l exploration soit ecrite
+```
+
+C'est faisable ici parce que la question est neuve : aucune de mes
+mesures n'a touché à un conditionnel de retracement. Le 18/08 j'avais
+consommé l'échantillon entier sur H36 ; c'était le bon choix pour une
+reprise déclarée, ce serait le mauvais ici.
+
+### Ce qui ferait un résultat
+
+Le conditionnel du repère **nettement au-dessus** de celui du témoin,
+à R comparable, et l'écart survit sur le tiers récent.
+
+Ce qui ne serait PAS un résultat : un conditionnel élevé des deux
+côtés. Si 70 % des ranges de n'importe quelle bougie se complètent
+après 50 %, on décrit le retour à la moyenne, pas le repère.
+
+### La suite prévue, et pourquoi elle ne se mesure pas maintenant
+
+L'utilisateur ajoute : *« si on croisait ça avec nos S/R déjà visités
+ou niveaux intraday je suis persuadé qu'on va trouver une
+correspondance viable »*. Le panneau S/R porte 854 niveaux.
+
+**Le croisement ne se mesure qu'APRÈS H37**, et sur le tiers récent
+seulement s'il reste intact — sinon on choisit le croisement qui marche
+après avoir vu lequel marche. Il est noté, pas commencé.
+
+### Ce que ça ne dira pas
+
+Ni euro, ni stop, ni sens d'entrée. « Le range se complète » ne dit ni
+en combien de temps, ni ce que le prix a fait entre-temps — or c'est
+entre-temps qu'un stop se prend.
