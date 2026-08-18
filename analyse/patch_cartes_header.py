@@ -45,8 +45,12 @@ CE QUE FAIT CELUI-CI
   Trois reecritures, chacune parce que la cible n existe pas hors du
   tableau de bord :
 
-    showTab('x')      -> la route du libelle si elle est servie,
-                         sinon `/` ou l onglet existe. Aucun lien mort.
+    showTab('x')      -> /x si cette route est servie, sinon la route
+                         du libelle, sinon `/` ou l onglet existe.
+                         L ARGUMENT D ABORD : onglets() n essaie que le
+                         libelle, et "VIX (tout)" donne /vix_(tout),
+                         qui n existe pas, quand son argument donne
+                         /vixall, qui est servi. Aucun lien mort.
     copyRawExport()   -> une copie locale. navigator.clipboard est
                          absent en http:// sur un nom de machine :
                          zone de texte cachee + execCommand.
@@ -74,7 +78,7 @@ MARQUE = "TRANCHE hdr..tabs"
 DEBUT = '            if parsed.path == "/cartes" or parsed.path == "/carte":\n'
 FIN = '            if parsed.path == "/profils":\n'
 
-B_ROUTE = '''            if parsed.path == "/cartes" or parsed.path == "/carte":
+B_ROUTE = r'''            if parsed.path == "/cartes" or parsed.path == "/carte":
                 import os as _o
                 import re as _re
                 import time as _t
