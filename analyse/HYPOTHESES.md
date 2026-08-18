@@ -2822,3 +2822,62 @@ que US30 en pourcentage (−0,281 contre −0,184), soit l'inverse du
 classement pré-enregistré. Une fenêtre de 91 minutes ne teste pas une
 hypothèse de séance — mais c'est un rappel que le classement n'est pas
 un fait acquis.
+
+### H32 — AMENDEMENT du 18/08, AVANT toute mesure
+
+**Écrit avant que H32 ait tourné une seule fois.** C'est la condition
+qui le sépare d'un sauvetage : on corrige une erreur de fait sur ce qui
+existe, pas un résultat qui déplaît. Même forme que l'amendement de H27
+du 17/08.
+
+**L'erreur.** H32 gelait `source snapshots.csv, la seule qui porte les
+TROIS indices`. C'est faux. Il existe un journal dédié, écrit par
+`index_cohesion.py`, dont l'en-tête dit explicitement qu'il a été fait
+parce que *« SierraChart n'a pas le NASDAQ »* :
+
+```
+docs/index_cohesion/cohesion_AAAA-MM-JJ.jsonl
+{"ts": "2026-08-18 00:00:00",
+ "z": {"US30": 1.495, "US500": 4.301, "US100": 1.629},
+ "state": {"US30": "UP", "US500": "UP", "US100": "UP"},
+ "regime": "ALIGNE_HAUSSE", "n_up": 3, "n_down": 0, "n_flat": 0,
+ "cohesion": 1.0, "corr_sp_nas": 0.756, "corr_sp_nas_lag1": 0.192,
+ "lead": "US500_MENE", "tz_offset_h": -3}
+```
+
+**Ce que ça change, et ce que ça ne change pas.**
+
+La source devient ce journal, pour une raison de fond : il porte des
+`z`, c'est-à-dire des mouvements **déjà normalisés par actif**. Or H32
+impose un contrôle obligatoire — vérifier que le classement ne soit pas
+une simple différence de volatilité. Le journal le fournit directement
+au lieu de le faire recalculer.
+
+**Mais la couverture est PIRE que ce que j'avais écrit.**
+
+```
+16 fichiers, du 2026-08-03 au 2026-08-18
+```
+
+Seize journées, contre les vingt et une de `snapshots.csv`. Et les deux
+épisodes fondateurs — le 13/08 et le 17-18/08 — sont **à l'intérieur**
+de cette fenêtre, donc exclus du test comme prévu. Il reste quatorze
+journées, dont peut-être quatre ou cinq de baisse large.
+
+**La conclusion de H32 est donc inchangée et son échéance aussi.** Le
+22/09 elle aura peut-être huit séances neuves, pas davantage. Elle
+reste mince, elle était annoncée mince, et corriger la source ne la
+rend pas plus forte.
+
+**Un cadeau au passage, qui ne concerne pas H32.** Le journal calcule à
+chaque instant :
+
+```
+corr_sp_nas        0,756     correlation S&P / Nasdaq, simultanee
+corr_sp_nas_lag1   0,192     la meme, decalee d un pas
+```
+
+C'est **H31 mesurée en direct par la stack depuis le 3 août** : les
+indices bougent ensemble à 0,76 et le décalage d'un pas fait tomber ça
+à 0,19. Rien ne précède. Une confirmation indépendante, sur une source
+qu'on n'avait pas ouverte, du résultat de la section 9 du protocole.
