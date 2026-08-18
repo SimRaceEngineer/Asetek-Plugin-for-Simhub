@@ -1695,3 +1695,53 @@ que la sortie affiche les valeurs brutes à côté des libellés. Les
 `AMPLEUR 0.0` et `TAILLE 1.0` alignés en colonne désignaient la cause
 sans ambiguïté. C'est la troisième fois en deux jours que l'impression
 de la table à côté du verdict sauve la mesure.
+
+## 18/08/2026 — Pine n'évalue pas ses `and` en court-circuit
+
+**Ce que j'ai écrit** dans l'indicateur `pine_reperes` :
+
+```
+while k < array.size(T) and array.get(T, k) < time_close
+```
+
+**Ce que TradingView a répondu**, sur le graphique de l'utilisateur :
+
+```
+Erreur d'execution RE10045
+Error on bar 5504: In 'array.get()' function.
+Index 150 is out of bounds, array size is 150.
+```
+
+**Le raisonnement faux.** J'ai écrit du Python en syntaxe Pine. En
+Python, `a and b` n'évalue `b` que si `a` est vrai — la garde protège
+l'accès. **Pine évalue les deux opérandes**, toujours : `array.get(T, k)`
+est appelé même quand `k < array.size(T)` est faux.
+
+**La conséquence.** L'indicateur se charge, s'affiche dans la liste, et
+ne trace **rien** — il meurt à la première barre où le pointeur atteint
+la fin de la table. Un échec silencieux du point de vue de l'utilisateur :
+seul le petit `!` à côté du nom le signale.
+
+**Le correctif.** La borne se teste dans un `if` séparé, et la boucle
+sort par `break` :
+
+```
+for i = 0 to 199
+    if k >= array.size(T)
+        break
+    ts = array.get(T, k)
+    if ts >= time_close
+        break
+```
+
+**La règle.** Écrire dans un langage qu'on connaît mal, c'est y importer
+les garanties de celui qu'on connaît bien. Les trois qui manquaient
+ici : le court-circuit des booléens, la portée des variables `var`, et
+le fait qu'un `if` de Pine s'exécute sur chaque barre. **Avant de livrer
+du code dans un langage étranger, lister ce qu'on suppose de lui** — et
+vérifier ces suppositions-là, pas la syntaxe, qui elle se voit.
+
+**Ce qui l'a attrapé.** L'utilisateur, en cliquant sur le `!`. Je
+n'avais aucun moyen d'exécuter du Pine ici, et je l'avais dit — mais je
+n'en avais pas tiré la conséquence, qui était de réduire au minimum ce
+que le script suppose du langage.

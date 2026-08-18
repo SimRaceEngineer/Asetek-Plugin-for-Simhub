@@ -294,32 +294,41 @@ if barstate.isfirst
 %(table)s
 
 // Pointeur qui avance : la table est triee, on ne la reparcourt pas a
-// chaque barre. Un balayage complet sur vingt mille barres ferait
-// expirer le script.
+// chaque barre.
+//
+// ATTENTION : Pine n evalue PAS ses `and` en court-circuit. Ecrire
+// `k < array.size(T) and array.get(T, k) < time` appelle array.get
+// MEME quand k est hors bornes -- d ou l erreur RE10045 "Index 150 is
+// out of bounds, array size is 150". La borne se teste donc dans un
+// `if` separe, et la boucle sort par `break`.
 var int k = 0
 
-if barstate.isconfirmed and k < array.size(T)
-    while k < array.size(T) and array.get(T, k) < time
-        k += 1
-    while k < array.size(T) and array.get(T, k) < time_close
-        nd = array.get(N, k)
-        if nd >= mini_dims
-            c = array.get(D, k)
-            if montrer_trait
-                line.new(bar_index, low, bar_index, high,
-                   color=color.new(color.gray, 40), width=1,
-                   extend=extend.both, style=line.style_dotted)
-            if montrer_haut
-                line.new(bar_index, high, bar_index + 1, high,
-                   color=coul_h, width=1, extend=extend.right)
-            if montrer_bas
-                line.new(bar_index, low, bar_index + 1, low,
-                   color=coul_b, width=1, extend=extend.right)
-            if montrer_texte
-                label.new(bar_index, high, str.tostring(nd),
-                   color=color.new(color.black, 100),
-                   textcolor=coul_h, style=label.style_label_down,
-                   size=size.tiny, tooltip=c)
+if barstate.isconfirmed
+    for i = 0 to 199
+        if k >= array.size(T)
+            break
+        ts = array.get(T, k)
+        if ts >= time_close
+            break
+        if ts >= time
+            nd = array.get(N, k)
+            if nd >= mini_dims
+                c = array.get(D, k)
+                if montrer_trait
+                    line.new(bar_index, low, bar_index, high,
+                       color=color.new(color.gray, 40), width=1,
+                       extend=extend.both, style=line.style_dotted)
+                if montrer_haut
+                    line.new(bar_index, high, bar_index + 1, high,
+                       color=coul_h, width=1, extend=extend.right)
+                if montrer_bas
+                    line.new(bar_index, low, bar_index + 1, low,
+                       color=coul_b, width=1, extend=extend.right)
+                if montrer_texte
+                    label.new(bar_index, high, str.tostring(nd),
+                       color=color.new(color.black, 100),
+                       textcolor=coul_h, style=label.style_label_down,
+                       size=size.tiny, tooltip=c)
         k += 1
 '''
 
