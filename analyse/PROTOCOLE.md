@@ -469,3 +469,76 @@ la plage couverte par une source n'est pas une journée « sans
 événement » : c'est une journée dont on ne sait rien. Tout groupe
 témoin doit être borné à la plage réellement couverte, et cette plage
 se lit dans le fichier.
+
+---
+
+## 9. Le carnet ne PRÉVIENT pas — mesuré le 18/08
+
+`refus_continuation.py`, huit mois de carnets, après exclusion de
+TICK-NYSE :
+
+```
+                tentatives   REFUS   CONTINUATION   INDECIS
+MES-continu           497      138            278        81
+YM-continu            486      136            275        75
+
+                APPROCHE           VOLUME
+MES-continu     ecart  32,0  p 0,77    ecart 0,9  p 0,40
+YM-continu      ecart  15,5  p 0,48    ecart 2,1  p 0,0005
+```
+
+Une TENTATIVE = franchissement du plus haut des 60 minutes précédentes
+d'au moins **3 fois le bruit minute médian de la journée et de l'actif**
+— le tampon mesuré, celui qui manquait à H27. L'issue est jugée
+60 minutes plus tard, en trois catégories.
+
+**APPROCHE** = delta cumulé sur `[t−60, t[`, c'est-à-dire **avant** que
+l'issue se joue. Sur 416 et 411 événements tranchés, il ne distingue
+pas une tentative qui va échouer d'une tentative qui va réussir.
+
+### Ce que ça ferme
+
+**La question « le flux précède-t-il le prix » a sa première réponse
+directe, et elle est non.** Tout ce qui avait été mesuré jusque-là
+était SIMULTANÉ — `rho(delta, rendement)` 0,675 sur MES et 0,296 sur
+YM à l'heure — et une corrélation simultanée est compatible avec « le
+flux pousse le prix » comme avec « le prix attire le flux ».
+
+Conséquence directe sur **H28**, condition 2 : le CVD réel ne prédit
+pas le mouvement à cet horizon. Un flux live serait un **compte rendu
+exact et sans avance**, pas un signal d'entrée.
+
+### La seule chose qui parle, et ce qu'elle vaut
+
+Le **volume** de YM sépare les deux issues : les refus se produisent
+sur un volume 2,1 fois plus élevé, `p = 0,0005`. Ce n'est pas circulaire
+— le volume n'entre pas dans la définition de l'issue — mais c'est
+**simultané**. Lisible au moment où ça se joue, pas avant. Utilisable
+au mieux pour abandonner une position en cours, jamais pour en ouvrir
+une.
+
+### Ce que ça NE ferme pas
+
+1. **La version inconditionnelle.** Ce résultat est conditionné à une
+   définition d'événement (W=60, H=60, k=3). `patch_decalage.py`, écrit
+   le 17/08 et **jamais lancé**, donne la même réponse sans conditionner.
+2. **La période réfractaire mange des événements.** Une seule tentative
+   par fenêtre de 60 minutes. Un mouvement remarqué à l'œil peut ne pas
+   figurer dans la table parce qu'une tentative l'a précédé de moins
+   d'une heure — vérifié sur le 14/08, où l'événement de 16h30 Paris
+   n'apparaît pas alors qu'un événement de 15h34 le précède.
+3. **Le Nasdaq.** Invisible, sur toutes les échéances. Aucun résultat
+   MES/YM ne dit quoi que ce soit de lui.
+
+### Ce qui a failli passer
+
+Le seul déclencheur détecté par la première version était sur
+**TICK-NYSE** — le seul symbole qui ne peut pas en avoir. Un indice n'a
+pas de carnet ; son `delta` est un compteur monotone, et le sommer sur
+une fenêtre mesure la position dans la journée. Il était déjà écarté
+dans trois autres outils, et le quatrième, écrit de zéro, n'avait pas
+repris l'exclusion.
+
+**Un chiffre qui sort seul, sur un seul symbole, est d'abord suspect
+d'être un artefact de ce symbole.** C'est l'heuristique qui a tué le
+`−1330` du 17/08, et elle a resservi le lendemain.
