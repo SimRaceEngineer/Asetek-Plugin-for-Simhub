@@ -2945,3 +2945,74 @@ il décide seulement de ce qui passe en confirmation.
 Aucune décision. Et une réserve de fond : une minute rapide peut être
 la conséquence d'une nouvelle que le calendrier ne porte pas. La
 vitesse ne dit pas la cause.
+
+### H34 — ANNOTATION DESCRIPTIVE du 18/08, ÉCRITE AVANT TOUTE MESURE
+
+`bougies_reperes.py`, sortie propre après `patch_bornes` : 107 séances
+sur MES, 108 sur YM, 5,4 % et 3,7 % des minutes repérées.
+
+**Le raisonnement de H34 est affaibli par un fait descriptif.** L'énoncé
+dit que les refus sont précédés d'une poussée *« plus RAPIDE et de plus
+PETITE taille moyenne »*. Or les deux ne coïncident presque jamais :
+
+```
+recouvrement VITESSE <-> TAILLE     MES  9 %     YM  2 %
+```
+
+Et la colonne TAILLE des vingt-cinq minutes les plus rapides de MES
+vaut 1,3 · 1,2 · 1,2 · 1,0 · 0,9 · 1,1 · 1,2 · 1,3 · 1,4 · 1,1 —
+**toutes autour de 1**, c'est-à-dire la taille ordinaire de la journée.
+
+**Les bougies rapides ne sont pas faites de petits ordres. Elles sont
+faites de beaucoup d'ordres de taille normale.**
+
+**Ce que ça change, et ce que ça ne change pas.** H34 porte sur REFUS
+contre CONTINUATION, pas sur la co-occurrence des deux variables : ce
+constat ne la réfute pas. Mais l'image qui l'a fait naître — « beaucoup
+de petits ordres pressés » — ne décrit pas ce que les données
+contiennent. Les deux variables restent mesurées **séparément**, comme
+prévu, et c'est justement parce qu'elles sont indépendantes que les
+mesurer toutes deux garde un sens.
+
+**Les paramètres ne bougent pas.** On ne réécrit pas un énoncé parce
+qu'un fait descriptif dérange ; on écrit le fait à côté, daté, avant la
+mesure. Si VITESSE sort et pas TAILLE, cette annotation dira qu'on
+l'avait vu venir — et si TAILLE sort quand même, elle dira que
+l'intuition valait mieux que le descriptif.
+
+### L'HORLOGE, CHIFFRÉE — contrainte sur H34 et sur toute mesure future
+
+```
+YM-continu, part des reperes par heure UTC (uniforme = 4,3 %)
+  13:00 UTC   18,2 %   ouverture du cash NYSE
+  22:00 UTC   11,8 %   cloture CME
+  les deux         30,0 % des reperes dans 2 heures sur 23
+
+MES-continu, maximum 8,3 % a 13:00 -- a peine le double de l uniforme
+```
+
+Le Dow est un contrat mince dont l'ouverture écrase le reste ; le S&P
+échange assez toute la journée pour que l'horloge ne domine pas.
+
+**Toute mesure bâtie sur les repères de YM apparie ses témoins À LA
+MÊME MINUTE DE SÉANCE**, faute de quoi elle mesurera « le cash ouvre à
+13:30 » et sortira un `p` magnifique. Sur MES la contrainte est plus
+légère mais elle reste.
+
+### Une dépendance ALGÉBRIQUE entre deux des six dimensions
+
+```
+MES   PRESSION <-> RENDU   54 % / 50 %   -- le plus fort du tableau
+```
+
+`RENDU = AMPLEUR / PRESSION`. Une PRESSION forte pousse mécaniquement
+le RENDU vers le bas : ce recouvrement est **construit, pas mesuré**.
+
+Conséquence : compter « le nombre de dimensions franchies » traite six
+grandeurs comme indépendantes alors que deux ne le sont pas. Le tri du
+listing en est faussé, et une hypothèse qui utiliserait les deux
+paierait deux tests pour une information et demie.
+
+À corriger dans l'outil : RENDU doit être déclaré **dérivé** et sorti
+du décompte. Le reste tient — TAILLE et SPREAD sont indépendants de
+tout à 2-15 %.
