@@ -127,14 +127,24 @@ def main():
     mtr = [br.med([b["n"] for b in v]) or 0.0 for v in jours.values()]
     seuil_tr = (br.med(mtr) or 0.0) / 2.0
 
-    reperes, mortes = [], 0
+    # TROIS compteurs, pas deux. La premiere version affichait
+    # `len(jours) - mortes` et annoncait 174 seances la ou
+    # bougies_reperes.py en comptait 107 sur les memes donnees : elle
+    # oubliait les seances rejetees par la densite de barres -- les
+    # reouvertures fantomes du dimanche soir. Deux outils qui ne
+    # comptent pas les memes seances pour le meme symbole, c est la
+    # faute du 17/08, et elle ne s est vue que parce que l autre outil
+    # affiche son propre compte.
+    reperes, mortes, minces, retenues = [], 0, 0, 0
     for jour in sorted(jours):
         j = jours[jour]
         if len(j) < seuil_j:
+            minces += 1
             continue
         if (br.med([b["n"] for b in j]) or 0.0) < seuil_tr:
             mortes += 1
             continue
+        retenues += 1
         br.dimensions(j)
         res = br.bornes(j, a.centile)
         haut, bas = res[0], res[1]
@@ -149,8 +159,10 @@ def main():
                 b["quoi"] = q
                 reperes.append(b)
 
-    print("  %-16s %d seance(s) retenue(s), %d ecartee(s) sans activite"
-          % (a.symbole, len(jours) - mortes, mortes))
+    print("  %-16s %d seance(s) retenue(s) sur %d dates"
+          % (a.symbole, retenues, len(jours)))
+    print("  %-16s %d ecartee(s) sans activite reelle, %d trop peu de "
+          "barres" % ("", mortes, minces))
     print("  %-16s %d bougie(s) repere(s) au centile %.1f"
           % ("", len(reperes), a.centile))
 
