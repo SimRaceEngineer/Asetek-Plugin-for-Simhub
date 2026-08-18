@@ -84,38 +84,38 @@ ACTIFS = {"US30": 100, "US500": 200, "US100": 300}
 # avance et qui n y figure pas.
 # =====================================================================
 DEEPSEEK = [
- {"i": 1, "nom": "US BASE CLEAN", "actifs": ["US30", "US500", "US100"],
+ {"i": 1, "tf": "toutes", "sens": "les deux", "nom": "US BASE CLEAN", "actifs": ["US30", "US500", "US100"],
   "src": ["TC_CLEAN"], "profil": "fondation, frequence elevee",
   "note": "la base la plus robuste en effectif ; rendement modeste."},
- {"i": 2, "nom": "US TIGHT MIXED MOMENTUM", "actifs": ["US500", "US30", "US100"],
+ {"i": 2, "tf": "toutes", "sens": "les deux", "nom": "US TIGHT MIXED MOMENTUM", "actifs": ["US500", "US30", "US100"],
   "src": ["TC_MIXED", "US500_BU_CL"], "profil": "momentum, risque moyen",
   "note": "TIGHT_CROSS mixte croise avec le leader aligne."},
- {"i": 3, "nom": "US MID CLEAN TREND", "actifs": ["US30", "US500", "US100"],
+ {"i": 3, "tf": "M15 + M3", "sens": "les deux", "nom": "US MID CLEAN TREND", "actifs": ["US30", "US500", "US100"],
   "src": ["MID_CLEAN", "M15_T_CL", "M3_T_MX"], "profil": "suivi, effectif tres large",
   "note": "la travailleuse : beaucoup de signaux, edge moyen."},
- {"i": 4, "nom": "US WIDE WIDENING", "actifs": ["US30", "US500", "US100"],
+ {"i": 4, "tf": "M5", "sens": "les deux", "nom": "US WIDE WIDENING", "actifs": ["US30", "US500", "US100"],
   "src": ["WIDE_CLEAN", "M5_WIDE_CL"], "profil": "cassure, volatilite",
   "note": "ECART : il annonce +11,04 sur N=250 pour US+WIDENING ; la "
           "seule ligne a 250 de l export donne 6,08."},
- {"i": 5, "nom": "US LEADER ROTATION", "actifs": ["US500"],
+ {"i": 5, "tf": "toutes", "sens": "achat", "nom": "US LEADER ROTATION", "actifs": ["US500"],
   "src": ["US500_BU_CL"], "profil": "conviction, meilleur couple N/R",
   "note": "leader detecte, churn propre, seance US."},
- {"i": 6, "nom": "US LEADER ROTATION", "actifs": ["US30"],
+ {"i": 6, "tf": "toutes", "sens": "vente", "nom": "US LEADER ROTATION", "actifs": ["US30"],
   "src": ["US30_BE_CL"], "profil": "conviction, meilleur couple N/R",
   "note": "le pendant baissier du Dow."},
- {"i": 7, "nom": "US HLC SPLIT CONFLUENCE", "actifs": ["US30", "US500", "US100"],
+ {"i": 7, "tf": "M15", "sens": "les deux", "nom": "US HLC SPLIT CONFLUENCE", "actifs": ["US30", "US500", "US100"],
   "src": ["M15_SPL_CL"], "profil": "confluence, effectif robuste",
   "note": "suit le majoritaire 2/3, pas le divergent."},
- {"i": 8, "nom": "US PULLBACK M5 ANCHOR", "actifs": ["US30", "US500"],
+ {"i": 8, "tf": "M5", "sens": "les deux", "nom": "US PULLBACK M5 ANCHOR", "actifs": ["US30", "US500"],
   "src": ["M5_ET_YES"], "profil": "chirurgical, tres rare",
   "note": "43 prises. Une qualification, pas une preuve."},
- {"i": 9, "nom": "US CONTRARIAN M5 AGAINST", "actifs": ["US30", "US500", "US100"],
+ {"i": 9, "tf": "M5 + M15", "sens": "les deux", "nom": "US CONTRARIAN M5 AGAINST", "actifs": ["US30", "US500", "US100"],
   "src": ["M5_AGA_CH", "M15_SCA_MX"], "profil": "fade du pack, risque eleve",
   "note": "son edge vient du CHURN, instable par nature."},
- {"i": 10, "nom": "US MULTI-TF M3+M5+M15", "actifs": ["US500"],
+ {"i": 10, "tf": "M3+M5+M15", "sens": "les deux", "nom": "US MULTI-TF M3+M5+M15", "actifs": ["US500"],
   "src": ["M3M5M15"], "profil": "ultra-selectif, rendement explosif",
   "note": "38 prises a 76 %. A surveiller, pas a conclure."},
- {"i": 11, "nom": "US VIX MOMENTUM BULL", "actifs": ["US500"],
+ {"i": 11, "tf": "M15 + M3", "sens": "achat", "nom": "US VIX MOMENTUM BULL", "actifs": ["US500"],
   "src": ["MID_CLEAN", "US500_BU_CL"], "profil": "macro, complementaire",
   "note": "s appuie sur vix_trend.bias, qui n est PAS dans l export -- "
           "il vient d un autre panneau, invérifiable ici."},
@@ -175,6 +175,62 @@ def ligne_strategie(magic, nom, profil, cles, actif):
                rr, rr * MARGE_RR, pnl_tr))
 
 
+
+def tableau():
+    """Le tableau de bord : une ligne par magic, ATTENDU puis CONSTATE.
+
+    Les quatre dernieres colonnes sont VIDES et le resteront tant que
+    rien n executera ces definitions. C est le fait le plus important
+    du panneau, et il doit se voir au premier coup d oeil plutot que
+    de se deduire d une absence."""
+    L = []
+    a = L.append
+    a("=" * 132)
+    a("TABLEAU DE BORD -- 36 magics, ATTENDU contre CONSTATE")
+    a("=" * 132)
+    a("  Les colonnes CONSTATE sont vides : AUCUN de ces magics n a pris")
+    a("  un seul trade. Rien sur la machine ne lit ces definitions et ne")
+    a("  place d ordre papier. Tant que ce sera le cas, elles le")
+    a("  resteront -- quel que soit l affichage.")
+    a("")
+    a("  %-7s %-3s %-8s %-10s %-11s | %5s %5s %5s %5s %7s | %6s %8s %6s"
+      % ("MAGIC", "JEU", "ACTIF", "UNITE", "SENS",
+         "nmax", "taux", "born", "RRmn", "PnL/tr",
+         "TRADES", "PnL", "RR"))
+    a("  " + "-" * 130)
+    lignes = []
+    for s2 in po.STRATEGIES:
+        lignes.append((s2["magic"], "A", "US30+500", s2["tf"], s2["sens"],
+                       s2["croise"]))
+    for d in DEEPSEEK:
+        for act in d["actifs"]:
+            lignes.append((230000 + ACTIFS[act] + d["i"], "B", act,
+                           d["tf"], d["sens"], d["src"]))
+    for magic, jeu, act, tf, sens, cles in lignes:
+        n_max, n_tot, taux, pnl_tr = po.agrege(cles)
+        a("  %-7d %-3s %-8s %-10s %-11s | %5d %4.0f%% %4.0f%% %5.2f %7.2f "
+          "| %6s %8s %6s"
+          % (magic, jeu, act, tf[:10], sens[:11], n_max, 100 * taux,
+             100 * po.wilson_bas(taux, n_tot), po.rr_equilibre(taux),
+             pnl_tr, "--", "--", "--"))
+    a("  " + "-" * 130)
+    a("  %d magics : %d dans le jeu A, %d dans le jeu B."
+      % (len(lignes), len(po.STRATEGIES), len(lignes) - len(po.STRATEGIES)))
+    a("")
+    a("  horaire commun a tous : %s" % po.HORAIRE)
+    a("  dimensionnement commun : 1,00 lot par tranche de %.0f de balance,"
+      % LOT_PAR)
+    a("  depart a %.0f, recalcule avant chaque prise." % BALANCE0)
+    a("")
+    a("  nmax   PLAFOND d effectif de l echantillon source, pas une")
+    a("         prevision de frequence.")
+    a("  born   borne basse de Wilson a 95 % sur le taux.")
+    a("  RRmn   (1-p)/p : le rapport gain/perte sous lequel la strategie")
+    a("         perd, quelle que soit sa qualite par ailleurs.")
+    a("  PnL/tr attendu depuis l export -- IN ECHANTILLON, jamais verifie.")
+    return L
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--sortie", default="cartes")
@@ -191,6 +247,8 @@ def main():
     add("  220001-220012  : douze strategies, croisement de trois sections")
     add("  2301xx-2303xx  : onze strategies DeepSeek, eclatees par actif")
     add("                   1xx = US30   2xx = US500   3xx = US100")
+    add("")
+    L.extend(tableau())
     add("")
     L.extend(bloc_dimensionnement())
     add("")
@@ -267,7 +325,8 @@ def main():
     # ici serait le "deuxieme style a maintenir" du 14/08.
     if not os.path.isdir(a.cartes):
         os.makedirs(a.cartes)
-    for nom, contenu in (("papers_220.html", po.rendu()),
+    for nom, contenu in (("papers_tableau.html", "\n".join(tableau())),
+                         ("papers_220.html", po.rendu()),
                          ("papers_compare.html", txt)):
         h = (contenu.replace("&", "&amp;").replace("<", "&lt;")
              .replace(">", "&gt;"))
