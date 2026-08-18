@@ -2550,3 +2550,118 @@ comme **rapportée, non vérifiée**.
 **Coupure confirmée : tous les tickets clos à partir du 18/08/2026
 00:00.** Le compteur repart de zéro à cet instant ; les 2 790 tickets
 ci-dessus sont tous du côté in-sample.
+
+---
+
+## H32 — Le classement de force entre les trois indices dans une séance de baisse large
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026. Non appliquée. Vérification
+le 22/09/2026.**
+
+**Écrite sur deux observations seulement, et parce qu'elles sont deux.**
+Attendre d'en avoir cinq pour l'écrire, ce serait l'écrire après les
+avoir vues — et une observation notée après coup ne contraint rien.
+
+### Ce qui a été observé
+
+Deux fois, à cinq jours d'intervalle, la même ordre de dégât relatif :
+
+```
+13/08   US100 tient au-dessus de sa cassure, US30 rend tout,
+        US500 entre les deux              (releve par l utilisateur, note
+                                           dans mistakes.md le 15/08)
+18/08   US100 -0,48 %, US500 -0,73 %, US30 -0,88 %
+        sous leur propre niveau de cassure
+```
+
+**Le 17/08 au soir et le 18/08 au matin sont UN SEUL épisode**, pas
+deux : la même descente continue, sans reprise entre les deux. Compter
+chaque capture d'un mouvement en cours comme une observation
+supplémentaire fabriquerait de l'effectif à partir de la fréquence à
+laquelle on regarde l'écran.
+
+Deux épisodes, donc. Sur six ordres possibles entre trois actifs, deux
+fois le même arrive avec une probabilité de **1 sur 6**. Ce n'est pas
+un résultat.
+
+### L'énoncé, sous une forme qui ne demande pas de définir « épisode »
+
+Définir un épisode de cassure puis réintégration demanderait des choix
+— combien de séances de range, quel tampon, quelle durée — et je les
+ferais forcément coller aux deux cas connus. On mesure donc quelque
+chose de mécanique :
+
+**Sur une séance de baisse large** — les trois indices clôturant en
+baisse par rapport à la clôture de la séance précédente — le classement
+des rendements en pourcentage est :
+
+```
+US100 > US500 > US30     (du moins negatif au plus negatif)
+```
+
+### Les paramètres sont GELÉS
+
+```
+source      snapshots.csv (MT5), la seule qui porte les TROIS indices
+            -- les .scid n ont pas de Nasdaq, sur aucune echeance
+mesure      rendement de seance en %, cloture a cloture
+selection   les trois indices en baisse le meme jour
+unite       la seance, definie par sa densite de barres
+exclues     13/08 et l episode 17-18/08, qui ont fait naitre
+            l hypothese et ne peuvent pas la tester
+```
+
+Refaire la mesure sur les rendements en points au lieu du pourcentage,
+ou sur une autre fenêtre que la séance, serait un balayage.
+
+### La limite, écrite d'avance
+
+`snapshots.csv` ne couvre que **21 journées**. C'est la contrainte
+dure : aucune source ne porte les trois indices sur plus long. Le
+Nasdaq est invisible à SierraChart, et `futures_<SYMBOLE>_M1.csv` est
+une fenêtre glissante sans historique.
+
+À raison d'environ une séance de baisse large sur trois, 21 journées en
+contiennent peut-être sept — dont deux sont exclues. **L'échantillon de
+départ est donc de l'ordre de cinq.** C'est peu, et c'est dit avant.
+
+### Ce qui la réfute
+
+Sur **au moins 8 séances de baisse large postérieures au 18/08/2026**,
+l'ordre exact `US100 > US500 > US30` doit apparaître plus souvent que
+le hasard ne le donne.
+
+Sous H0, chaque séance a 1 chance sur 6. Sur 8 séances :
+
+```
+0 a 2 fois sur 8    compatible avec le hasard  -> H32 est FAUSSE
+5 fois ou plus      p = 0,0035                 -> elle survit ce tour
+```
+
+**H32 est fausse si l'ordre exact apparaît 2 fois ou moins sur 8.**
+
+Un ordre partiel — US100 devant US30 mais US500 mal placé — ne compte
+pas comme une confirmation. C'est l'ordre complet qui a été observé,
+c'est lui qu'on teste.
+
+### Ce qui la rendrait vraie par construction
+
+**Élargir la définition.** « Les trois en baisse » est mécanique.
+Passer à « les trois en forte baisse », ou choisir un seuil, ferait
+entrer le choix du seuil dans le résultat.
+
+**Se rabattre sur l'ordre partiel** si l'ordre complet échoue. C'est
+exclu d'avance, ici, par écrit.
+
+**Confondre avec la volatilité.** Le US30 est le plus volatil en
+points ; s'il descend le plus en pourcentage aussi, ce peut n'être que
+sa volatilité, pas une faiblesse. **Contrôle obligatoire** : rapporter
+chaque rendement à l'écart-type de séance de son propre actif. Si
+l'ordre disparaît après normalisation, H32 ne décrit qu'une différence
+de volatilité déjà connue — et c'est ce qu'il faudra écrire.
+
+### Ce que H32 n'autorise pas
+
+Aucune décision de trading, aucun changement de paramètre. Elle est
+**observée**, pas appliquée. Un classement de force n'est ni un point
+d'entrée, ni une direction, ni un euro.
