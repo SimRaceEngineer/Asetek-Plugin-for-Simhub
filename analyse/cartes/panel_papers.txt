@@ -1,0 +1,329 @@
+======================================================================================================================
+PAPERS OPTIMIZED -- douze strategies pre-enregistrees
+======================================================================================================================
+  horaire commun : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+  magics         : 220001 -> 220012
+
+  CE TABLEAU N EST PAS UNE PREVISION. Les lignes sources sont
+  les MEILLEURES d un export : toutes positives parce que
+  retenues pour ca. Un backtest dont on garde le haut du panier
+  mesure sa propre dispersion, pas une esperance.
+
+  La colonne ATTENDU est figee aujourd hui. La colonne CONSTATE
+  se remplit toute seule et c est elle qui tranchera.
+
+----------------------------------------------------------------------------------------------------------------------
+MAGIC   NOM                         PROFIL                                  n max   taux   borne  RR eq.   PnL/tr
+----------------------------------------------------------------------------------------------------------------------
+220001  SOCLE M5 TENDANCE           frequence haute, edge mince               290    52%     49%    0.93     7.32
+220002  M15 TENDANCE DEUX REGIMES   frequence haute, robustesse par repeti    313    52%     49%    0.91     9.31
+220003  M1 TENDANCE PROPRE          reussite haute, effectif moyen            171    58%     54%    0.73    13.64
+220004  ASYMETRIE PAR ACTIF         conviction maximale, effectif faible      107    66%     61%    0.52    26.27
+220005  CONFLIT M15 VENDEUR         contrarien, effectif moyen                243    53%     50%    0.88     8.16
+220006  SPLIT M15 PROPRE            PnL par trade eleve, effectif moyen       167    55%     51%    0.81    14.41
+220007  CROISEMENT SERRE MIXTE      PnL par trade tres eleve, effectif fai     53    58%     52%    0.74    27.14
+220008  ACCORD TROIS UNITES         conviction extreme, tres rare              24    63%     54%    0.60    51.13
+220009  ECARTEMENT QUI S OUVRE      frequence haute, edge mince               248    50%     47%    0.99     9.51
+220010  CONTRE-TENDANCE EN CHURN    reussite basse, RR exige, effectif hau    104    48%     44%    1.10     7.81
+220011  RSI M15 AU-DESSUS           frequence moyenne, edge mince              53    55%     50%    0.81    14.45
+220012  SCATTER TOUS ACTIFS         rare, seul a sortir du perimetre US        46    55%     49%    0.83    13.25
+----------------------------------------------------------------------------------------------------------------------
+
+  n max   PLAFOND d effectif, pas prevision : une intersection
+          ne depasse pas le plus petit de ses termes. Et le
+          filtre horaire le reduira encore d une part inconnue.
+  borne   borne basse de Wilson a 95 %. L ecart avec le taux
+          affiche mesure la fragilite de l effectif.
+  RR eq.  (1-p)/p : le rapport gain/perte SOUS lequel la
+          strategie perd, quelle que soit sa qualite par ailleurs.
+
+======================================================================================================================
+LE DETAIL, ET LA JUSTIFICATION DE CHAQUE CROISEMENT
+======================================================================================================================
+
+----------------------------------------------------------------------------------------------------------------------
+  220001  SOCLE M5 TENDANCE
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M5
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M5 en T, regime CLEAN, ecartement en WIDENING, pas d etoile
+
+     croise 3 section(s) :
+        M5 T / CLEAN                   n= 401   57%  PnL  +4409.25  (11.00/tr)
+        M5 WIDENING / CLEAN            n= 355   49%  PnL  +1627.51  ( 4.58/tr)
+        M5 * NO / CLEAN                n= 290   48%  PnL  +1616.49  ( 5.57/tr)
+
+     ATTENDU  n max 290   taux 52%   borne basse 49%
+              RR d equilibre 0.93   PnL/trade 7.32
+     CONSTATE (papier)   -- vide, se remplira
+
+     Le socle. M5 T CLEAN est la plus grosse ligne CLEAN de l export (401 trades) et sa reussite tient a 52 % en
+     borne basse. On la durcit par deux etats concordants du meme M5 -- WIDENING et absence d etoile -- qui sont
+     eux-memes positifs separement. Aucune conviction sur le sens : c est la ligne de reference contre laquelle
+     les onze autres se jugent.
+
+----------------------------------------------------------------------------------------------------------------------
+  220002  M15 TENDANCE DEUX REGIMES
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M15
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M15 en T, regime CLEAN **ou** MIXED, et M15 en position leader
+
+     croise 3 section(s) :
+        M15 T / CLEAN                  n= 441   54%  PnL  +3339.86  ( 7.57/tr)
+        M15 T / MIXED                  n= 359   50%  PnL  +3690.39  (10.28/tr)
+        M15 leader / CLEAN             n= 313   53%  PnL  +3329.55  (10.64/tr)
+
+     ATTENDU  n max 313   taux 52%   borne basse 49%
+              RR d equilibre 0.91   PnL/trade 9.31
+     CONSTATE (papier)   -- vide, se remplira
+
+     M15 T sort positif dans DEUX regimes differents -- 441 trades a 54 % en CLEAN, 359 a 50 % en MIXED. Une
+     regle qui survit a un changement de regime est moins probablement un artefact qu une regle qui n existe que
+     dans un seul. On ne choisit donc pas le meilleur des deux : on prend les deux, ce qui coute du taux et
+     achete de la robustesse.
+
+----------------------------------------------------------------------------------------------------------------------
+  220003  M1 TENDANCE PROPRE
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M1
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M1 en T, CLEAN, alignement BULL, RSI dedans
+
+     croise 3 section(s) :
+        M1 T / CLEAN                   n= 299   62%  PnL  +4741.54  (15.86/tr)
+        M1 ALIGNED_BULL / CLEAN        n= 211   54%  PnL  +3318.77  (15.73/tr)
+        M1 bull RSI dedans / achat     n= 171   55%  PnL  +1227.03  ( 7.18/tr)   [col. non identifiee : 15]
+
+     ATTENDU  n max 171   taux 58%   borne basse 54%
+              RR d equilibre 0.73   PnL/trade 13.64
+     CONSTATE (papier)   -- vide, se remplira
+
+     62 % de reussite sur 299 trades : le meilleur taux de l export au-dela de 250 prises, et 15,9 par trade. On
+     le croise avec deux conditions haussieres du meme M1, ce qui en fait une strategie DIRECTIONNELLE assumee --
+     elle ne prendra que des achats, et elle sera muette dans un marche baissier. C est son cout.
+
+----------------------------------------------------------------------------------------------------------------------
+  220004  ASYMETRIE PAR ACTIF
+----------------------------------------------------------------------------------------------------------------------
+     unites   : toutes
+     actifs   : US30 vendeur / US500 acheteur
+     sens     : impose par l actif
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : sur US30 : vente seulement. Sur US500 : achat seulement.
+
+     croise 3 section(s) :
+        US30 BEAR / CLEAN              n= 124   65%  PnL  +2630.95  (21.22/tr)
+        US30 BEAR / MIXED              n= 107   64%  PnL  +2736.13  (25.57/tr)
+        US500 BULL / CLEAN             n= 108   69%  PnL  +3539.98  (32.78/tr)
+
+     ATTENDU  n max 107   taux 66%   borne basse 61%
+              RR d equilibre 0.52   PnL/trade 26.27
+     CONSTATE (papier)   -- vide, se remplira
+
+     Les TROIS plus hauts taux de tout l export sont ici : 65 %, 64 % et 69 %. Et ils disent la meme chose sous
+     deux formes -- le Dow paye a la baisse, le S&P paye a la hausse. C est aussi la strategie la plus exposee au
+     biais de selection : trois lignes choisies pour leur taux, sur 108 a 124 trades chacune. La borne basse la
+     ramene autour de 56-60 %, ce qui reste le sommet du tableau -- mais elle est la premiere que le papier peut
+     demolir.
+
+----------------------------------------------------------------------------------------------------------------------
+  220005  CONFLIT M15 VENDEUR
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M15
+     actifs   : US30 + US500
+     sens     : vente seule
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M15 en CONFLIT, vente, sur SPLIT CLEAN ou NO MIXED
+
+     croise 3 section(s) :
+        M15 CONFLIT vente              n= 358   52%  PnL  +2019.33  ( 5.64/tr)   [col. non identifiee : 15]
+        M15 SPLIT / CLEAN              n= 243   57%  PnL  +5033.59  (20.71/tr)
+        M15 NO / MIXED                 n= 396   52%  PnL  +1082.80  ( 2.73/tr)
+
+     ATTENDU  n max 243   taux 53%   borne basse 50%
+              RR d equilibre 0.88   PnL/trade 8.16
+     CONSTATE (papier)   -- vide, se remplira
+
+     Elle fait le contraire de l intuition : elle vend QUAND les unites de temps se contredisent, la ou le
+     reflexe est de s abstenir. 358 trades a 52 %, et le SPLIT M15 CLEAN est la plus grosse ligne de PnL de tout
+     l export (+5033 sur 243). Deux manieres differentes de dire desaccord, toutes deux payantes.
+
+----------------------------------------------------------------------------------------------------------------------
+  220006  SPLIT M15 PROPRE
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M15
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M15 en SPLIT, CLEAN, ecartement WIDENING
+
+     croise 3 section(s) :
+        M15 SPLIT / CLEAN              n= 243   57%  PnL  +5033.59  (20.71/tr)
+        M15 WIDENING / CLEAN           n= 301   51%  PnL  +3246.65  (10.79/tr)
+        M15 ALIGNED_BULL / CLEAN       n= 167   60%  PnL  +1968.21  (11.79/tr)
+
+     ATTENDU  n max 167   taux 55%   borne basse 51%
+              RR d equilibre 0.81   PnL/trade 14.41
+     CONSTATE (papier)   -- vide, se remplira
+
+     20,7 par trade, le meilleur ratio au-dela de 200 prises. La version MIXED du meme SPLIT tombe a 5,7 par
+     trade pour un effectif voisin : le regime CLEAN n est pas un detail ici, il porte quatre cinquiemes du
+     resultat. On l ecarte explicitement.
+
+----------------------------------------------------------------------------------------------------------------------
+  220007  CROISEMENT SERRE MIXTE
+----------------------------------------------------------------------------------------------------------------------
+     unites   : toutes
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : TIGHT_CROSS en regime MIXED, avec convergence M3 ou M15
+
+     croise 3 section(s) :
+        TIGHT_CROSS / MIXED            n= 154   59%  PnL  +4218.25  (27.39/tr)
+        M3 CONVERGING / CLEAN          n=  84   52%  PnL  +1633.83  (19.45/tr)
+        M15 CONVERGING / MIXED         n=  53   62%  PnL  +2044.46  (38.57/tr)
+
+     ATTENDU  n max 53   taux 58%   borne basse 52%
+              RR d equilibre 0.74   PnL/trade 27.14
+     CONSTATE (papier)   -- vide, se remplira
+
+     27,4 par trade sur 154 prises -- le meilleur rendement unitaire au-dela de 100 trades. Et le TIGHT_CROSS se
+     comporte de facon OPPOSEE selon le regime : 27,4 en MIXED contre 5,7 en CLEAN et 6,1 sur la seconde ligne
+     mixte. Cette contradiction interne est un avertissement autant qu une opportunite, et le papier est
+     exactement l endroit ou la trancher.
+
+----------------------------------------------------------------------------------------------------------------------
+  220008  ACCORD TROIS UNITES
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M3 + M5 + M15
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : accord d au moins trois unites de temps
+
+     croise 3 section(s) :
+        M3+M5+M15 / MIXED              n=  38   76%  PnL  +3463.18  (91.14/tr)
+        M1+M3+M5+M15 / CLEAN           n=  62   56%  PnL  +1300.85  (20.98/tr)
+        M1+M15 / CLEAN                 n=  24   58%  PnL  +1576.20  (65.67/tr)
+
+     ATTENDU  n max 24   taux 63%   borne basse 54%
+              RR d equilibre 0.60   PnL/trade 51.13
+     CONSTATE (papier)   -- vide, se remplira
+
+     76 % de reussite et 91,1 par trade : les deux meilleurs chiffres de tout l export. Sur 38 trades. La borne
+     basse de Wilson tombe a 60 % -- toujours excellent, mais l ecart entre 76 et 60 dit tout ce qu il faut
+     savoir sur la confiance qu on peut accorder a un taux mesure sur 38 prises. A tenir tres longtemps avant de
+     conclure quoi que ce soit.
+
+----------------------------------------------------------------------------------------------------------------------
+  220009  ECARTEMENT QUI S OUVRE
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M15
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M15 WIDENING, CLEAN, leader, pente bull+
+
+     croise 3 section(s) :
+        M15 WIDENING / CLEAN           n= 301   51%  PnL  +3246.65  (10.79/tr)
+        M15 leader / CLEAN             n= 313   53%  PnL  +3329.55  (10.64/tr)
+        M15 bull+                      n= 248   46%  PnL  +1621.08  ( 6.54/tr)   [col. non identifiee : 12]
+
+     ATTENDU  n max 248   taux 50%   borne basse 47%
+              RR d equilibre 0.99   PnL/trade 9.51
+     CONSTATE (papier)   -- vide, se remplira
+
+     L ecartement qui s ouvre paye (10,8 par trade sur 301) la ou l ecartement stable ne paye presque pas (4,3
+     sur 145). La difference entre WIDENING et STEADY est le vrai signal de cette section, et elle se retrouve
+     sur M5 comme sur M15.
+
+----------------------------------------------------------------------------------------------------------------------
+  220010  CONTRE-TENDANCE EN CHURN
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M5
+     actifs   : US30 + US500
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M5 AGAINST en regime CHURN, sans etoile
+
+     croise 3 section(s) :
+        M5 AGAINST / CHURN             n= 365   45%  PnL  +1838.22  ( 5.04/tr)
+        M5 * NO AGAINST / CHURN        n= 104   45%  PnL  +1132.60  (10.89/tr)
+        M1 S / CHURN                   n= 295   52%  PnL  +2997.42  (10.16/tr)
+
+     ATTENDU  n max 104   taux 48%   borne basse 44%
+              RR d equilibre 1.10   PnL/trade 7.81
+     CONSTATE (papier)   -- vide, se remplira
+
+     45 % de reussite et pourtant +1838 : cette strategie ne gagne que par l asymetrie. Son RR d equilibre est de
+     1,22 -- elle DOIT encaisser plus qu elle ne rend, sinon elle perd. C est la seule du lot dont la survie
+     depend d une gestion de sortie et non d un taux de reussite, et c est pour ca qu elle est dans le lot : si
+     le papier la valide, il valide un mecanisme different des onze autres.
+
+----------------------------------------------------------------------------------------------------------------------
+  220011  RSI M15 AU-DESSUS
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M15
+     actifs   : US30 + US500
+     sens     : achat seul
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M15 bull, RSI au-dessus, achat, alignement bull
+
+     croise 3 section(s) :
+        M15 bull RSI au-dessus/achat   n= 186   49%  PnL  +1854.86  ( 9.97/tr)   [col. non identifiee : 12]
+        M15 ALIGNED_BULL / CLEAN       n= 167   60%  PnL  +1968.21  (11.79/tr)
+        M15 CONVERGING / MIXED         n=  53   62%  PnL  +2044.46  (38.57/tr)
+
+     ATTENDU  n max 53   taux 55%   borne basse 50%
+              RR d equilibre 0.81   PnL/trade 14.45
+     CONSTATE (papier)   -- vide, se remplira
+
+     10,0 par trade sur 186 prises. Le RSI au-dessus qui reste acheteur est contre-intuitif -- on achete ce qui
+     est deja etendu -- et cette famille est positive sur M3, M5 ET M15, donc sur trois unites independantes. La
+     repetition vaut mieux qu un chiffre unique plus flatteur.
+
+----------------------------------------------------------------------------------------------------------------------
+  220012  SCATTER TOUS ACTIFS
+----------------------------------------------------------------------------------------------------------------------
+     unites   : M15
+     actifs   : TOUS
+     sens     : les deux
+     horaire  : 14:00 Paris -> cloture (12:00 UTC en heure d ete)
+     regle    : M15 SCATTER, regime MIXED, sur l ensemble des actifs
+
+     croise 3 section(s) :
+        M15 SCATTER / MIXED / ALL      n=  73   58%  PnL  +1534.98  (21.03/tr)
+        M5 divergent / CLEAN           n= 190   52%  PnL  +1356.45  ( 7.14/tr)
+        M5 DIVERGING / CLEAN           n=  46   61%  PnL  +1202.93  (26.15/tr)
+
+     ATTENDU  n max 46   taux 55%   borne basse 49%
+              RR d equilibre 0.83   PnL/trade 13.25
+     CONSTATE (papier)   -- vide, se remplira
+
+     La SEULE ligne de l export marquee ALL et non US. 73 trades a 58 %, 21,0 par trade. Elle est ici parce qu
+     elle teste une question qu aucune autre ne pose : la dispersion paye-t-elle hors du perimetre americain ? Si
+     elle tient, elle ouvre un terrain ; si elle tombe, on aura appris que le perimetre compte.
+
+======================================================================================================================
+CE QUE CE PANNEAU NE DIT PAS
+======================================================================================================================
+  Aucun de ces chiffres n est hors echantillon. Aucun n a de
+  temoin. Aucun n a paye un euro reel.
+
+  Douze strategies tirees du haut d un meme export partagent
+  leurs donnees : si le marche de ces mois etait particulier,
+  elles se tromperont TOUTES ENSEMBLE, et leur accord ne sera
+  pas une confirmation.
+
+  Ce qui les separera, c est le papier -- et le fait que leurs
+  attentes sont ecrites ici, datees, avant.
+
+  Genere le 2026-08-18 12:25
