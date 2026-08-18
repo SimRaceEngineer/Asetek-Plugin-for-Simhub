@@ -3307,3 +3307,107 @@ Ni euro, ni sens, ni mécanisme. « Non touché pendant 60 minutes » ne
 dit pas qu'il fallait s'y opposer, ni que quelqu'un le défendait. Un
 niveau que personne ne regarde et un niveau défendu donnent la même
 proportion.
+
+---
+
+## H36 — RÉSULTAT : RÉFUTÉE, et le contraire est vrai sur les deux symboles
+
+**Mesurée le 18/08/2026 sur l'intégralité, `survie_queue.py`,
+paramètres gelés avant exécution.**
+
+```
+                              REPERE    TEMOIN
+MES-continu  107 seances, 2103 reperes
+  DISTANCE mediane au prix      0,75      0,75      <- annulee, OK
+  agitation 60 min (desc.)      1,75      1,50
+  non touche a  30 min (n=4098) 16,4 %    19,4 %
+  non touche a  60 min (n=3974) 13,3 %    15,3 %    <- primaire
+  non touche a 120 min (n=3700)  9,8 %    11,5 %
+  ecart a 60 min : -2,0 pp      p = 0,0145
+
+YM-continu   108 seances,  978 reperes
+  DISTANCE mediane au prix     19,00     19,00      <- annulee, OK
+  agitation 60 min (desc.)     21,00     10,00
+  non touche a  30 min (n=1926) 24,7 %    32,3 %
+  non touche a  60 min (n=1884) 20,3 %    27,5 %    <- primaire
+  non touche a 120 min (n=1726) 15,4 %    19,5 %
+  ecart a 60 min : -7,2 pp      p = 0,0005
+```
+
+### L'énoncé est réfuté
+
+H36 disait : *« un niveau produit par une bougie repère est MOINS
+souvent touché dans les 60 minutes »*. Il est **PLUS** souvent touché,
+sur les deux symboles, avec le même signe et `p` de 0,0145 et 0,0005.
+
+**La correction 1 a fonctionné** : les distances sont identiques au
+centième sur les deux symboles (0,75 / 0,75 et 19,00 / 19,00). Ce
+n'est plus un effet de géométrie.
+
+### Un défaut de ma règle de décision, à noter
+
+La règle gelée prévoyait trois cas : deux symboles significatifs de
+même signe, un seul, aucun. **Elle n'avait pas prévu « deux symboles
+significatifs, signe opposé à l'énoncé ».** Le premier cas y était
+écrit comme si « même signe » impliquait le signe attendu.
+
+Conséquence, et elle est stricte : **ce résultat n'est la confirmation
+de rien.** Il n'était pas prédit. Il est enregistré comme une
+découverte à confirmer, pas comme une hypothèse validée — au même
+titre que s'il avait été trouvé en cherchant.
+
+### Ce que ça dit, et pourquoi ce n'est qu'à moitié une surprise
+
+La ligne descriptive d'agitation, déclarée hors verdict, donne le
+mécanisme sans ambiguïté :
+
+```
+agitation des 60 minutes suivantes    MES  1,75 / 1,50   (+17 %)
+                                      YM  21,00 / 10,00  (+110 %)
+```
+
+**Une bougie repère est le DÉBUT d'une heure agitée, pas une
+barrière.** Et l'ampleur de l'effet suit celle de l'agitation : +17 %
+d'agitation donne −2,0 pp, +110 % donne −7,2 pp. Les deux symboles
+sont cohérents entre eux.
+
+**Il faut dire ce que ça a de banal.** AMPLEUR est l'une des six
+dimensions : une bougie repère est souvent, par construction, une
+grande bougie. Et une grande bougie suivie d'une heure agitée, c'est
+le regroupement de volatilité — l'un des faits les plus anciennement
+établis en finance. Nous le redécouvrons dans nos données, avec un
+témoin. C'est une vérification, pas une trouvaille.
+
+### Ce qui, en revanche, est tranché et nous appartient
+
+**Un niveau de bougie repère n'est pas un support.** À géométrie
+égale, il tient MOINS bien qu'un niveau quelconque. L'intuition de
+départ — les repères marquent des niveaux qu'on retrouvera — est
+contredite, deux fois, dans le bon sens de lecture.
+
+Cela vaut aussi pour le tracé TradingView : les rayons ne sont pas des
+niveaux à défendre. Ce sont des marqueurs d'entrée en agitation.
+
+### La question qui reste, et pourquoi elle ne se mesure PAS ici
+
+Si l'effet vient d'AMPLEUR, alors on mesure « grande bougie » et non
+« flux inhabituel ». La séparation serait de recompter les repères
+**sans AMPLEUR** parmi les six dimensions.
+
+**Cette mesure ne peut plus être faite sur cet échantillon** : il a été
+vu. La refaire ici serait choisir la variante après avoir vu le
+résultat de la première.
+
+```
+A MESURER LE 20/10/2026, sur les seances posterieures au 18/08/2026 :
+  meme protocole, reperes definis SANS la dimension AMPLEUR.
+  Si l ecart survit, le flux dit quelque chose que la taille ne dit
+  pas. S il disparait, nous mesurions la taille de la bougie.
+```
+
+### Ce que ça ne dit toujours pas
+
+Ni euro, ni sens. « Plus souvent touché » ne dit pas de quel côté, ni
+s'il fallait s'y opposer. Une heure agitée n'est pas une heure
+rentable — elle est aussi celle où un stop est le plus facilement
+pris.
