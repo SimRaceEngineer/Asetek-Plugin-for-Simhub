@@ -14,12 +14,19 @@ LE DIMENSIONNEMENT, IDENTIQUE POUR LES DEUX JEUX
     recalcule AVANT CHAQUE PRISE. A 20 k : 1,00 lot. A 30 k : 1,50.
     A 15 k : 0,75. La taille suit dans les deux sens.
 
-    POURQUOI CA NE BIAISE PAS LA COMPARAISON, et c est le point :
-    avec des lots proportionnels a la balance et un stop exprime en
-    POINTS, le risque par trade est un POURCENTAGE CONSTANT du compte.
-    Deux strategies de rendements differents sont alors comparables --
-    ce qui ne serait pas le cas a lot fixe, ou la plus frequente
-    accumulerait mecaniquement plus de risque absolu.
+    CE QUE CETTE REGLE NEUTRALISE : la TAILLE DU COMPTE. Le risque par
+    trade vaut points_SL x valeur_point x balance / 20 000 ; rapporte a
+    la balance il ne depend plus d elle. Une strategie ne paraitra donc
+    ni meilleure ni pire selon qu elle a grossi ou fondu.
+
+    CE QU ELLE NE NEUTRALISE PAS : l ECART DE STOPS entre strategies.
+    J avais ecrit ici que le risque etait un pourcentage constant du
+    compte. C est vrai A DISTANCE DE STOP EGALE, et faux entre deux
+    strategies dont les stops different en points -- or les stops se
+    posent sur la structure, donc ils different. Celle qui vise large
+    risque mecaniquement plus par prise. Le vrai risque constant
+    demanderait lot = (balance x risque%) / (points_SL x valeur_point),
+    qui exige la valeur du point, absente de l export.
 
     Le plancher du courtier (0,01 lot) s applique : sous 200 de
     balance le compte ne peut plus dimensionner, et le journal doit le
