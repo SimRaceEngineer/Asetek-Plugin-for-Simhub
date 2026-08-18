@@ -3809,3 +3809,64 @@ de confirmation se constitue sans rien faire.
 Qu'un niveau soit revu ne dit pas qu'il tient, ni qu'il rapporte. Et la
 causalité reste hors de portée : un niveau né dans un moment
 d'activité est peut-être simplement né là où le prix passait beaucoup.
+
+### H39 — deux amendements, AVANT tout `p`
+
+**18/08/2026. Les deux garde-fous ont bloqué le test :**
+
+```
+US500   fuseau +3 h, correlation +0,873, marge +0,072   -> retenu
+        7 niveaux seulement sur une minute repere (30 minimum)
+        -> SANS PUISSANCE, aucun p calcule
+
+US30    fuseau +2 h, correlation +0,724, marge +0,044   -> refuse
+        -> ALIGNEMENT TROP FAIBLE, arret avant la jointure
+```
+
+**Aucune statistique de test n'a été calculée.** C'est ce qui rend ces
+amendements légitimes : on ne re-spécifie pas après avoir vu un
+résultat, on re-spécifie après avoir constaté que la mesure ne peut pas
+tourner. La distinction est réelle et je la pose explicitement.
+
+#### Amendement 1 — UN SEUL fuseau pour tout le fichier
+
+`US500` donne +3 h à 0,873 ; `US30` donne +2 h à 0,724, marge 0,044.
+**Les deux ne peuvent pas être vrais : c'est le même serveur, donc la
+même horloge.** Estimer un décalage par actif était une faute — j'ai
+jeté une contrainte externe forte au lieu de m'en servir.
+
+```
+GELE : un decalage unique, estime sur les trois actifs mis en commun
+       (US100 compris : il ne sert pas a la mesure, il sert a la
+       calibration) contre les trades de MES et YM mis en commun.
+```
+
+#### Amendement 2 — une TOLÉRANCE sur la jointure
+
+7 coïncidences sur 293 niveaux. Ce n'est pas zéro : les minutes repères
+font environ 1,4 % des minutes, donc **le hasard seul en donnerait
+autour de 4**. La rareté est arithmétique, pas informative.
+
+La justification de la tolérance est PHYSIQUE et ne doit rien au
+résultat : `bar_time` est la minute d'une barre MT5, et un détecteur de
+S/R confirme son niveau **après** la clôture de la barre, parfois une
+ou deux barres plus tard. Exiger la minute exacte, c'est exiger une
+simultanéité que ni l'un ni l'autre système ne prétend offrir.
+
+```
+GELE : fenetre de +/- 5 minutes autour d une minute repere.
+       Le groupe ORDINAIRE est ce qui tombe HORS de cette fenetre.
+       La sortie imprime la PART DES MINUTES couverte par la fenetre,
+       et le nombre de coincidences ATTENDU PAR HASARD, pour qu un
+       simple effet de largeur ne passe pas pour un resultat.
+```
+
+Cinq minutes est un choix de jugement, assumé comme tel, gelé une fois.
+Il ne sera pas élargi si le test ne sort pas — élargir jusqu'à ce que
+`p` descende serait choisir la fenêtre qui donne raison.
+
+#### Ce qui ne change pas
+
+Le témoin (jour × heure), la moyenne et non la médiane, le garde-fou
+des 30 niveaux et des 20 %, la règle de décision, et la confirmation
+datée au 20/10/2026.
