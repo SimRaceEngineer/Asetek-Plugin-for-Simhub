@@ -71,7 +71,12 @@ import shutil
 import sys
 
 CIBLE = "refus_continuation.py"
-MARQUE = "rendement"
+# Le marqueur porte sur du CODE, pas sur de la prose. Une premiere
+# version cherchait le mot "rendement" -- il figure deja dans le texte
+# d avertissement sur la colonne DECISION pose par patch_refus, donc le
+# patch se croyait applique et refusait de s appliquer. Un marqueur qui
+# peut apparaitre dans un commentaire n est pas un marqueur.
+MARQUE = "def rendement("
 
 A1 = '''    vmed = med([b[3] for b in barres]) or 0.0
 '''

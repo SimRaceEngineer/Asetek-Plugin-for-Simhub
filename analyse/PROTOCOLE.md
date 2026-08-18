@@ -542,3 +542,78 @@ repris l'exclusion.
 **Un chiffre qui sort seul, sur un seul symbole, est d'abord suspect
 d'être un artefact de ce symbole.** C'est l'heuristique qui a tué le
 `−1330` du 17/08, et elle a resservi le lendemain.
+
+---
+
+## 10. La COUPE D'EXPLORATION — comment chercher sans se mentir
+
+Écrite le 18/08, à la demande de rejouer les mesures avec de nouvelles
+variables.
+
+### Le problème, chiffré
+
+Les 827 événements de `refus_continuation.py` ont déjà servi à tester
+APPROCHE, VOLUME et RENDEMENT. Chaque variable ajoutée sur les mêmes
+données augmente mécaniquement la chance qu'une passe par hasard :
+
+```
+3 variables a 5 %   ~14 %
+4 variables         ~19 %
+6 variables         ~26 %
+```
+
+Interdire les variables serait absurde — le fichier en porte
+quatorze et on n'en lisait que cinq. Mais les tester toutes sur le
+même échantillon rendrait n'importe quel résultat ininterprétable.
+
+### La règle
+
+**Les données sont coupées en deux, une fois, par la DATE, et la coupe
+ne bouge plus.**
+
+```
+EXPLORATION   les 2/3 les plus anciens des seances disponibles
+CONFIRMATION  le tiers le plus recent, JAMAIS regarde pendant
+              l exploration
+```
+
+Sur MES-continu : 133 séances, donc **89 en exploration** et **44 en
+confirmation**. Sur YM-continu : 112, donc 74 et 38. La date exacte de
+coupe est calculée par l'outil et **imprimée**, jamais choisie.
+
+**Dans l'exploration, on fait ce qu'on veut.** Toutes les variables,
+tous les croisements, autant de tours qu'on veut. Aucun `p` n'y est
+publiable, et c'est justement ce qui libère : on cherche.
+
+**Dans la confirmation, on passe UNE fois.** Les variables retenues,
+figées, sans en rechoisir aucune. C'est le seul `p` qui compte.
+
+### Pourquoi c'est mieux que d'interdire
+
+Interdire les variables ferait manquer celle qui marche. Couper les
+données ne coûte qu'un tiers de l'effectif et rend la recherche
+**gratuite** : chercher dix variables dans l'exploration ne dégrade en
+rien la confirmation, puisqu'elle n'a pas servi.
+
+Le prix : 44 séances de confirmation sur MES. Un effet qui n'y survit
+pas n'était pas assez gros pour être exploitable de toute façon.
+
+### Ce qui l'annulerait
+
+- **Regarder la confirmation avant d'avoir figé les variables.** Une
+  seule fois suffit à la détruire, et rien dans les données ne le
+  montrera après coup.
+- **Rechoisir un seuil au vu de la confirmation.** Si le résultat
+  déplaît, on écrit qu'il déplaît.
+- **Refaire une coupe ailleurs** parce que la première n'a rien donné.
+  La coupe est calculée par la date et imprimée : elle se vérifie.
+
+### Ce qui reste vrai des mesures déjà faites
+
+`APPROCHE p 0,77 / 0,48` a été mesuré sur la totalité. Ce résultat
+NÉGATIF n'est pas menacé par la multiplicité — chercher beaucoup fait
+trouver de faux positifs, jamais de faux négatifs. Il tient.
+
+Les mesures POSITIVES déjà obtenues sur la totalité — le VOLUME de YM
+à `p 0,0005` — passent en statut « exploration » et devront repasser
+par la confirmation comme les autres.

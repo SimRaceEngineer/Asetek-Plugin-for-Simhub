@@ -2881,3 +2881,67 @@ C'est **H31 mesurée en direct par la stack depuis le 3 août** : les
 indices bougent ensemble à 0,76 et le décalage d'un pas fait tomber ça
 à 0,19. Rien ne précède. Une confirmation indépendante, sur une source
 qu'on n'avait pas ouverte, du résultat de la section 9 du protocole.
+
+---
+
+## H34 — La VITESSE du flux, et non son volume
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026, AVANT toute mesure. Mesurée
+en EXPLORATION d'abord (§10 du protocole).**
+
+### D'où elle vient
+
+L'utilisateur, 18/08 : *« lorsque je regarde les bougies je vois le
+rythme usuel de formation de la bougie via les échanges et parfois,
+sans news ou autre, on a des bougies repères car on a vu le flux à
+l'intra-bougie aller beaucoup plus vite »*.
+
+**Tous mes outils agrègent à la minute et détruisent cette information
+par construction.** Deux bougies de même volume et même delta, l'une
+remplie en cinq secondes et l'autre étalée sur soixante, sont le même
+point dans toutes mes mesures.
+
+### Ce qui rend la mesure possible tout de suite
+
+`of_*.csv` porte quatorze colonnes, mes outils en lisaient cinq :
+
+```
+ts open high low close trades volume bid_vol ask_vol delta cvd
+spread_moy contrat roulement
+```
+
+`trades` = nombre de transactions dans la minute. Il était là depuis le
+début, sur 183 314 barres.
+
+### Les deux variables, GELÉES
+
+```
+VITESSE   trades de la minute        / mediane des trades du jour
+TAILLE    (volume / trades)          / mediane du (volume/trades) du jour
+```
+
+Mille transactions d'un lot et cent transactions de dix lots font le
+même volume. VITESSE et TAILLE les séparent ; le volume seul, non.
+
+Mesurées sur **la minute au plus fort |delta| de la fenêtre
+d'approche** — même point que H33, pour qu'elles soient comparables
+entre elles et qu'aucune ne bénéficie d'un choix particulier.
+
+### L'énoncé
+
+**Les tentatives qui finissent en REFUS sont précédées d'une minute de
+poussée plus RAPIDE et de plus PETITE taille moyenne que celles qui
+finissent en CONTINUATION** — beaucoup de petits ordres pressés plutôt
+que peu de gros ordres posés.
+
+### Ce qui la réfute
+
+`p > 0,05` sur les deux variables et les deux symboles, en
+CONFIRMATION. Un résultat d'exploration ne réfute ni ne confirme rien :
+il décide seulement de ce qui passe en confirmation.
+
+### Ce qu'elle n'autorise pas
+
+Aucune décision. Et une réserve de fond : une minute rapide peut être
+la conséquence d'une nouvelle que le calendrier ne porte pas. La
+vitesse ne dit pas la cause.
