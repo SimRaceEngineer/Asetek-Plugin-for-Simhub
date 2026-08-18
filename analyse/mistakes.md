@@ -1472,6 +1472,22 @@ jamais faire ça.
 **Rien n'a été lancé.** Le sauvetage vient d'une variable vide, pas
 d'une précaution de ma part.
 
+**Le constat de l'utilisateur, et c'est lui qui fonde la règle :**
+
+> « la ligne start process était encadrée dans le chat comme si je
+> devais la coller, c'est une erreur à ne pas reproduire si tu ne veux
+> pas que je colle ça. »
+
+C'est exactement ça. **L'encadrement EST l'instruction.** Ce que je
+croyais dire — « regarde cette ligne du script » — n'existe pas dans
+l'interface : un cadre, sur cette machine, veut dire « colle-moi ».
+L'intention de l'auteur n'est pas lisible ; seule la mise en forme
+l'est.
+
+C'est pour ça que trois rappels n'avaient rien corrigé : je corrigeais
+mon attention alors que le défaut était dans le contrat de la mise en
+forme.
+
 **La règle existait déjà, écrite trois fois.** 14/08 : *« un bloc de
 code EST une commande, c'est le contrat, quelle que soit mon
 intention »*. Puis récidive à 23:15, puis à 23:19, puis à 01:00 sur
