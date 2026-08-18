@@ -2665,3 +2665,46 @@ de volatilité déjà connue — et c'est ce qu'il faudra écrire.
 Aucune décision de trading, aucun changement de paramètre. Elle est
 **observée**, pas appliquée. Un classement de force n'est ni un point
 d'entrée, ni une direction, ni un euro.
+
+### H29 — ANNOTATION DE COUPURE, chiffres VÉRIFIÉS le 18/08 à 08:09
+
+L'annotation d'hier soir portait la mention « rapportés, non vérifiés » :
+ses chiffres venaient du REPL lisant le panneau, pas d'une lecture
+directe. Lecture faite dans `scalp_orderflow_20260818-0809.txt`.
+
+```
+                         tickets  apparies       base      dA      dB
+17/08 10:25  pre-enreg     2 550   1 635 (64,1%)  -0,97   +4,65   +3,69
+17/08 18:56  rapporte      2 790   1 764 (63,0%)      ?   +3,75   +3,31
+18/08 08:09  VERIFIE       2 813   1 778 (63,2%)  -1,19   +3,88   +3,38
+```
+
+Les chiffres rapportés par le REPL étaient **proches mais pas exacts**
+— +3,75 contre +3,88, +3,31 contre +3,38. L'écart s'explique par deux
+exports différents (18:56 la veille, 08:09 ce matin) et non par une
+erreur de lecture. La mention « non vérifié » est levée.
+
+**Ce que la vérification confirme.** L'érosion est réelle : `A` passe de
++4,65 à +3,88, `B` de +3,69 à +3,38, sur 263 tickets supplémentaires et
+**toujours in-sample**. La valeur de référence du 15/10 reste +4,65 et
++3,69, celles du pré-enregistrement.
+
+**Ce que la vérification ajoute, et que le REPL n'avait pas dit.** La
+base elle-même a bougé : **−0,97 € → −1,19 €** par signal. Une partie
+de la baisse du Δ vient donc d'un `après` qui monte moins, pas
+seulement d'un `avant` qui descend. À relire au 15/10 : comparer les Δ
+sans comparer les bases serait comparer deux soustractions différentes.
+
+**Et le cumul des règles est chiffré, il n'est plus une crainte.** Le
+document lui-même écrit, sur la ligne `cumul des règles Δ>0` :
+
+```
+9 regles combinees -- sur-ajuste, a lire comme un plafond, pas un plan
+retires 2 344 sur 2 813 (83 %)   reste 469   apres +9,42   D +10,62
+```
+
+83 % du flux retiré, 469 tickets restants. C'est exactement l'ordre de
+grandeur estimé la veille (≈18 % de survivants) et ça confirme
+qu'empiler les filtres ne construit pas une stratégie : ça isole le
+sous-ensemble le plus sur-ajusté de l'échantillon. Le panneau le dit
+lui-même, dans sa propre sortie.
