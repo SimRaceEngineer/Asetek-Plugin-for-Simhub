@@ -3613,3 +3613,92 @@ proposée de lui-même :
 Aucune n'est lancée. Elles se gèlent d'abord, et une seule sera
 retenue — trois variantes essayées après un échec, ce serait le
 repêchage que la coupe est censée empêcher.
+
+---
+
+## H38 — H37 rejouée sur des bougies de CINQ MINUTES
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026, AVANT écriture de l'outil.
+Re-spécification déclarée de H37, dont le test a saturé. UNE SEULE
+variante des trois envisagées est retenue — en essayer plusieurs après
+un échec serait le repêchage que la coupe est censée empêcher.**
+
+**Hypothèse de travail assumée en l'absence de réponse :** l'utilisateur
+avait proposé le passage en M5 de lui-même (« si les bougies sont des
+m5 au lieu de m1 pour montrer les ticks on aura au moins déjà une
+information »). Je retiens celle-là. S'il préfère le décile de taille
+ou l'appariement des ranges, cet énoncé tombe et se réécrit — mais il
+tombe AVANT d'avoir été mesuré, ce qui est la seule chose qui compte.
+
+### Pourquoi cette variante et pas les deux autres
+
+Les trois pistes ne sont pas de même nature. Le décile de taille et
+l'appariement des ranges **corrigent la mesure**. Le passage en M5
+**corrige l'objet** — et c'est l'objet qui était faux :
+
+```
+R median du repere, MES, barres d une minute :  1,75 point
+```
+
+L'utilisateur décrit un range visible sur un graphique. Une minute de
+MES n'en est pas un.
+
+### Ce qui change, et ce qui ne change pas
+
+```
+CHANGE     les barres sont agregees a 5 minutes AVANT le calcul des
+           dimensions :
+              o = premier open      h = max des hauts
+              b = min des bas       c = dernier close
+              n = somme des trades  v = somme du volume
+              d = somme du delta    sp = moyenne du spread
+           Les medianes de seance qui normalisent les six dimensions
+           sont donc celles de la seance en M5.
+
+NE CHANGE PAS   le centile 99,5, le seuil de 2 dimensions, le temoin
+                (bougie ordinaire, meme minute de seance, autre jour,
+                son propre range), l horizon de 10 jours de bourse, la
+                graine 20260818, et la coupe du §10.
+```
+
+### LE GARDE-FOU DE SATURATION, déclaré AVANT la mesure
+
+C'est la leçon du jour, et elle devient une règle :
+
+```
+SI  P(aboutissement) SANS conditionnement depasse 90 % dans l un des
+    deux groupes, ALORS le test est declare DEGENERE et le `p` n est
+    NI CALCULE NI LU.
+```
+
+Sur H37 cette valeur était de 96,4 % et j'ai quand même lu un `p`. Un
+`p` issu d'une statistique saturée n'est pas un résultat faible, c'est
+un nombre sans contenu — et il invite à commenter du bruit.
+
+Si le garde-fou se déclenche en M5, **on ne relance pas en M15 dans la
+foulée** : on écrit que l'objet n'est pas atteignable à cette
+granularité, et on s'arrête. Escalader d'unité de temps jusqu'à ce que
+le test veuille bien discriminer, c'est chercher l'échelle qui donne
+raison.
+
+### L'énoncé, GELÉ — identique à H37, autre granularité
+
+**À géométrie propre à chacun, le range d'une bougie repère de cinq
+minutes à moitié repris se complète plus souvent que celui d'une
+bougie ordinaire de cinq minutes prise à la même minute de séance.**
+
+### La règle de décision, écrite avant les chiffres
+
+- **garde-fou déclenché** → dégénéré, on écrit et on arrête.
+- **MES et YM `p < 0,05`, signe conforme** → à confirmer sur le tiers
+  récent, une seule passe.
+- **un seul des deux** → asymétrique, noté tel quel.
+- **aucun des deux** → la question est CLOSE à cette granularité.
+
+Et le signe compte : après H36, je n'écrirai plus « même signe » là où
+je veux dire « le signe annoncé ».
+
+### Ce que ça ne dira pas
+
+Ni euro, ni sens, ni stop. Un range qui se complète ne dit pas ce que
+le prix a fait entre-temps — or c'est entre-temps qu'un stop se prend.
