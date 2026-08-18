@@ -2708,3 +2708,117 @@ grandeur estimé la veille (≈18 % de survivants) et ça confirme
 qu'empiler les filtres ne construit pas une stratégie : ça isole le
 sous-ensemble le plus sur-ajusté de l'échantillon. Le panneau le dit
 lui-même, dans sa propre sortie.
+
+---
+
+## H33 — Ce n'est pas le SIGNE du flux qui annonce le refus, c'est son RENDEMENT
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026, AVANT toute mesure. Non
+appliquée. Première lecture attendue sous 48 h.**
+
+### D'où elle vient : une bougie, pas un échantillon
+
+`bougie_deux_actifs.py`, 14/08 à 16h30 Paris, MES-continu, minute par
+minute :
+
+```
+heure    cloture    dprix    delta   x med    cvd     vol xm
+16:04    7828.00    +1.75     +809    27.9    +902     19.5
+16:05    7830.00    +3.75    +1047    36.1   +1949     25.7
+16:06    7829.25    +3.00     +187     6.4   +2136     13.0
+...
+16:21    7818.75    -7.50    -1651    56.9   -4289     48.6
+```
+
+**+2 136 contrats nets à l'achat, en trois minutes, à 28 et 36 fois le
+delta médian de la journée — pour +3,75 points.** Puis le flux se
+retourne et le prix rend 22 points sur la fenêtre, avec un delta cumulé
+de −9 554.
+
+De l'achat massif qui n'achète presque rien, suivi d'un effondrement.
+C'est la définition opérationnelle de l'absorption.
+
+### Pourquoi `refus_continuation.py` ne peut pas la voir
+
+Sa colonne APPROCHE est une **SOMME** de delta sur 60 minutes. Ici la
+somme est trompeuse : l'achat de 16:04-16:06 et la vente qui suit se
+compensent. Le signal n'est pas dans le total, il est dans le
+**RAPPORT** entre ce que le flux pousse et ce que le prix rend.
+
+C'est pour ça que `APPROCHE` sort à `p = 0,77` et `0,48` : elle mesure
+une direction là où le phénomène est un rendement. **Une variable nulle
+n'est pas une absence de phénomène, c'est parfois la mauvaise variable.**
+
+### La mesure, GELÉE avant d'être faite
+
+Dans la fenêtre d'approche `[t−60, t[`, on prend **la minute au plus
+fort |delta|** — pas une somme, pas une moyenne : l'extrême, qui est
+l'endroit où l'absorption se voit :
+
+```
+d = |delta| de cette minute      / mediane |delta| du jour
+p = |dprix| de cette minute      / mediane |dprix| du jour
+RENDEMENT = p / d
+```
+
+Sur 16:05 : `d = 36,1`, `p = 2,00 / 0,25 = 8,0`, donc **rendement
+0,22**. Une minute ordinaire vaut environ 1.
+
+Les deux médianes sont celles de la journée et de l'actif, déjà
+calculées par les deux outils. Rien de nouveau n'est inventé.
+
+### L'énoncé
+
+**Les tentatives qui finissent en REFUS ont, dans leur fenêtre
+d'approche, un RENDEMENT plus faible que celles qui finissent en
+CONTINUATION.** Le flux pousse autant, le prix suit moins.
+
+### Ce qui la réfute
+
+Même dispositif que la colonne APPROCHE : écart des médianes entre
+REFUS et CONTINUATION, `p` par permutation des issues à l'intérieur de
+chaque journée, graine 20260817.
+
+**H33 est fausse si `p > 0,05` sur MES-continu et sur YM-continu.**
+
+### LA RÉSERVE QUI COMPTE : c'est un deuxième test sur le même échantillon
+
+Les 827 événements ont déjà servi à tester APPROCHE et VOLUME. Ajouter
+une troisième variable sur les mêmes données augmente mécaniquement la
+chance qu'une d'elles sorte. Trois variables à 5 %, c'est ~14 % de
+chance qu'au moins une passe sous H0.
+
+Donc, écrit d'avance :
+
+- un `p < 0,05` sur H33 **ne vaut pas** un `p < 0,05` obtenu du premier
+  coup. Il vaut « à confirmer » ;
+- **la confirmation exigée est une période disjointe** — les données de
+  septembre à novembre, même outil, mêmes paramètres, sans rien
+  rechoisir ;
+- si H33 passe et que la confirmation échoue, on écrit qu'elle a
+  échoué. On ne se rabat pas sur une quatrième variable.
+
+### Ce qu'elle n'autorise pas
+
+Aucune décision, aucun paramètre. Et même vraie, elle ne dirait qu'une
+chose : que l'information est dans le rendement du flux et non dans son
+sens. Le chemin vers l'euro passerait encore par des tickets, un
+spread et `churn_trades.jsonl`.
+
+### Ce que la bougie du 14/08 dit AUSSI, et qu'il faut noter
+
+```
+MES-continu  delta -9554   prix -0,281 %   volume 16,6 x median
+YM-continu   delta   +198  prix -0,184 %   volume  7,5 x median
+```
+
+**Le Dow a baissé avec un carnet net ACHETEUR.** Les deux carnets sont
+de signe opposé sur la fenêtre, 42 % des minutes en désaccord de signe.
+C'est H31 — les prix ensemble, les flux non — rendue visible sur un
+seul événement.
+
+Et une caution pour **H32** : sur cette fenêtre, US500 baisse **plus**
+que US30 en pourcentage (−0,281 contre −0,184), soit l'inverse du
+classement pré-enregistré. Une fenêtre de 91 minutes ne teste pas une
+hypothèse de séance — mais c'est un rappel que le classement n'est pas
+un fait acquis.
