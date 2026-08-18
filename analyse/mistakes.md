@@ -1745,3 +1745,108 @@ vérifier ces suppositions-là, pas la syntaxe, qui elle se voit.
 n'avais aucun moyen d'exécuter du Pine ici, et je l'avais dit — mais je
 n'en avais pas tiré la conséquence, qui était de réduire au minimum ce
 que le script suppose du langage.
+
+---
+
+## 18/08/2026 — un second extracteur à côté d'un extracteur correct
+
+**Le fait.** La route `/cartes` a servi une barre de navigation en
+bandes empilées, avec une ligne de code Python affichée au milieu, et
+tous les onglets renvoyant au tableau de bord.
+
+Trois défauts, une seule cause.
+
+**Le défaut technique 1 — le conteneur perdu.** J'ai recopié les
+`<div class="tab">` **ligne par ligne**, sans le `<div class="tabs">`
+qui les contient et qui porte la mise en page. Chaque pastille est
+redevenue un bloc pleine largeur.
+
+**Le défaut technique 2 — le filtre qui s'attrape lui-même.** Le test
+retenait toute ligne contenant à la fois `class="tab"` et `onclick=`.
+La ligne qui *exprime* ce test contient les deux. Elle s'est
+sélectionnée et s'est affichée dans la barre.
+
+Et en corrigeant, j'ai failli le refaire : l'ancre du bloc titre,
+écrite en toutes lettres, se serait trouvée dans sa propre ligne de
+`find()`. **Le banc l'a attrapée avant livraison** — pas moi.
+
+> **Une ancre qui cherche dans le fichier où elle vit s'assemble à
+> l'exécution.** Jamais en clair. Elle vit dans ce qu'elle fouille.
+
+**Le défaut technique 3 — les routes non résolues.** Tous les onglets
+pointaient sur `/`, alors que `price_action.py` sert ~150 adresses.
+
+**La cause, qui n'est aucune des trois.** `onglets()` existe dans
+`carte_html.py` **depuis le 14/08**, écrite au troisième essai après
+le reproche *« mets juste le header identique aux autres panels »*.
+Sa docstring dit : *« Une première version inventait sa propre barre.
+Ce n'est pas comme les autres panneaux, c'est un deuxième style à
+maintenir. »* Elle résout les routes ; la mienne non.
+
+**J'ai écrit un second extracteur à côté d'un extracteur correct,
+dans un fichier dont l'entrée voisine avertit contre « les deux
+constantes jumelles qui ont déjà coûté une soirée ».**
+
+La règle était écrite — *« sur une interface qui existe, on recopie ;
+on ne conçoit pas »*. Elle n'a pas été relue avant d'écrire.
+
+> **Avant d'écrire un extracteur, chercher s'il existe.** Un `grep` sur
+> le verbe de la tâche — ici `onglets` — coûte une seconde et aurait
+> supprimé les trois défauts d'un coup.
+
+**Le correctif durable, au-delà du patch.** La structure du header est
+désormais relevée dans `NOTES_panneaux.md` : les deux blocs `div.hdr`
+et `div.tabs`, la prise par tranche, le comptage de profondeur, les
+ancres assemblées, la résolution par argument puis par libellé. Elle
+n'était écrite nulle part — d'où trois relectures du même fichier en
+quatre jours.
+
+---
+
+## 18/08/2026 — une statistique incapable de trancher, et un verdict trop prudent
+
+**Le fait.** `survie_niveaux.py` compare des durées de survie en
+**minutes entières** par une **différence de médianes**. Les médianes
+valent 2 et 3. La statistique ne peut donc sortir que `+0`, `+1`,
+`+2`… : sur MES elle a sorti `+0,0` avec `p = 1,0000`.
+
+`p = 1,0000` est arithmétiquement dégénéré — l'écart observé valant
+exactement 0, toute permutation donne `|e| >= 0`.
+
+**C'est la même faute que le 17/08.** `patch_bornes.py` corrigeait un
+centile qui supposait une distribution continue là où les égalités
+sont la règle sur de petits entiers. J'ai reconnu le piège sur les
+**seuils** et je l'ai réintroduit dans le **test**.
+
+> **Une variable à petites valeurs entières ne se compare pas par
+> médiane.** Sa médiane est un entier, et l'écart de deux médianes est
+> quantifié au pas de la variable. Sur ce type de grandeur, viser une
+> proportion — part au-delà de 30, 60, 120 minutes — qui, elle, est
+> continue.
+
+**Et la seconde moitié de l'erreur, opposée à la première.** J'ai
+annoncé qu'on « ne pouvait pas conclure ». L'utilisateur a refusé :
+*« je ne suis pas d'accord [...] qu'est-ce qui te fait penser ça ? »*
+
+Il avait raison. **Le résultat se conclut.** Sur MES les deux groupes
+sont à la même distance du prix et l'écart est exactement nul ; sur YM
+le seul écart apparaît avec une distance triple. Le seul endroit où
+une différence sort est le seul endroit où l'appariement est
+déséquilibré. C'est un argument, pas une prudence.
+
+J'avais en plus invoqué l'absence de coupe du §10 comme limite.
+**Mauvaise application de la règle** : le §10 protège contre le fait
+de croire un POSITIF trouvé en cherchant. On ne sur-ajuste pas vers un
+résultat nul.
+
+> **La prudence excessive est une erreur au même titre que
+> l'affirmation excessive.** Refuser de conclure quand les chiffres
+> concluent, c'est rendre la mesure inutile après l'avoir payée. Une
+> limite ne se cite que si elle change la lecture — et il faut dire
+> **laquelle** des trois lectures elle change.
+
+Ce qui reste vraiment ouvert ici est plus précis que « on ne peut pas
+conclure » : la médiane décrit les deux ou trois premières minutes,
+alors que la question des supports vit dans la queue censurée
+(11,3 % contre 6,3 %). **La mesure a répondu à une autre question que
+celle posée.** C'est ça qu'il fallait dire.

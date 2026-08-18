@@ -3119,3 +3119,83 @@ touché ; elle ne dit ni pourquoi, ni s'il fallait s'y opposer.
 
 **Un support tenu parce que personne ne le regarde et un support
 défendu donnent la même mesure.**
+
+---
+
+## MESURE — La survie des niveaux de repère (18/08/2026)
+
+**Statut : MESURÉE sur l'échantillon complet. Résultat NÉGATIF, et il
+se conclut — la première rédaction de cette entrée sur-couvrait le
+résultat, elle a été corrigée après objection de l'utilisateur.**
+
+### Les chiffres
+
+```
+MES-continu   distance au prix  0,75 / 0,75    ecart +0,0 min   p = 1,0000
+YM-continu    978 reperes, 1956 niveaux
+              survie mediane    3,0 / 2,0 min
+              censures         11,3 % / 6,3 %
+              distance au prix 19,00 / 6,00    ecart +1,0 min   p = 0,0370
+```
+
+### Ce qui se conclut
+
+**Aucun soutien à l'idée qu'un niveau de bougie repère tient plus
+longtemps qu'un niveau ordinaire.** Et les deux bras se répondent :
+
+- Sur **MES**, les deux groupes sont à la **même distance du prix**
+  (0,75 contre 0,75) : l'appariement est complet, et l'écart est
+  **exactement nul**.
+- Sur **YM**, le seul écart observé (+1 min) apparaît avec un écart de
+  distance de **19 contre 6** — plus du triple. Un niveau trois fois
+  plus loin est retouché plus tard pour une raison géométrique.
+
+**Le seul endroit où une différence apparaît est le seul endroit où la
+distance est déséquilibrée.** C'est un argument, pas une prudence.
+
+### Ce que ces chiffres ne permettent PAS de dire
+
+**1. Que l'effet est nul.** La survie est un nombre entier de minutes
+et les médianes valent 2 et 3. Une différence de médianes sur de
+petits entiers ne peut sortir que `+0`, `+1`, `+2`… : tout effet
+inférieur à la minute est **invisible par construction**. On écarte un
+gros effet, pas un petit.
+
+**2. Que `p = 1,0000` soit une preuve forte.** Il est arithmétiquement
+dégénéré : l'écart observé valant exactement 0, toute permutation
+donne `|e| >= 0`. Le fait informatif est l'**égalité des médianes**,
+pas le `p`.
+
+**3. Que la question des supports soit tranchée.** La médiane décrit
+les **deux ou trois premières minutes** — le prix reste près d'où il
+vient de passer, et c'est ce que mesure la médiane. Un support au sens
+courant vit dans la **queue censurée** : 11,3 % contre 6,3 %. C'est le
+seul chiffre du tableau qui parle de la question posée, et il est
+lui aussi porté par la distance.
+
+**La mesure a répondu à « à quelle vitesse un niveau est-il
+retouché », quand la question était « lesquels survivent
+longtemps ».**
+
+### Ce qui NE limite PAS ce résultat — rectification
+
+J'avais opposé l'absence de coupe du §10. **C'était une mauvaise
+application de la règle.** Le §10 protège contre le fait de croire un
+résultat POSITIF trouvé en cherchant. Un résultat négatif ne se
+fabrique pas par sur-ajustement : on ne cherche pas jusqu'à ne rien
+trouver. La coupe redeviendra nécessaire le jour où un test sortira
+positif.
+
+### Ce qu'il faudrait pour reprendre la question
+
+Deux corrections, à **déclarer avant** de relancer, sinon c'est
+choisir le test après avoir vu échouer le premier :
+
+1. **Apparier aussi sur la distance**, et pas seulement sur la minute
+   de séance. Le témoin doit être à distance comparable du prix.
+2. **Viser la queue, pas la médiane** : part de niveaux non touchés à
+   30, 60, 120 minutes, qui est une proportion et non un entier
+   quantifié.
+
+Tant que ces deux points ne sont pas écrits et gelés, la question
+reste ouverte **et l'outil ne se relance pas**.

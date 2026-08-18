@@ -193,3 +193,103 @@ Et alors, jamais sans `PA_ROLE=panel` sur la même ligne.
 - Mettre une page interactive en onglet interne. Le rechargement à
   cinq secondes l'efface.
 - Faire calculer le serveur. Le générateur tourne hors ligne.
+
+---
+
+# LA STRUCTURE DU HEADER DU 8095 — relevée le 18/08/2026
+
+**À lire AVANT d'écrire quoi que ce soit qui sert une page sur le
+8095.** Trois épisodes ont coûté des allers-retours faute de cette
+page : 14/08 (barre absente, puis inventée, puis recopiée), 18/08
+(barre recopiée ligne par ligne, sans son conteneur).
+
+## Le balisage réel, tel qu'il sort de `price_action.py`
+
+```
+</style>
+</head><body>
+<div class="hdr">
+    <h1><span class="live"></span> Price Action v1.2</h1>
+    <div class="meta" id="meta">--</div>
+    <div id="battle-pill" style="display:none;...."></div>
+    <button onclick="copyRawExport()" id="btn-export" style="...">Copy All Raw Data</button>
+</div>
+<div class="tabs">
+    <div class="tab active" onclick="showTab('sr')">S/R Levels</div>
+    <div class="tab" onclick="showTab('vixall')" style="color:#ff3366;font-weight:bold;">VIX (tout)</div>
+    ...
+</div>
+```
+
+**Le header, c'est DEUX blocs, pas un.**
+
+- `div.hdr` — le titre, la pastille d'état `#meta`, la pastille
+  `#battle-pill`, le bouton `Copy All Raw Data`.
+- `div.tabs` — **le conteneur qui porte la mise en page** des
+  pastilles. Sans lui, chaque `.tab` redevient un bloc pleine largeur.
+  C'est le défaut visible du 18/08.
+
+## Les trois pièges, chacun payé une fois
+
+**1. Prendre la TRANCHE, pas les lignes.** De `div.hdr` jusqu'à la
+fermeture de `div.tabs`, conteneurs compris, telle quelle. Une
+sélection ligne par ligne perd le conteneur — et perd aussi l'ordre et
+les rangées.
+
+Fermeture repérée **par comptage de profondeur**, jamais par `rfind` :
+un `</div>` écrit plus bas dans du code Python serait ramassé.
+
+**2. Une ancre littérale s'attrape elle-même.** Le code qui cherche la
+balise d'ouverture vit *dans* `price_action.py`. Écrite en toutes
+lettres, l'ancre se trouve dans sa propre ligne de recherche et la
+tranche part du code au lieu du HTML.
+
+Deux fois le même piège, sous deux formes, le même jour :
+
+```
+18/08 07:29   filtre 'class="tab"' in _l and "onclick=" in _l
+              -> retenait SA PROPRE LIGNE, affichée dans la barre
+18/08 11:xx   ancre du bloc titre, littérale
+              -> se serait trouvée dans sa propre ligne de find()
+                 (attrapée au banc, jamais livrée)
+```
+
+**La règle : une ancre qui cherche dans le fichier où elle vit
+s'assemble à l'exécution** — par concaténation, jamais en clair.
+
+**3. Les onglets internes doivent être résolus, pas renvoyés à `/`.**
+`price_action.py` sert ~150 routes. Deux pistes, dans cet ordre :
+
+```
+showTab('vixall')       -> /vixall         l'ARGUMENT d'abord
+libellé "RAILS TRADES"  -> /rails_trades   le LIBELLÉ ensuite
+sinon                   -> /
+```
+
+`onglets()` dans `carte_html.py` n'essaie que le libellé. « VIX
+(tout) » donne `/vix_(tout)`, qui n'existe pas, alors que son argument
+donne `/vixall`, qui est servi. **L'argument résout ce que le libellé
+ne peut pas.**
+
+## Le châssis exigé — rappel du 14/08
+
+Un panneau = **une route + un bouton dans la barre + un châssis** :
+retour possible, en-tête qui dit *ce qu'on regarde et de quand ça
+date*, et bouton copier rendant le contenu en **texte**.
+
+`#meta` est l'emplacement prévu pour « ce qu'on regarde et de quand ça
+date » — il porte `--` sur le tableau de bord et se remplit en JS.
+Sur une page servie ailleurs, on y écrit le nom du fichier et sa date.
+
+`copyRawExport()` n'existe pas hors du tableau de bord. Un bouton
+copier muet est **pire que pas de bouton** : c'est par lui que le
+contenu part dans le REPL. Et `navigator.clipboard` est absent en
+`http://` sur un nom de machine — zone de texte cachée +
+`document.execCommand("copy")`.
+
+## Et la règle qui les résume toutes
+
+**Sur une interface qui existe, on recopie ; on ne conçoit pas.**
+Écrite le 14/08 dans `mistakes.md`. Non relue le 18/08 : un second
+extracteur a été écrit à côté d'`onglets()`, qui existait et faisait
+mieux.
