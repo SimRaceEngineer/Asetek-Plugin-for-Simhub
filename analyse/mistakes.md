@@ -1904,3 +1904,38 @@ quelque chose à mesurer — et les deux ont répondu sur autre chose.
 **Ce qui reste valable.** H36 tient pour ce qu'elle a mesuré : dans
 l'heure qui suit, une bougie repère est suivie d'agitation, sur les
 deux symboles. Ce n'est pas faux, c'est ailleurs.
+
+---
+
+## 18/08/2026 — remplacer un fichier du Drive en le mettant à la corbeille
+
+**Le fait.** Pour livrer une version corrigée de `pine_reperes.py`, j'ai
+déposé le nouveau fichier puis mis l'ancien à la corbeille, afin
+d'éviter deux fichiers de même nom dans le dossier.
+
+La commande donnée juste après a échoué :
+
+```
+copy "G:\My Drive\ScalpEA\pine_reperes.py" .
+Cannot find path ... because it does not exist.
+```
+
+**La cause.** Google Drive autorise deux fichiers de même nom dans un
+dossier ; **Drive Desktop, non.** Il a très probablement conservé le
+nouveau sous `pine_reperes (1).py`, puis supprimé localement celui que
+la mise à la corbeille désignait — c'est-à-dire exactement le nom que
+la commande visait.
+
+**Le raisonnement faux.** J'ai traité le Drive comme un espace de noms
+que je contrôle. C'est un **dossier synchronisé** : chaque opération y
+a un effet différé sur une autre machine, et l'ordre d'arrivée n'est
+pas le mien. Supprimer pour désambiguïser a produit l'ambiguïté.
+
+> **On ne remplace pas un fichier du Drive en supprimant l'ancien.**
+> On dépose sous un nom NOUVEAU et on renomme à la copie :
+> `copy "...\outil_v2.py" outil.py`. Un dépôt est additif et arrive en
+> une fois ; une suppression est destructive et arrive quand elle veut.
+
+**Ce que ça a coûté.** Un aller-retour, sur une correction qui, elle,
+était justement destinée à éviter que l'utilisateur regarde 40 bougies
+dont une partie venait de séances fantômes.
