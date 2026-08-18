@@ -305,7 +305,8 @@ STRATEGIES = [
   "regle": "M5 AGAINST en regime CHURN, sans etoile",
   "pourquoi":
     "45 % de reussite et pourtant +1838 : cette strategie ne gagne "
-    "que par l asymetrie. Son RR d equilibre est de 1,22 -- elle "
+    "que par l asymetrie. Sa ligne source exige un RR de 1,22 ; le "
+    "croisement la ramene a 1,10, seule du lot au-dessus de 1. Elle "
     "DOIT encaisser plus qu elle ne rend, sinon elle perd. C est la "
     "seule du lot dont la survie depend d une gestion de sortie et "
     "non d un taux de reussite, et c est pour ca qu elle est dans le "

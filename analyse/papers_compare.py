@@ -178,6 +178,8 @@ def ligne_strategie(magic, nom, profil, cles, actif):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--sortie", default="cartes")
+    p.add_argument("--cartes", default="cartes",
+                   help="dossier des .html servis par l onglet CARTES")
     a = p.parse_args()
 
     L = []
@@ -253,6 +255,28 @@ def main():
 
     txt = "\n".join(L)
     print(txt)
+
+    # --- LES DEUX PANNEAUX EN HTML, POUR L ONGLET CARTES --------------
+    # panels\ est ce que le REPL lit ; il n est servi par aucune route.
+    # cartes\ est ce que l onglet CARTES sert, avec l en-tete et le
+    # bouton copier. Les deux dossiers ne servent pas le meme lecteur,
+    # et on ecrit dans les deux plutot que de choisir.
+    #
+    # Un <pre> suffit : la route prepose deja le style, la barre de
+    # navigation et le bouton copier. Ecrire une seconde mise en page
+    # ici serait le "deuxieme style a maintenir" du 14/08.
+    if not os.path.isdir(a.cartes):
+        os.makedirs(a.cartes)
+    for nom, contenu in (("papers_220.html", po.rendu()),
+                         ("papers_compare.html", txt)):
+        h = (contenu.replace("&", "&amp;").replace("<", "&lt;")
+             .replace(">", "&gt;"))
+        io.open(os.path.join(a.cartes, nom), "w", encoding="utf-8",
+                newline="").write(
+            '<pre style="font:12px Consolas,monospace;color:#c9d1d9;'
+            'background:#0e1116;padding:16px 20px;margin:0;'
+            'white-space:pre">' + h + "</pre>\n")
+        print("  carte : %s" % os.path.join(a.cartes, nom))
     if not os.path.isdir(a.sortie):
         os.makedirs(a.sortie)
     che = os.path.join(a.sortie, "panel_papers_compare.txt")
