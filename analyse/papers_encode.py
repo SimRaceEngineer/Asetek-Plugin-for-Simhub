@@ -288,7 +288,7 @@ def main():
         % ("CLE", "LIBELLE", "annonce", "ALL", "EUR", "US", "verdict"))
     add("  " + "-" * 84)
 
-    valides = {}
+    valides, session_de = {}, {}
     n_ok = n_ko = n_non = 0
     for cle, lib, attendu, pred, note in CLES:
         if pred is None:
@@ -312,6 +312,7 @@ def main():
         if ec == 0:
             n_ok += 1
             valides[cle] = pred
+            session_de[cle] = best
             v = "OK sur %s" % best
         else:
             n_ko += 1
@@ -350,6 +351,21 @@ def main():
             for act in d["actifs"]:
                 lignes.append((230000 + pc.ACTIFS[act] + d["i"],
                                d["nom"] + " (" + act + ")", d["src"]))
+        # Deux cles sont INCOMPATIBLES si aucun ticket du jeu ne les
+        # verifie toutes les deux. C est un constat sur CET echantillon,
+        # pas une impossibilite logique -- sauf quand les deux portent sur
+        # le meme champ a valeur unique (le regime, la signature _tf_sig),
+        # ou elles ne peuvent structurellement pas coexister. Le dire AVANT
+        # de compter evite de presenter un zero comme une rarete.
+        def contradit(k1, k2):
+            for t in tickets:
+                try:
+                    if valides[k1](t) and valides[k2](t):
+                        return False
+                except Exception:
+                    pass
+            return True
+
         add("  %-7s %-30s %7s %7s  %s"
             % ("MAGIC", "NOM", "estime", "REEL", "etat"))
         add("  " + "-" * 76)
@@ -360,13 +376,35 @@ def main():
                 add("  %-7d %-30s %7d %7s  bloque par %s"
                     % (magic, nom[:30], est, "-", ",".join(manque)))
                 continue
+            # Les cles d un magic peuvent avoir valide sur des colonnes
+            # differentes. On compte dans celle de la PREMIERE, et on le
+            # dit, plutot que de melanger silencieusement.
+            sess = session_de[cles[0]]
+            paire = None
+            for i in range(len(cles)):
+                for j in range(i + 1, len(cles)):
+                    if contradit(cles[i], cles[j]):
+                        paire = (cles[i], cles[j])
+                        break
+                if paire:
+                    break
+            if paire:
+                add("  %-7d %-30s %7d %7s  VIDE : aucun ticket ne verifie"
+                    " %s ET %s"
+                    % (magic, nom[:30], est, "0", paire[0], paire[1]))
+                continue
             n = 0
             for t in tickets:
+                if sess != "ALL" and _sess(t) != sess:
+                    continue
                 if all(valides[k](t) for k in cles):
                     n += 1
-            add("  %-7d %-30s %7d %7d  %s"
+            melange = len(set(session_de[k] for k in cles)) > 1
+            add("  %-7d %-30s %7d %7d  %s (%s)%s"
                 % (magic, nom[:30], est, n,
-                   "MESURE" if n >= 30 else "trop mince pour juger"))
+                   "MESURE" if n >= 30 else "trop mince pour juger", sess,
+                   "  [cles validees sur des colonnes differentes]"
+                   if melange else ""))
     print("\n".join(L))
     return 0
 
