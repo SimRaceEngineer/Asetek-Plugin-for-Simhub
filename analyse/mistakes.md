@@ -1850,3 +1850,57 @@ conclure » : la médiane décrit les deux ou trois premières minutes,
 alors que la question des supports vit dans la queue censurée
 (11,3 % contre 6,3 %). **La mesure a répondu à une autre question que
 celle posée.** C'est ça qu'il fallait dire.
+
+---
+
+## 18/08/2026 — mesurer au mauvais horizon, et sur la mauvaise population
+
+**Le fait.** L'utilisateur demandait, depuis le début, de suivre
+*quelques* bougies repères sur TradingView et de voir si leurs niveaux
+sont retrouvés **des jours plus tard**. J'ai livré deux mesures
+successives qui ne pouvaient répondre ni l'une ni l'autre.
+
+**Défaut 1 — l'horizon exclu par construction.** Dans
+`survie_niveaux.py` puis `survie_queue.py`, la fonction qui décide si
+un niveau est touché reçoit **les barres d'une seule séance**. Elle
+balaie `range(i0 + 1, len(jour))`, et rend « inconnu » dès que la
+séance s'arrête avant l'horizon.
+
+> **Un niveau ne pouvait pas vivre au-delà de sa propre séance.** Les
+> niveaux multi-jours — le seul objet demandé — étaient écartés comme
+> censurés avant d'être comptés.
+
+Les horizons choisis le disent aussi : 30, 60, 120 minutes. J'ai
+discuté du choix de l'horizon primaire, de la quantification de la
+médiane, de la permutation par journée — **sans jamais remarquer que
+le plafond était la fin de séance.**
+
+**Défaut 2 — la population entière au lieu de la poignée.** J'ai
+mesuré 2 103 repères sur MES et 978 sur YM. La demande portait sur
+*quelques* bougies, les plus marquées. Diluer les rares dans les deux
+mille détruit l'objet : ce qui distingue une bougie exceptionnelle
+disparaît dans la moyenne de deux mille bougies simplement au-dessus
+d'un centile.
+
+**Ce que ça révèle.** Les deux outils étaient corrects, benchés, et
+répondaient à une question que personne n'avait posée. Le soin apporté
+à la statistique — témoin apparié, distance annulée, permutation par
+journée, banc sur deux mondes — a masqué que **l'objet mesuré n'était
+pas le bon**. Un banc vérifie qu'un outil fait ce qu'il dit ; il ne
+vérifie jamais que c'est ce qu'on demandait.
+
+> **Avant de choisir une statistique, écrire l'objet en une phrase et
+> la relire contre la demande.** « Combien de minutes avant qu'un
+> niveau soit retouché dans sa séance » et « ce niveau est-il retrouvé
+> des jours plus tard » n'ont pas le même sujet. Aucun raffinement du
+> premier n'approche du second.
+
+**Et l'ordre était inversé.** L'utilisateur avait dit :
+*« visuellement on saura si on a quelque chose »*. Il proposait
+d'établir **l'existence** de l'objet avant de le mesurer. Je suis
+parti dans deux mesures complètes sans avoir montré qu'il y avait
+quelque chose à mesurer — et les deux ont répondu sur autre chose.
+
+**Ce qui reste valable.** H36 tient pour ce qu'elle a mesuré : dans
+l'heure qui suit, une bougie repère est suivie d'agitation, sur les
+deux symboles. Ce n'est pas faux, c'est ailleurs.
