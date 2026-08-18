@@ -1562,3 +1562,62 @@ les plus marquées de YM tombent à 13:30 UTC exactement**, l'ouverture
 du cash NYSE. Ce n'est pas un événement, c'est une horloge — le piège
 déjà écrit au §2 du protocole à propos de 14:30 et de l'initial
 balance.
+
+## 18/08/2026 — une fausse alerte, et c'est elle qui a créé le danger
+
+**Ce que j'ai fait.** Constatant que `Redemarrer-Stack.ps1` ne contient
+aucune occurrence de `PA_ROLE`, j'ai averti l'utilisateur — deux fois,
+en termes urgents — que le bouton de son bureau lancerait
+`price_action.py` en rôle MOTEUR et enverrait de vrais ordres pendant
+le gel.
+
+**Ce que disait le code, que je n'avais pas lu.**
+
+```
+if __name__ == "__main__":
+    os.environ.setdefault("PA_ROLE", "panel")     # ligne 23612
+...
+def start(...):
+    _pa_role = os.environ.get("PA_ROLE", "")      # ligne 23360
+    _run_trading = _pa_role != "panel"
+```
+
+`__main__` est le point d'entrée : il pose `panel` **avant** que
+`start()` ne lise la variable. `_run_trading` est donc faux. Lancer
+`python price_action.py` sans rien poser démarre en **panneau**. Le
+bouton est sûr, et il l'était depuis le 10/07.
+
+**Sur quoi je m'appuyais.** Trois commentaires concordants :
+`Superviseur.ps1:197`, `Gardien-Stack.ps1:245` et l'interdit n°2 de
+notre propre `PROTOCOLE.md`. Tous les trois affirment qu'un lancement
+sans `PA_ROLE` passe des ordres. Tous les trois sont **postérieurs** au
+correctif qui les a rendus faux — les `.ps1` datent du 12/08, le
+`setdefault` du 10/07.
+
+**La règle du 14/08, que je croyais avoir apprise.** *« Une docstring
+n'est pas un lieu où l'on suppose. Avant de toucher une fonction
+partagée, énumérer ses appelants. »* Elle vaut pour les commentaires
+d'un script autant que pour une docstring, et **trois sources qui se
+répètent ne valent pas une lecture** : elles se recopient.
+
+**La conséquence, et c'est le pire.** Ma fausse alerte a fait
+interrompre le travail en cours et lancer trois commandes de
+diagnostic. Et c'est en citant la ligne `Start-Process` pour étayer
+l'alarme que j'ai fait coller une commande de lancement dans le
+terminal. **Le seul risque réel de l'épisode a été créé par
+l'avertissement lui-même**, pas par ce qu'il dénonçait.
+
+**La règle.** Une alerte de sécurité se vérifie AVANT d'être émise, sur
+le code, pas sur ce que des commentaires en disent — et d'autant plus
+qu'elle est urgente, parce qu'une alerte urgente fait agir vite. Le
+coût d'une lecture de vingt lignes est de trente secondes ; le coût
+d'une fausse alerte est une interruption, trois allers-retours, et une
+commande dangereuse collée.
+
+**Ce qui reste vrai, et qu'il ne faut pas jeter avec le reste.**
+`Redemarrer-Stack.ps1` ne pose effectivement pas `PA_ROLE`, contrairement
+au gardien et au superviseur. Ce n'est pas dangereux, mais c'est une
+asymétrie : la sécurité repose entièrement sur le `setdefault` de
+`price_action.py`. Si quelqu'un le retirait un jour en pensant que les
+lanceurs s'en chargent, le danger deviendrait réel — et les trois
+commentaires redeviendraient vrais.
