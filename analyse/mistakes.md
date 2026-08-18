@@ -1621,3 +1621,61 @@ asymétrie : la sécurité repose entièrement sur le `setdefault` de
 `price_action.py`. Si quelqu'un le retirait un jour en pensant que les
 lanceurs s'en chargent, le danger deviendrait réel — et les trois
 commentaires redeviendraient vrais.
+
+## 18/08/2026 — le correctif d'une cécité en a créé une pire
+
+**Ce que j'ai fait.** Ayant constaté que `bougies_reperes.py` ne
+regardait que la queue haute de chaque dimension, je l'ai corrigé pour
+tester les deux. Résultat sur les vraies données :
+
+```
+MES-continu   37 754 reperes   283,86 par seance   ~22 % des minutes
+YM-continu    79 647 reperes   711,13 par seance   ~57 % des minutes
+```
+
+Attendu au centile 99,5 sur deux queues : **~6 %**.
+
+**La cause.** Un centile suppose une distribution continue. Sur des
+entiers petits — un nombre de transactions, une amplitude en tics — les
+égalités sont la règle. Sur une séance quasi morte, la médiane de
+`high − low` vaut **zéro** : le centile 0,5 tombe donc sur zéro, et
+`valeur <= borne` attrape **toute la masse liée** au lieu de 0,5 %.
+
+**Et un second défaut, du même tonneau.** Les repères les plus extrêmes
+de YM étaient tous datés du **2026-03-13**, sa toute première séance ;
+ceux de MES du 05/02, quand `MESM26` ne cotait presque pas. Mon filtre
+de séance exige la moitié du nombre médian de **barres** — une séance
+thin le passe : elle a ses barres, elles sont vides. La règle correcte
+est la même, appliquée aux **transactions**.
+
+C'est « une plage de dates n'est pas une couverture », consigné le
+17/08, dans une variante que je n'avais pas vue : compter les barres ne
+dit pas s'il s'y passe quelque chose.
+
+**Ce qui l'a rendu visible immédiatement.** La table par heure disait
+l'inverse du marché : sur YM, `03:00 UTC` à 6,8 % et la séance
+américaine `14:00` à 1,1 %. Un outil qui trouve l'essentiel de ses
+événements à trois heures du matin mesure la minceur, pas l'activité.
+
+**LA VRAIE FAUTE, ET ELLE EST PLUS INSTRUCTIVE QUE LES DEUX AUTRES.**
+
+J'avais le nombre attendu. Je l'ai écrit de ma main dans le texte du
+patch : *« Conséquence : ~12 % des minutes au lieu de ~6 »*. Et je n'ai
+pas fait vérifier ce nombre par le code.
+
+Un outil qui connaît sa part nominale doit la **comparer** à ce qu'il
+obtient, et le dire quand l'écart est d'un ordre de grandeur. Ici il
+aurait affiché « attendu ~6 %, obtenu 57 % » et le défaut serait mort
+dans la minute au lieu de produire une sortie de deux cents lignes qu'il
+a fallu lire.
+
+**La règle.** Quand une mesure a une valeur attendue connue d'avance —
+une part nominale, un effectif, une somme qui doit se conserver — le
+code la calcule et la compare. L'écrire dans un commentaire ne sert
+qu'à l'auteur, et seulement le jour où il l'écrit.
+
+**Le contre-poids.** Le correctif a été trouvé en une lecture, parce
+que la sortie affiche les valeurs brutes à côté des libellés. Les
+`AMPLEUR 0.0` et `TAILLE 1.0` alignés en colonne désignaient la cause
+sans ambiguïté. C'est la troisième fois en deux jours que l'impression
+de la table à côté du verdict sauve la mesure.
