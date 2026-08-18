@@ -1392,3 +1392,58 @@ j'ai conclu avant.
 **La règle.** Quand un correctif embarque son propre témoin, on ne
 conclut pas avant de l'avoir lu. Un « ça marche maintenant » n'est
 jamais un diagnostic : il faut que le témoin dise *par quel chemin*.
+
+## 18/08/2026 — six outils d'orderflow, cinq colonnes sur quatorze
+
+**Ce que j'ai fait.** Écrit `reaction_evenements.py`, `ecart_carnets.py`,
+`ecart_fenetre.py`, `flux_contre_prix.py`, `bougie_deux_actifs.py` et
+`refus_continuation.py` — six outils dont l'objet est l'orderflow — en
+lisant systématiquement les mêmes cinq colonnes : `ts`, `close`,
+`delta`, `volume`, `contrat`.
+
+**Ce que le fichier contenait :**
+
+```
+ts;open;high;low;close;trades;volume;bid_vol;ask_vol;delta;cvd;
+spread_moy;contrat;roulement
+```
+
+Quatorze. Je n'ai jamais ouvert `open`, `high`, `low`, `trades`,
+`bid_vol`, `ask_vol` ni `spread_moy`. Sur 183 314 barres, depuis le
+premier jour.
+
+**Le raisonnement faux.** J'ai recopié le lecteur du premier outil dans
+le deuxième, puis dans les quatre suivants. Il marchait, donc je ne l'ai
+jamais relu. Un lecteur qui fonctionne n'invite pas à vérifier ce qu'il
+ignore — il ne se plaint pas des colonnes qu'il ne lit pas.
+
+**Ce que ça a coûté, et c'est mesurable.** `refus_continuation.py`
+mesure une SOMME de delta sur 60 minutes et sort `p = 0,77`. Or ce que
+l'utilisateur observe — « le flux à l'intra-bougie va beaucoup plus
+vite » — est dans `trades`, qui était là. Deux bougies de même volume et
+même delta, l'une remplie en cinq secondes et l'autre étalée sur
+soixante, étaient **le même point** dans toutes mes mesures. J'ai
+conclu « le carnet ne prévient pas » sur cinq quatorzièmes du carnet.
+
+**C'est le point 8 de notre propre protocole**, écrit le 17/08 : *« Le
+format se lit dans les données (`--schema`, `--colonnes`, en-tête du
+fichier), jamais dans un souvenir. »* Je l'ai appliqué aux `.jsonl` et
+aux `snapshots`, jamais aux CSV que je produisais moi-même — comme si
+un fichier qu'on a fabriqué n'avait pas besoin d'être relu.
+
+**Ce qui l'a attrapé.** L'utilisateur, en deux phrases : *« tu as
+complètement squizé ces variables dans ton code, or c'est le propre de
+l'orderflow de nous permettre de visualiser les ordres. »* Aucun de mes
+garde-fous ne pouvait le voir : ils vérifient que ce qu'on lit est
+correct, jamais qu'on lit tout.
+
+**La règle.** Avant d'écrire le premier outil sur une source, **imprimer
+son en-tête et le commenter colonne par colonne** — y compris celles
+qu'on ne compte pas utiliser, surtout celles-là. Et quand on recopie un
+lecteur d'un outil à l'autre, la copie est le moment où l'on relit, pas
+celui où l'on se dispense de relire.
+
+**Le contre-poids.** La correction est gratuite : `trades` et
+`spread_moy` sont déjà là, sur toute la profondeur. Rien à
+retélécharger, rien à payer. La donnée n'a jamais manqué — c'est
+l'attention qui a manqué.
