@@ -290,6 +290,12 @@ var int[]    T = array.new_int()
 var int[]    N = array.new_int()
 var string[] D = array.new_string()
 
+// Niveaux ENCORE VALIDES. Un rayon qui continue apres que le prix l a
+// traverse n est plus un niveau : il est CONSOMME. Les garder tous
+// saturait l ecran de centaines de lignes deja invalidees.
+var line[]   L = array.new_line()
+var float[]  V = array.new_float()
+
 if barstate.isfirst
 %(table)s
 
@@ -302,6 +308,34 @@ if barstate.isfirst
 // out of bounds, array size is 150". La borne se teste donc dans un
 // `if` separe, et la boucle sort par `break`.
 var int k = 0
+
+// FERMETURE DES NIVEAUX TRAVERSES, avant d en ouvrir de nouveaux.
+// On parcourt a l envers pour pouvoir retirer sans decaler ce qui
+// reste. Pas de `and` sur un acces tableau -- Pine n a pas de
+// court-circuit.
+if barstate.isconfirmed
+    if array.size(L) > 0
+        for i = array.size(L) - 1 to 0
+            lv = array.get(V, i)
+            touche = low <= lv
+            if touche
+                touche := high >= lv
+            if touche
+                ln = array.get(L, i)
+                line.set_x2(ln, bar_index)
+                line.set_extend(ln, extend.none)
+                array.remove(L, i)
+                array.remove(V, i)
+
+    // Plafond de securite : Pine supprime lui-meme la ligne la plus
+    // ancienne au-dela de max_lines_count, ce qui laisserait une
+    // reference morte dans L. On borne donc nous-memes.
+    if array.size(L) > 180
+        for i = 0 to 19
+            if array.size(L) == 0
+                break
+            line.delete(array.shift(L))
+            array.shift(V)
 
 if barstate.isconfirmed
     for i = 0 to 199
@@ -319,11 +353,15 @@ if barstate.isconfirmed
                        color=color.new(color.gray, 40), width=1,
                        extend=extend.both, style=line.style_dotted)
                 if montrer_haut
-                    line.new(bar_index, high, bar_index + 1, high,
+                    lh = line.new(bar_index, high, bar_index + 1, high,
                        color=coul_h, width=1, extend=extend.right)
+                    array.push(L, lh)
+                    array.push(V, high)
                 if montrer_bas
-                    line.new(bar_index, low, bar_index + 1, low,
+                    lb = line.new(bar_index, low, bar_index + 1, low,
                        color=coul_b, width=1, extend=extend.right)
+                    array.push(L, lb)
+                    array.push(V, low)
                 if montrer_texte
                     label.new(bar_index, high, str.tostring(nd),
                        color=color.new(color.black, 100),
