@@ -195,6 +195,8 @@ def main():
     p.add_argument("--centile", type=float, default=99.5)
     p.add_argument("--mini-dims", type=int, default=2)
     p.add_argument("--tirages", type=int, default=2000)
+    p.add_argument("--tolerance", type=int, default=5,
+                   help="minutes de part et d autre d une minute repere")
     a = p.parse_args()
 
     print("=" * 78)
@@ -237,6 +239,36 @@ def main():
         print(m)
     print()
 
+    # UN SEUL FUSEAU POUR TOUT LE FICHIER. C est le meme serveur MT5
+    # pour les trois actifs, donc la meme horloge. Estimer un decalage
+    # par actif jetait cette contrainte : le 18/08, US500 donnait +3 h a
+    # 0,873 et US30 +2 h a 0,724 -- deux valeurs qui ne peuvent pas
+    # etre vraies ensemble. US100 ne sert pas a la mesure mais sert a
+    # la calibration.
+    p_niv = profil_niveaux(niv)
+    p_tr = [0.0] * 24
+    for _, sym in PAIRES:
+        if sym in barres:
+            for b in barres[sym]:
+                p_tr[b["t"].hour] += float(b["n"])
+    DEC, scores = decalage(p_niv, p_tr)
+    print("  FUSEAU UNIQUE, estime sur les TROIS actifs mis en commun")
+    print("  contre les trades de MES et YM. Aucun repere n intervient.")
+    if DEC is None:
+        print("  profils plats : fuseau indeterminable. On s arrete.")
+        return 1
+    for c, dd in scores[:4]:
+        print("     decalage %+3d h   correlation %+.3f%s"
+              % (dd, c, "   <-- retenu" if dd == DEC else ""))
+    marge = scores[0][0] - scores[1][0] if len(scores) > 1 else 0.0
+    print("  marge sur le suivant : %+.3f" % marge)
+    if scores[0][0] < 0.5 or marge < 0.05:
+        print()
+        print("  ALIGNEMENT TROP FAIBLE. Une jointure temporelle sur un")
+        print("  fuseau incertain ne vaut rien : on s arrete.")
+        return 1
+    print()
+
     for asset, sym in PAIRES:
         print("-" * 78)
         print("  %s  <->  %s" % (asset, sym))
@@ -256,27 +288,7 @@ def main():
         for b in barres[sym]:
             jours.setdefault(b["t"].date(), []).append(b)
 
-        # --- LE FUSEAU, avant tout repere ---------------------------
-        d, scores = decalage(profil_niveaux(lv), profil_trades(jours))
-        if d is None:
-            print("    profils plats : fuseau indeterminable. On s arrete.")
-            print()
-            continue
-        print("    FUSEAU, estime sur les profils d activite horaire")
-        print("    (aucun repere n intervient dans ce choix) :")
-        for c, dd in scores[:4]:
-            print("       decalage %+3d h   correlation %+.3f%s"
-                  % (dd, c, "   <-- retenu" if dd == d else ""))
-        marge = scores[0][0] - scores[1][0] if len(scores) > 1 else 0.0
-        print("    marge sur le suivant : %+.3f" % marge)
-        if scores[0][0] < 0.5 or marge < 0.05:
-            print()
-            print("    ALIGNEMENT TROP FAIBLE. Une jointure temporelle sur")
-            print("    un fuseau incertain ne vaut rien : on s arrete ici")
-            print("    pour %s." % asset)
-            print()
-            continue
-        print()
+        d = DEC
 
         # --- les minutes reperes, en UTC -----------------------------
         cpt = sorted(len(v) for v in jours.values())
@@ -302,6 +314,19 @@ def main():
                         q += 1
                 if q >= a.mini_dims:
                     rep.add(b["t"].replace(second=0, microsecond=0))
+        # FENETRE : bar_time est la minute d une barre MT5, et un
+        # detecteur de S/R confirme son niveau APRES la cloture de la
+        # barre, parfois une ou deux plus tard. Exiger la minute exacte
+        # exige une simultaneite qu aucun des deux systemes ne promet.
+        from datetime import timedelta as _td
+        fen = set()
+        for t in rep:
+            for k in range(-a.tolerance, a.tolerance + 1):
+                fen.add(t + _td(minutes=k))
+        n_min = sum(len(v) for v in jours.values())
+        part_min = len(fen & set(b["t"].replace(second=0, microsecond=0)
+                                 for v in jours.values() for b in v)) \
+            / float(max(1, n_min))
 
         # --- le croisement -------------------------------------------
         from datetime import timedelta
@@ -317,7 +342,7 @@ def main():
                 continue
             cle_j = str(u.date())
             cle_h = "%s %02d" % (u.date(), u.hour)
-            if u in rep:
+            if u in fen:
                 sur.append(float(x["tc"]))
                 cj_sur.append(cle_j)
                 ch_sur.append(cle_h)
@@ -326,6 +351,12 @@ def main():
                 cj_hors.append(cle_j)
                 ch_hors.append(cle_h)
 
+        print("    fenetre : +/- %d min autour d une minute repere"
+              % a.tolerance)
+        print("    part des minutes de seance couvertes : %.1f %%"
+              % (100.0 * part_min))
+        print("    coincidences ATTENDUES par hasard : %.0f"
+              % (part_min * (len(sur) + len(hors))))
         print("    niveaux hors periode orderflow, ecartes : %d" % hors_periode)
         print("    %-28s %8s %8s" % ("", "REPERE", "ORDINAIRE"))
         print("    %-28s %8d %8d" % ("niveaux", len(sur), len(hors)))
