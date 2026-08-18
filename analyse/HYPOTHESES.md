@@ -3199,3 +3199,111 @@ choisir le test après avoir vu échouer le premier :
 
 Tant que ces deux points ne sont pas écrits et gelés, la question
 reste ouverte **et l'outil ne se relance pas**.
+
+---
+
+## H36 — Un niveau de repère survit-il à la queue, à distance égale ?
+
+**Statut : PRÉ-ENREGISTRÉE le 18/08/2026, AVANT toute exécution du
+nouvel outil. Reprise déclarée de la mesure négative du même jour,
+sur demande explicite de l'utilisateur : « geler les 2 corrections et
+relancer sur l'intégralité ».**
+
+**C'est un SECOND test après l'échec d'un premier.** Ce qui le rend
+légitime et non un repêchage : les deux corrections sont écrites ici
+*avant* de voir le moindre chiffre, et elles étaient déjà nommées dans
+l'entrée du résultat négatif.
+
+### Correction 1 — la distance n'est plus approchée, elle est ANNULÉE
+
+Le premier tour comparait le plus haut d'une bougie repère au plus
+haut d'une bougie ordinaire. Sur YM les repères sont de grandes
+bougies : 19 points du prix contre 6. La survie mesurait
+l'éloignement.
+
+Apparier « au plus proche » laisserait un résidu — si aucune bougie
+ordinaire de cette minute n'atteint 19, l'écart persiste. **On
+supprime donc le degré de liberté au lieu de le réduire :**
+
+```
+d              = distance du niveau repère à la clôture de SA bougie
+niveau repère  = cloture_repere + d      (et - d pour le bas)
+niveau témoin  = cloture_temoin + d      (et - d pour le bas)
+```
+
+Le niveau témoin n'est plus un extrême de bougie : c'est **le même
+écart géométrique, posé sur une bougie ordinaire**. Les deux niveaux
+sont à distance identique par construction — la sortie l'imprime pour
+le prouver.
+
+Ce que ça isole exactement : *un niveau situé à d du prix est-il
+particulier parce qu'une bougie repère l'a produit, ou seulement parce
+qu'il est à d ?*
+
+### Correction 2 — une PROPORTION, pas une médiane
+
+La survie est un entier de minutes et les médianes valaient 2 et 3 :
+l'écart de médianes ne pouvait sortir que `+0` ou `+1`. La médiane
+décrivait en plus les trois premières minutes, c'est-à-dire le fait
+banal que le prix reste près d'où il vient — pas un support.
+
+```
+NON TOUCHÉ À H = le niveau n est contenu par aucune barre de la
+                 même séance dans les H minutes qui suivent
+```
+
+Une proportion est continue : elle n'a pas de pas d'une minute.
+
+**HORIZON PRIMAIRE : 60 minutes.** Gelé. 30 et 120 sont imprimés en
+robustesse et **ne portent aucun verdict** — c'est ce qui évite de
+payer trois tests pour une question.
+
+**Censure :** une paire ne compte que si les DEUX séances ont encore
+au moins H minutes devant elles. Un niveau dont la séance s'arrête
+avant l'horizon n'est pas « survivant », il est inconnu.
+
+### L'énoncé, GELÉ
+
+**À distance égale du prix, un niveau produit par une bougie repère
+est moins souvent touché dans les 60 minutes qu'un niveau posé au même
+écart sur une bougie ordinaire de la même minute de séance.**
+
+### La règle de décision, écrite avant les chiffres
+
+```
+p par permutation de l etiquette repere/temoin A L INTERIEUR de chaque
+journee, 2000 tirages, graine 20260818, bilaterale sur la difference
+des proportions a 60 minutes.
+```
+
+- **MES et YM tous deux `p < 0,05`, même signe** → le repère ajoute
+  quelque chose à géométrie égale.
+- **Un seul des deux** → asymétrique. Noté tel quel, jamais raconté
+  comme une symétrie.
+- **Aucun des deux** → la question est CLOSE. On n'essaie ni un
+  troisième horizon, ni un autre seuil de dimensions, ni un autre
+  découpage.
+
+### Le coût accepté, déclaré à l'avance
+
+L'utilisateur demande l'intégralité. **Cela consomme le tiers récent
+que le §10 réservait à la confirmation.** Conséquence acceptée en
+connaissance de cause : un résultat positif ici ne pourra PAS être
+confirmé hors échantillon sur ces données.
+
+**Sa confirmation est donc fixée en avant, comme H30 :**
+
+```
+CONFIRMATION H36   le 20/10/2026, sur les seances posterieures au
+                   18/08/2026, memes parametres, une seule passe.
+```
+
+Si le résultat est négatif, cette date tombe d'elle-même — un nul n'a
+pas besoin d'être confirmé.
+
+### Ce que ça ne dira pas, même positif
+
+Ni euro, ni sens, ni mécanisme. « Non touché pendant 60 minutes » ne
+dit pas qu'il fallait s'y opposer, ni que quelqu'un le défendait. Un
+niveau que personne ne regarde et un niveau défendu donnent la même
+proportion.
