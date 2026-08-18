@@ -158,6 +158,8 @@ def main():
     p.add_argument("--tight", type=float, default=None,
                    help="valeur de TIGHT_SPREAD si elle est introuvable")
     p.add_argument("--racine", action="append", default=None)
+    p.add_argument("--jusqua", default=None,
+                   help="coupure 'AAAA-MM-JJ HH:MM:SS' ; deduite si absente")
     a = p.parse_args()
 
     if not os.path.isfile(a.fichier):
@@ -191,6 +193,38 @@ def main():
     add("  Les trois colonnes de session sont imprimees. On ne garde pas")
     add("  celle qui arrange : on regarde laquelle tombe juste, ou aucune.")
     add("")
+    # La COUPURE est DEDUITE, pas choisie. Pour chaque ligne on lit
+    # l horodatage du N-ieme ticket (N = effectif annonce) en session US.
+    # Mesure du 18/08 : les quatre N-iemes tombent le 17/08 et les quatre
+    # SUIVANTS le 18/08 -- la frontiere est donc dans le meme trou pour
+    # les quatre. Toute coupure dans ce trou rend les quatre exacts.
+    bornes = []
+    for setup, seau, attendu in EMPREINTE:
+        ts = sorted(t.get("entry_ts") for t in tickets
+                    if t.get("rails_setup") == setup
+                    and _bucket(_verdict(t)) == seau
+                    and _sess(t) == "US"
+                    and isinstance(t.get("entry_ts"), str))
+        if len(ts) > attendu:
+            bornes.append((ts[attendu - 1], ts[attendu]))
+    coupure = a.jusqua
+    if coupure is None and len(bornes) == len(EMPREINTE):
+        bas = max(b[0] for b in bornes)     # le dernier N-ieme
+        haut = min(b[1] for b in bornes)    # le premier suivant
+        if bas < haut:
+            coupure = bas
+    if coupure:
+        avant = len(tickets)
+        tickets = [t for t in tickets
+                   if isinstance(t.get("entry_ts"), str)
+                   and t["entry_ts"] <= coupure]
+        add("  COUPURE  : %s  (%d tickets retenus sur %d)"
+            % (coupure, len(tickets), avant))
+        add("  Elle est DEDUITE des quatre N-iemes, pas choisie : le")
+        add("  dernier N-ieme et le premier suivant encadrent un trou")
+        add("  commun aux quatre lignes.")
+        add("")
+
     add("  %-22s %8s %8s %8s %8s"
         % ("ligne de l export", "attendu", "ALL", "EUR", "US"))
     add("  " + "-" * 62)
