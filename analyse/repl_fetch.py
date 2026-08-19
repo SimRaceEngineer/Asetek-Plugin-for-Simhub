@@ -157,6 +157,10 @@ def main():
     p.add_argument("--fichier", action="append", default=None,
                    help="lire CE fichier et rien d autre ; repetable. "
                         "Aucun balayage : instantane.")
+    p.add_argument("--lignes", action="append", default=None,
+                   help="FICHIER:DEBUT-FIN, repetable. Imprime CES lignes "
+                        "telles quelles, sans filtre ni contexte. Pour les "
+                        "lignes qu un extrait par motif a sautees.")
     p.add_argument("--inventaire", action="store_true")
     p.add_argument("--max", type=int, default=400,
                    help="lignes de contexte par fichier (defaut 400)")
@@ -177,6 +181,37 @@ def main():
     add("  pour etre collee dans une conversation.")
     add("  Racines : %s" % ", ".join(racines))
     add("")
+
+    # --- plages explicites : ce qu aucun motif n a fait sortir
+    if a.lignes:
+        for spec in a.lignes:
+            try:
+                che, plage = spec.rsplit(":", 1)
+                d, f = plage.split("-")
+                d, f = int(d), int(f)
+            except ValueError:
+                add("  PLAGE MAL ECRITE : %s  (attendu FICHIER:DEBUT-FIN)"
+                    % spec)
+                continue
+            if not os.path.isfile(che):
+                add("  INTROUVABLE : %s" % che)
+                continue
+            lg = io.open(che, encoding="utf-8",
+                         errors="replace").read().split("\n")
+            add("=" * 100)
+            add("%s   lignes %d a %d  (fichier : %d lignes)"
+                % (che, d, f, len(lg)))
+            add("=" * 100)
+            for i in range(max(1, d), min(len(lg), f) + 1):
+                add("  %5d  %s" % (i, masque(lg[i - 1].rstrip())[:220]))
+            add("")
+        if not a.fichier:
+            add("=" * 100)
+            add("  Ce script n a rien ecrit, n a appele aucune API, et a")
+            add("  masque toute valeur ressemblant a une cle.")
+            add("=" * 100)
+            print("\n".join(L))
+            return 0
 
     if a.fichier:
         code, logs = [], []
