@@ -72,6 +72,7 @@ LECTEUR SEUL. N ecrit que dans `cartes\`.
 """
 import argparse
 import io
+import json
 import os
 import sys
 from datetime import datetime
@@ -198,6 +199,68 @@ def bloc_dimensionnement():
     return L
 
 
+# ======================================================================
+# CE QUI TOURNE VRAIMENT   (19/08/2026)
+# ======================================================================
+# Le tableau annoncait "AUCUN de ces magics n a pris un seul trade".
+# C etait vrai le 18/08 et c est faux depuis que papers_moteur.py
+# tourne. Un panneau qui affirme une chose fausse est pire qu un
+# panneau absent : on lui fait confiance.
+#
+# CONSTATE se lit donc dans le journal, et le jeu en ligne se lit dans
+# le moteur -- pas dans une liste recopiee ici qui divergerait au
+# premier magic ajoute.
+JOURNAL = os.path.join("docs", "papers_live", "trades.jsonl")
+
+
+def charge_journal(chemin=JOURNAL):
+    """Rend {magic: [prises]}. Journal absent = dict vide, sans erreur."""
+    par = {}
+    if not os.path.isfile(chemin):
+        return par
+    with io.open(chemin, encoding="utf-8", errors="replace") as f:
+        for l in f:
+            l = l.strip()
+            if not l:
+                continue
+            try:
+                o = json.loads(l)
+            except ValueError:
+                continue
+            if isinstance(o, dict) and o.get("magic") is not None:
+                par.setdefault(o["magic"], []).append(o)
+    return par
+
+
+def jeu_en_ligne():
+    """Rend {magic: nom} tel que le MOTEUR le definit, ou None.
+
+    On l importe au lieu de le recopier : une liste de magics tenue a
+    deux endroits diverge au premier ajout, et c est exactement ce qui
+    a produit les deux TIGHT_SPREAD et les deux plafonds jumeaux."""
+    try:
+        import papers_moteur as pm
+        pe, pr, manque = pm._charge_modules()
+        if manque:
+            return None
+        return dict((m, nom) for m, nom, _a, _s, _p in pm.papers(pe, pr))
+    except Exception:
+        return None
+
+
+def mesure(prises):
+    """(n, pnl total, RR realise). RR None s il n y a aucune perte :
+    un rapport gain/perte sans perte n existe pas, il ne vaut pas zero."""
+    n = len(prises)
+    if not n:
+        return 0, 0.0, None
+    pnls = [x.get("pnl") or 0.0 for x in prises]
+    g = [v for v in pnls if v > 0]
+    pe_ = [-v for v in pnls if v < 0]
+    rr = ((sum(g) / len(g)) / (sum(pe_) / len(pe_))) if g and pe_ else None
+    return n, sum(pnls), rr
+
+
 def ligne_strategie(magic, nom, profil, cles, actif):
     n_max, n_tot, taux, pnl_tr = po.agrege(cles)
     rr = po.rr_equilibre(taux)
@@ -220,10 +283,31 @@ def tableau():
     a("=" * 132)
     a("TABLEAU DE BORD -- 36 magics, ATTENDU contre CONSTATE")
     a("=" * 132)
-    a("  Les colonnes CONSTATE sont vides : AUCUN de ces magics n a pris")
-    a("  un seul trade. Rien sur la machine ne lit ces definitions et ne")
-    a("  place d ordre papier. Tant que ce sera le cas, elles le")
-    a("  resteront -- quel que soit l affichage.")
+    par = charge_journal()
+    roster = jeu_en_ligne()
+    total = sum(len(v) for v in par.values())
+    if roster is None:
+        a("  MOTEUR ILLISIBLE : papers_moteur.py ou ses modules sont")
+        a("  absents. CONSTATE ne peut pas etre rempli, et l ignorer")
+        a("  aurait affiche des zeros pour une absence de mesure.")
+    elif not total:
+        a("  Les colonnes CONSTATE sont vides : le moteur tourne (%d"
+          % len(roster))
+        a("  papers en ligne) mais son journal est vide. Lance")
+        a("  papers_moteur.py.")
+    else:
+        a("  CONSTATE est LU DANS LE JOURNAL depuis le 19/08 : %d prises"
+          % total)
+        a("  sur %d papers en ligne. Ce panneau affirmait jusqu ici qu"
+          % len(roster))
+        a("  AUCUN magic n avait pris un trade -- c etait vrai le 18/08,")
+        a("  et faux depuis. Un panneau qui affirme une chose fausse est")
+        a("  pire qu un panneau absent : on lui fait confiance.")
+        a("")
+        a("  'hors moteur' n est PAS zero. Zero veut dire que le filtre")
+        a("  n a jamais accroche ; hors moteur veut dire que personne ne")
+        a("  pose la question. Les confondre ferait passer une absence")
+        a("  de mesure pour un resultat.")
     a("")
     a("  ET LA COLONNE ATTENDU N EST PAS VERIFIABLE SUR L HISTORIQUE.")
     a("  Mesure du 18/08 (papers_regime.py) : sept lectures du regime")
@@ -260,11 +344,20 @@ def tableau():
                            d["tf"], d["sens"], d["src"]))
     for magic, jeu, act, tf, sens, cles in lignes:
         n_max, n_tot, taux, pnl_tr = po.agrege(cles)
+        if roster is None:
+            c_n, c_pnl, c_rr = "?", "?", "?"
+        elif magic not in roster:
+            c_n, c_pnl, c_rr = "hors", "moteur", "--"
+        else:
+            n, pnl, rr = mesure(par.get(magic) or [])
+            c_n = "%d" % n
+            c_pnl = ("%+.0f" % pnl) if n else "0"
+            c_rr = ("%.2f" % rr) if rr is not None else "--"
         a("  %-7d %-3s %-8s %-10s %-11s | %5d %4.0f%% %4.0f%% %5.2f %7.2f "
           "| %6s %8s %6s"
           % (magic, jeu, act, tf[:10], sens[:11], n_max, 100 * taux,
              100 * po.wilson_bas(taux, n_tot), po.rr_equilibre(taux),
-             pnl_tr, "--", "--", "--"))
+             pnl_tr, c_n, c_pnl, c_rr))
     a("  " + "-" * 130)
     a("  %d magics : %d dans le jeu A, %d dans le jeu B."
       % (len(lignes), len(po.STRATEGIES), len(lignes) - len(po.STRATEGIES)))
@@ -280,6 +373,34 @@ def tableau():
     a("  RRmn   (1-p)/p : le rapport gain/perte sous lequel la strategie")
     a("         perd, quelle que soit sa qualite par ailleurs.")
     a("  PnL/tr attendu depuis l export -- IN ECHANTILLON, jamais verifie.")
+    a("  TRADES/PnL/RR  CONSTATE, lu dans docs\\papers_live\\trades.jsonl.")
+
+    if roster:
+        dedans = set(m for m, _j, _a, _t, _s, _c in lignes)
+        restants = sorted(m for m in roster if m not in dedans)
+        a("")
+        a("=" * 132)
+        a("LE MOTEUR -- les %d papers en ligne, dont %d hors de ce tableau"
+          % (len(roster), len(restants)))
+        a("=" * 132)
+        a("  Le tableau ci-dessus est le registre de ce qui a ete PROMIS.")
+        a("  Le moteur, lui, fait tourner un autre ensemble : la serie")
+        a("  240000 n a jamais figure dans l export, et les magics leader")
+        a("  reparees le 19/08 ne sont entrees qu apres. Les deux listes")
+        a("  ne coincident pas, et les fondre en une seule aurait cache")
+        a("  laquelle repond de quoi.")
+        a("")
+        a("  %-7s %-30s %6s %10s %6s" % ("MAGIC", "NOM", "PRISES", "PnL",
+                                         "RR"))
+        a("  " + "-" * 64)
+        for m in sorted(roster):
+            n, pnl, rr = mesure(par.get(m) or [])
+            a("  %-7d %-30s %6d %+10.0f %6s"
+              % (m, roster[m][:30], n, pnl,
+                 ("%.2f" % rr) if rr is not None else "--"))
+        a("  " + "-" * 64)
+        a("  RR realise, pas attendu. '--' = aucune perte encore, donc")
+        a("  pas de rapport gain/perte : ce n est pas un zero.")
     return L
 
 

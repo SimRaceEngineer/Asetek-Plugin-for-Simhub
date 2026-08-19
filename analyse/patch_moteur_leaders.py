@@ -242,7 +242,7 @@ def main():
     io.open(che, "w", encoding="utf-8", newline="").write(s)
     print("  ecrit      : %s" % che)
     print()
-    print("  17 -> 21 papers. Les quatre nouveaux ne rattraperont PAS")
+    print("  17 -> 23 papers. Les quatre nouveaux ne rattraperont PAS")
     print("  l historique tout seuls : le journal ne rejoue jamais un")
     print("  ticket deja vu. Pour qu ils partent du meme point que les")
     print("  autres, il faut reconstruire :")
