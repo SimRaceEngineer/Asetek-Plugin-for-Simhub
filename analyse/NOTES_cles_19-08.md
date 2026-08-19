@@ -156,3 +156,64 @@ pas absurde, il etait applique a la mauvaise section.
 - 1 ligne de l export jamais encodee : `M15 bull+` n= 248.
 - Prochain pas : LIRE le source de CONFLUENCE et des lignes RSI, et
   la mise en colonne d origine. Pas deduire.
+
+---
+
+## 19/08, soir : C_M15_VENTE fermee -- 33 cles sur 35
+
+La section n etait pas dans `rails_trades_panel.py`. Elle est dans
+**`confluence_section.py`**, un module que je n avais jamais ouvert, et
+qui alimente a la fois `panel_rails_trades.txt` et
+`panel_orderflow.txt`.
+
+    _BIAIS   = {"BOTH>50": "BULL", "BOTH<50": "BEAR"}            rails_pos
+    _ALIGNED = {"ALIGNED_BULL": "BULL", "ALIGNED_BEAR": "BEAR"}  consensus
+
+    def _etat(s, tf):
+        r, h = _rails_avis(s, tf), _hlc_avis(s, tf)
+        if r is None or h is None:
+            return None
+        return ("ACCORD", r) if r == h else ("CONFLIT", None)
+
+    lbl = "achat" if d == "BULL" else "vente"
+    _add(agg[(i, tf, "CONFLIT", lbl)], s)
+
+**CONFLIT oppose les RAILS au HLC.** Il ne regarde pas le trade pour
+exister ; le sens du trade ne sert qu a etiqueter la ligne.
+
+Je mesurais `_vs_pack(t, "M15") == "AGAINST" and dir == "SELL"` --
+c est-a-dire "le trade va contre le consensus HLC". Deux grandeurs sans
+rapport. Aucune coupure, aucune population, aucune colonne ne pouvaient
+rattraper ca : **je comptais autre chose.**
+
+Resultat :
+
+    C_M15_VENTE = M15 x CONFLIT x vente -- annonce 358
+      EXACTE : [2026-08-18 13:26:34, 2026-08-18 16:32:46)
+
+Cellule unique, et la fenetre contient `13:51:27` -- le meme instant
+que les 29 autres.
+
+## L hypothese "bull+" est REFUTEE
+
+`_BIAIS` mappe `BOTH>50` sur BULL, et le libelle `M15 bull+` (n= 248)
+y ressemblait. Teste et affiche comme hypothese sur le libelle, pas
+comme deduction :
+
+    M15 x rails_pos == "BOTH>50"   1964 lignes pour 248 annoncees
+    fenetre : 2026-07-31 14:02:20  -- trois semaines avant l instant
+
+Ce n etait qu une ressemblance de mots. `M15 bull+` vient d ailleurs.
+
+## Etat au 19/08 au soir
+
+- **33 cles sur 35 reproduites**, dont 30 a l instant unique
+  `2026-08-18 13:51:27`.
+- Ouvertes : `RSI_M1_BU` (171), `RSI_M15_BU` (186).
+- Jamais encodee : `M15 bull+` (248), sous 220009.
+- Piste pour les RSI : `confluence_section.py` est batie sur
+  `rails_pos`. Les libelles RSI croisent un "bull" et un `rsi_pos`
+  (INSIDE / ABOVE, valeurs bien reelles dans les tickets). Il existe
+  probablement une section jumelle batie sur `rsi_pos`. A LIRE, pas a
+  deduire.
+- Aucune de ces trois n est utilisee par les 23 papers en ligne.
