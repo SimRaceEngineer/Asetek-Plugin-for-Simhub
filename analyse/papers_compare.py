@@ -413,7 +413,11 @@ def tableau():
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--sortie", default="cartes")
+    # panels\ et non cartes\ : le commentaire plus bas dit que panels\
+    # est ce que le REPL lit, et le code ecrivait dans cartes\. Le REPL
+    # ne voyait donc pas ce panneau -- une source declaree lisible et
+    # deposee ailleurs est une source absente.
+    p.add_argument("--sortie", default="panels")
     p.add_argument("--cartes", default="cartes",
                    help="dossier des .html servis par l onglet CARTES")
     a = p.parse_args()
