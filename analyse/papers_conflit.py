@@ -24,39 +24,57 @@ CE QUE panel_papers.txt A REVELE, ET CE QUE CA DIT DE MOI
     reconstruction alors que la definition etait dans un fichier que
     j avais deja.
 
-CE QUI RESTE, ET POURQUOI CE N EST PAS UNE ENIGME DU PANNEAU
+LES QUATRE LIGNES QUI RESISTENT
 
     Quatre lignes de l export portent un marqueur ecrit par MON
-    parseur, papers_panel.py :
+    parseur, papers_panel.py, et ce sont exactement les quatre qui ne
+    se reproduisent pas :
 
       M1 bull RSI dedans / achat    n= 171   [col. non identifiee : 15]
       M15 bull RSI au-dessus/achat  n= 186   [col. non identifiee : 12]
       M15 CONFLIT vente             n= 358   [col. non identifiee : 15]
       M15 bull+                     n= 248   [col. non identifiee : 12]
 
-    Ce sont EXACTEMENT les quatre qui ne se reproduisent jamais. Le
-    marqueur dit que le parseur n a pas su quelle colonne portait
-    l effectif. Les nombres 171, 186, 358 et 248 sont donc suspects
-    a la source : j ai cherche a reproduire des valeurs dont mon
-    propre outil annoncait qu il n etait pas sur de les avoir lues.
+CE QUE LA PREMIERE PASSE A APPRIS, ET OU JE M ETAIS TROMPE
 
-    Continuer a chercher un predicat pour ces nombres serait chercher
-    la bonne cle pour une serrure dont on n a pas verifie l adresse.
+    1. LE MARQUEUR NE VEUT PAS DIRE CE QUE JE CROYAIS.
+       Sur la ligne, l effectif est EXACTEMENT a la meme place que sur
+       toutes les autres :
 
-CE QUE FAIT CE SCRIPT
+         M15 CONFLIT vente   n= 358  52%  PnL +2019.33  ( 5.64/tr)  [...]
+         M15 SPLIT / CLEAN   n= 243  57%  PnL +5033.59  (20.71/tr)
 
-    A. Il trouve, dans le SOURCE du panneau, les fonctions qui
-       produisent ces libelles -- CONFLUENCE rails x HLC pour le
-       CONFLIT, et ce qui porte "bull+" et le RSI -- et les imprime
-       telles quelles. Aucune paraphrase.
+       "col. non identifiee" ne dit pas que 358 est mal lu : il dit que
+       le parseur n a pas su de quelle COLONNE DE SESSION la ligne
+       venait. J avais ecrit que 171, 186, 358 et 248 etaient suspects
+       a la source. C est faux, les effectifs sont bons.
 
-    B. Il retrouve dans les PANNEAUX TEXTE la ligne d origine de
-       chacune des quatre, avec son en-tete de section et sa ligne
-       de colonnes, pour qu on voie enfin la mise en colonne que le
-       parseur n a pas su lire.
+    2. LE FORMAT D ORIGINE A UN CHAMP DE PLUS.
 
-    Ensuite seulement on saura si 358 est un effectif ou une autre
-    colonne. Pas avant.
+         M15 | CONFLIT | vente | 384 | 16 | 51% | +1793.46 | ...
+
+       Ce 16 varie de 8 a 16 selon les lignes et porte un avertissement
+       quand il est bas : c est un nombre de JOURS couverts. Dix champs
+       la ou les autres sections en ont neuf -- d ou l echec.
+
+    3. JE N AI CHERCHE QUE DANS UN SEUL FICHIER.
+       rails_trades_panel.py ne contient aucune section CONFLUENCE. Or
+       panel_rails_trades.txt ET panel_orderflow.txt la portent, avec
+       les memes chiffres. Elle est produite AILLEURS, et la premiere
+       passe ne pouvait pas la voir.
+
+CE QUE FAIT CETTE VERSION
+
+    A. Elle balaye TOUS les modules du depot, pas un seul, et imprime
+       en entier les fonctions qui portent CONFLUENCE, CONFLIT ou
+       "bull+". Aucune paraphrase.
+
+    B. Elle retrouve dans les PANNEAUX TEXTE la ligne d origine de
+       chacune des quatre, avec son en-tete de section.
+
+    Ce qui manque n est plus l effectif -- il est bon -- mais la
+    DEFINITION de la section qui le produit. C est elle qu on cherche,
+    et elle est dans un module.
 """
 import argparse
 import io
@@ -64,7 +82,10 @@ import os
 import re
 import sys
 
-MOTS_SOURCE = ("CONFLIT", "bull+", "dedans", "au-dessus", "CONFLUENCE")
+MOTS_SOURCE = ("CONFLUENCE", "CONFLIT", "bull+", "RSI dedans", "au-dessus")
+# Les mots qui designent la section elle-meme, pas une legende qui la
+# mentionne : c est sur eux qu on imprime la fonction en entier.
+MOTS_FORTS = ("CONFLUENCE", "CONFLIT", "bull+")
 LIBELLES = ("M15 CONFLIT vente", "M1 bull RSI dedans",
             "M15 bull RSI au-dessus", "M15 bull+")
 MAX_FONCTION = 90
@@ -91,41 +112,91 @@ def corps(lignes, debut):
     return debut, fin
 
 
-def partie_source(add, chemin, mots):
-    add("=" * 96)
-    add("LE SOURCE DES SECTIONS QUI PRODUISENT CES LIBELLES")
-    add("=" * 96)
-    if not chemin or not os.path.isfile(chemin):
-        add("  Panneau introuvable.")
-        return
-    lignes = io.open(chemin, encoding="utf-8",
-                     errors="replace").read().split("\n")
-    add("  %s : %d lignes" % (chemin, len(lignes)))
-    add("")
-    vues = {}
-    for i, l in enumerate(lignes):
-        if not any(m in l for m in mots):
+def fichiers_python(racines, taille_max=4 * 1024 * 1024):
+    """Tous les .py, chacun une fois, sauf les miens.
+
+    La version precedente ne lisait QUE rails_trades_panel.py. La
+    section CONFLUENCE n y est pas -- elle est ailleurs, et c est
+    exactement ce que la premiere passe n a pas pu voir."""
+    vus = set()
+    for racine in racines:
+        if not os.path.isdir(racine):
             continue
-        nom, debut = enclosante(lignes, i)
-        if debut is None or nom in vues:
-            continue
-        vues[nom] = debut
-    if not vues:
-        add("  Aucun de ces mots dans le panneau. Les libelles viennent")
-        add("  donc d un AUTRE producteur -- un panneau different.")
-        return
-    add("  Fonctions concernees : %s" % ", ".join(sorted(vues)))
+        for dossier, _sd, fichiers in os.walk(racine):
+            if "__pycache__" in dossier:
+                continue
+            for f in sorted(fichiers):
+                if not f.endswith(".py") or f.startswith("papers_"):
+                    continue
+                chemin = os.path.join(dossier, f)
+                cle = os.path.normcase(os.path.abspath(chemin))
+                if cle in vus:
+                    continue
+                vus.add(cle)
+                try:
+                    if os.path.getsize(chemin) > taille_max:
+                        continue
+                    yield chemin, io.open(
+                        chemin, encoding="utf-8",
+                        errors="replace").read().split("\n")
+                except Exception:
+                    continue
+
+
+def partie_source(add, racines, mots, max_index=50, max_fonctions=3):
+    add("=" * 96)
+    add("OU CES MOTS APPARAISSENT -- dans TOUS les modules, pas un seul")
+    add("=" * 96)
+    add("  La passe precedente ne lisait que rails_trades_panel.py et")
+    add("  n y a rien trouve. La section CONFLUENCE existe pourtant :")
+    add("  panel_rails_trades.txt ET panel_orderflow.txt la portent.")
+    add("  Elle est donc produite ailleurs.")
     add("")
-    for nom in sorted(vues, key=lambda n: vues[n]):
-        d, f = corps(lignes, vues[nom])
+    add("  %-34s %6s  %-26s %s" % ("fichier", "ligne", "fonction", "extrait"))
+    add("  " + "-" * 94)
+    index, forts, vus = 0, {}, 0
+    for chemin, lignes in fichiers_python(racines):
+        for i, l in enumerate(lignes):
+            touches = [m for m in mots if m in l]
+            if not touches:
+                continue
+            nom, debut = enclosante(lignes, i)
+            if index < max_index:
+                add("  %-34s %6d  %-26s %s"
+                    % (os.path.basename(chemin)[:34], i + 1, nom[:26],
+                       l.strip()[:30]))
+            index += 1
+            if debut is not None and any(m in l for m in MOTS_FORTS):
+                cle = (chemin, nom)
+                if cle not in forts:
+                    forts[cle] = (debut, lignes)
+            vus += 1
+    if index > max_index:
+        add("  ... %d occurrence(s) de plus" % (index - max_index))
+    add("")
+    if not vus:
+        add("  Aucun de ces mots dans aucun module. La section vient")
+        add("  d un fichier que ce balayage ne couvre pas.")
+        return
+    add("  %d occurrence(s), %d fonction(s) portant un mot FORT"
+        % (vus, len(forts)))
+    add("")
+    for (chemin, nom), (debut, lignes) in list(forts.items())[:max_fonctions]:
+        d, f = corps(lignes, debut)
         n = f - d
         add("-" * 96)
-        add("  --- %s  (ligne %d, %d lignes)" % (nom, d + 1, n))
+        add("  --- %s : %s  (ligne %d, %d lignes)"
+            % (os.path.basename(chemin), nom, d + 1, n))
         add("-" * 96)
         for k in range(d, min(f, d + MAX_FONCTION)):
             add("  %5d  %s" % (k + 1, lignes[k][:104]))
         if n > MAX_FONCTION:
             add("  ... %d lignes de plus (rendu HTML)" % (n - MAX_FONCTION))
+        add("")
+    if len(forts) > max_fonctions:
+        add("  %d autre(s) fonction(s) non imprimee(s) : %s"
+            % (len(forts) - max_fonctions,
+               ", ".join(n for _c, n in list(forts)[max_fonctions:])))
         add("")
 
 
@@ -199,20 +270,10 @@ def partie_texte(add, racines):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--mot", action="append", default=None)
-    p.add_argument("--panneau", default=None)
+    p.add_argument("--panneau", default=None,
+                   help="limiter le balayage a ce dossier")
     a = p.parse_args()
 
-    chemin = a.panneau
-    if not chemin:
-        try:
-            import papers_repare as PR
-            chemin = PR.trouve_panneau([".", "..", os.path.join("..", "..")])
-        except Exception:
-            for c in ("rails_trades_panel.py",
-                      os.path.join("analyse", "rails_trades_panel.py")):
-                if os.path.isfile(c):
-                    chemin = c
-                    break
 
     L = []
     add = L.append
@@ -226,7 +287,8 @@ def main():
     add("  par balayage : '/ ALL' etait ecrit, et l etoile marquait")
     add("  l ancre M5. Ce qui suit ne deduit rien : ca lit.")
     add("")
-    partie_source(add, chemin, tuple(a.mot) if a.mot else MOTS_SOURCE)
+    racines = [a.panneau] if a.panneau else [".", "analyse"]
+    partie_source(add, racines, tuple(a.mot) if a.mot else MOTS_SOURCE)
     partie_texte(add, ["panels", os.path.join("analyse", "cartes"),
                        "docs", "."])
     add("")
