@@ -274,7 +274,6 @@ def main():
                    help="limiter le balayage a ce dossier")
     a = p.parse_args()
 
-
     L = []
     add = L.append
     add("=" * 96)
