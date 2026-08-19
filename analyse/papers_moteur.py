@@ -186,6 +186,26 @@ def rr_equilibre(p):
     return (1.0 - p) / p if p > 0 else float("inf")
 
 
+def accepte(entry, t):
+    """Ce paper aurait-il pris ce ticket ? Une seule definition.
+
+    Le panneau de rendu doit poser exactement la meme question sur les
+    positions encore ouvertes. Deux ecritures du meme filtre auraient
+    diverge -- c est ce qui a produit les deux TIGHT_SPREAD du 18/08.
+    """
+    _magic, _nom, actif, sens, pred = entry
+    if actif and t.get("asset") != actif:
+        return False
+    if sens == "achat" and t.get("dir") != "BUY":
+        return False
+    if sens == "vente" and t.get("dir") != "SELL":
+        return False
+    try:
+        return bool(pred(t))
+    except Exception:
+        return False
+
+
 def traite(jeu, tickets, etat):
     """Une passe. Rend (prises, n_deja_vus, n_sans_volume)."""
     prises, deja, sans_vol = [], 0, 0
@@ -211,16 +231,7 @@ def traite(jeu, tickets, etat):
             sans_vol += 1
             continue
         for magic, nom, actif, sens, pred in jeu:
-            if actif and t.get("asset") != actif:
-                continue
-            if sens == "achat" and t.get("dir") != "BUY":
-                continue
-            if sens == "vente" and t.get("dir") != "SELL":
-                continue
-            try:
-                if not pred(t):
-                    continue
-            except Exception:
+            if not accepte((magic, nom, actif, sens, pred), t):
                 continue
             k = str(magic)
             b = bal.get(k, BALANCE0)
