@@ -178,6 +178,54 @@ def coupure_deduite(tickets, PE, colonne):
     return bas if bas < haut else None
 
 
+# ======================================================================
+# CE QUE LE PANNEAU DIT DE CHAQUE SECTION   (lu, pas devine)
+# ======================================================================
+# Chercher au hasard la meilleure combinaison parmi vingt-quatre serait
+# de l ajustement deguise : avec assez d essais, une cle finit par
+# tomber juste par accident. On teste donc la combinaison que LE CODE
+# ANNONCE, et un echec devient alors une information -- pas une
+# invitation a essayer autre chose.
+#
+#   pop : "trades" ou "signaux", selon l argument de la section
+#   col : "US"/"EUR"/"ALL" -- "ALL" quand la section n a PAS de
+#         dimension de session dans son agregation
+#
+#   _section_setup(trades)        _agg_sess -> session          ligne 312
+#   _section_per_tf(trades)       for ss in ("ALL", s)          ligne 395
+#   _section_tf_pattern(trades)   _agg_sess -> session          ligne 372
+#   _section_leader(trades)       _agg_sess -> session          ligne 424
+#   _section_hlc_churn(trades)    vue A : ("ALL", s)            ligne 615
+#                                 vue B : "ALL" SEUL            ligne 619
+#                                 vue C : "ALL" SEUL            ligne 622
+#   _section_vs_pack(signals)     aucune session                ligne 814
+#   _section_mtf_nest(signals)    aucune session                ligne 876
+#   _section_mom(signals)         aucune session                ligne 918
+SECTIONS = {
+    "TC_CLEAN": ("trades", None), "TC_MIXED": ("trades", None),
+    "MID_CLEAN": ("trades", None), "WIDE_CLEAN": ("trades", None),
+    "M1_T_CL": ("trades", None), "M1_S_CH": ("trades", None),
+    "M3_T_MX": ("trades", None), "M5_T_CL": ("trades", None),
+    "M15_T_CL": ("trades", None), "M15_T_MX": ("trades", None),
+    "M1M15": ("trades", None), "M1M3M5M15": ("trades", None),
+    "M3M5M15": ("trades", None),
+    "M1_ALBU_CL": ("trades", None), "M15_ALBU_CL": ("trades", None),
+    "M15_SPL_CL": ("trades", None), "M15_SCA_MX": ("trades", None),
+    "M15_LEAD": ("trades", "ALL"), "M5_DIVG": ("trades", "ALL"),
+    "M3_CONV_CL": ("trades", "ALL"), "M5_DIV_CL": ("trades", "ALL"),
+    "M15_CONV_MX": ("trades", "ALL"),
+    "US30_BE_CL": ("trades", None), "US30_BE_MX": ("trades", None),
+    "US500_BU_CL": ("trades", None),
+    "M5_AGA_CH": ("signaux", "ALL"), "C_M15_VENTE": ("signaux", "ALL"),
+    "M5_ET_YES": ("signaux", "ALL"), "M5_ET_NO_A": ("signaux", "ALL"),
+    "M5_ET_NO_C": ("signaux", "ALL"), "M15_NO_MX": ("signaux", "ALL"),
+    "M5_WIDE_CL": ("signaux", "ALL"), "M15_WIDE_CL": ("signaux", "ALL"),
+    # RSI_* : aucune section du panneau ne les produit. Le mot rsi n y
+    # apparait que dans des legendes. Elles viennent d ailleurs.
+    "RSI_M1_BU": (None, None), "RSI_M15_BU": (None, None),
+}
+
+
 def compte(tickets, pred, colonne, coupure, PE):
     c = 0
     for t in tickets:
@@ -207,6 +255,25 @@ def main():
     except ImportError:
         print("KO : papers_encode.py doit etre dans le meme dossier.")
         return 1
+
+    # Les predicats CORRIGES du 19/08 -- leader relu, nest lisible.
+    # Sans eux on remesurerait avec les definitions dont on sait deja
+    # qu elles sont fausses, et on rangerait cinq cles reparees parmi
+    # les irreductibles.
+    corrige = None
+    try:
+        import papers_repare as PR
+        below, err = PR.literal_apres(
+            io.open(PR.trouve_panneau([".", "..", os.path.join("..", "..")]),
+                    encoding="utf-8", errors="replace").read(),
+            "_ANCHOR_BELOW")
+        nest = PR.fabrique_nest(below, PE) if isinstance(below, dict) else None
+        # Liste et non dict : l ordre de papers_encode groupe les cles
+        # par section. Un tri alphabetique melangerait les familles, et
+        # c est justement par famille qu on lit ce tableau.
+        corrige = [(c, n, p) for c, n, p, _o in PR.construit_cles(PE, nest)]
+    except Exception:
+        corrige = None
 
     L = []
     add = L.append
@@ -253,63 +320,114 @@ def main():
 
     pops = [("rails", rails), ("churn", churn),
             ("rails/sig", rails_s), ("churn/sig", churn_s)]
-    cles = [(c, n, pr) for c, _l, n, pr, _x in PE.CLES if pr is not None]
-
-    add("=" * 96)
-    add("COMBIEN DE CLES CHAQUE POPULATION REND EXACTEMENT")
-    add("=" * 96)
-    add("  %-12s %-5s %-21s %8s" % ("POPULATION", "COL", "COUPURE DEDUITE",
-                                    "EXACTES"))
-    add("  " + "-" * 60)
-    detail = {}
-    for nom, pop in pops:
-        if not pop:
-            continue
-        for col in ("US", "EUR", "ALL"):
-            cp = coupure_deduite(pop, PE, col)
-            justes = []
-            for cle, n, pred in cles:
-                if compte(pop, pred, col, cp, PE) == n:
-                    justes.append(cle)
-            detail[(nom, col)] = justes
-            add("  %-12s %-5s %-21s %5d / %d"
-                % (nom, col, cp or "aucune -- compte TOTAL",
-                   len(justes), len(cles)))
+    if corrige:
+        cles = corrige
+        add("  Predicats : papers_repare (corriges le 19/08), %d cles."
+            % len(cles))
+    else:
+        cles = [(c, n, pr) for c, _l, n, pr, _x in PE.CLES if pr is not None]
+        add("  Predicats : papers_encode SEUL -- papers_repare.py absent.")
+        add("  Cinq cles reparees le 19/08 vont donc ressortir fausses.")
     add("")
 
-    if not detail:
-        add("  Aucune population exploitable.")
-        print("\n".join(L))
-        return 1
-
-    meilleur = max(detail.items(), key=lambda kv: len(kv[1]))
-    add("  MEILLEURE : %s / %s -- %d cles sur %d."
-        % (meilleur[0][0], meilleur[0][1], len(meilleur[1]), len(cles)))
+    # --- la coupure se deduit sur les TICKETS, une seule fois. Les
+    # populations de signaux en HERITENT : les quatre effectifs de
+    # reference sont comptes au niveau ticket, les chercher dans une
+    # population dedoublonnee revenait a exiger l impossible -- c est
+    # ce qui a fait sortir zero partout au premier essai.
+    CP = coupure_deduite(rails, PE, "US")
+    add("=" * 96)
+    add("LA COUPURE, DEDUITE SUR LES TICKETS ET HERITEE PAR LES SIGNAUX")
+    add("=" * 96)
+    add("  %s" % (CP or "NON DEDUCTIBLE -- tout ce qui suit compte le total"))
     add("")
 
-    # --- ce que chaque cle prefere
+    parpop = dict(pops)
     add("=" * 96)
-    add("PAR CLE -- ou elle tombe juste, et nulle part sinon")
+    add("CHAQUE CLE A LA COMBINAISON QUE LE PANNEAU ANNONCE")
     add("=" * 96)
-    ou = {}
-    for (nom, col), justes in detail.items():
-        for c in justes:
-            ou.setdefault(c, []).append("%s/%s" % (nom, col))
-    jamais = []
+    add("  On ne cherche pas la meilleure des vingt-quatre combinaisons :")
+    add("  avec assez d essais une cle tombe juste par accident. On teste")
+    add("  celle que le CODE annonce, et un echec devient alors une")
+    add("  information plutot qu une invitation a essayer autre chose.")
+    add("")
+    add("  %-13s %5s %-9s %-4s %8s %8s %8s"
+        % ("CLE", "N", "POP", "COL", "rails", "churn", "verdict"))
+    add("  " + "-" * 62)
+    bilan = {}
     for cle, n, pred in cles:
-        if cle in ou:
-            add("  %-13s n=%-5d %s" % (cle, n, ", ".join(sorted(ou[cle]))))
-        else:
-            jamais.append((cle, n))
+        genre, col_fixe = SECTIONS.get(cle, (None, None))
+        if genre is None:
+            add("  %-13s %5d %-9s %-4s %8s %8s  hors panneau"
+                % (cle, n, "?", "?", "-", "-"))
+            bilan[cle] = None
+            continue
+        noms = (("rails", "churn") if genre == "trades"
+                else ("rails/sig", "churn/sig"))
+        cols = [col_fixe] if col_fixe else ["US", "EUR", "ALL"]
+        ok = []
+        vus = {}
+        for col in cols:
+            for nom in noms:
+                pop = parpop.get(nom) or []
+                v = compte(pop, pred, col, CP, PE)
+                vus[(nom, col)] = v
+                if v == n:
+                    ok.append("%s/%s" % (nom, col))
+        principal = cols[0] if col_fixe else "US"
+        add("  %-13s %5d %-9s %-4s %8d %8d  %s"
+            % (cle, n, genre, principal,
+               vus.get((noms[0], principal), 0),
+               vus.get((noms[1], principal), 0),
+               ("EXACT " + ", ".join(ok)) if ok else "aucune"))
+        bilan[cle] = ok
+
     add("")
-    if jamais:
-        add("  AUCUNE POPULATION NE LES REND (%d) :" % len(jamais))
-        for cle, n in jamais:
-            add("    %-13s n=%d" % (cle, n))
-        add("")
-        add("  Pour celles-la, ce n est ni la population, ni la coupure,")
-        add("  ni la colonne. C est le predicat, et il faudra le relire")
-        add("  dans le panneau plutot que de continuer a l essayer.")
+    justes = [c for c, v in bilan.items() if v]
+    add("  %d cles sur %d tombent exactement la ou le code les annonce."
+        % (len(justes), len(cles)))
+    add("")
+
+    # --- par famille : une cause commune vaut mieux qu un succes isole
+    add("=" * 96)
+    add("PAR FAMILLE -- une explication qui tient pour TOUTE une section")
+    add("=" * 96)
+    add("  Une cle qui tombe juste seule peut le devoir au hasard. Une")
+    add("  section entiere qui tombe juste ne le peut pas.")
+    add("")
+    FAM = [
+        ("ecartement    (trades, session)",
+         ["TC_CLEAN", "TC_MIXED", "MID_CLEAN", "WIDE_CLEAN"]),
+        ("par TF        (trades, session)",
+         ["M1_T_CL", "M1_S_CH", "M3_T_MX", "M5_T_CL", "M15_T_CL",
+          "M15_T_MX"]),
+        ("accords TF    (trades, session)",
+         ["M1M15", "M1M3M5M15", "M3M5M15"]),
+        ("hlc vue A     (trades, session)",
+         ["M1_ALBU_CL", "M15_ALBU_CL", "M15_SPL_CL", "M15_SCA_MX"]),
+        ("hlc vue B     (trades, ALL)", ["M15_LEAD", "M5_DIVG"]),
+        ("hlc vue C     (trades, ALL)",
+         ["M3_CONV_CL", "M5_DIV_CL", "M15_CONV_MX"]),
+        ("leader        (trades, session)",
+         ["US30_BE_CL", "US30_BE_MX", "US500_BU_CL"]),
+        ("vs pack       (SIGNAUX, ALL)", ["M5_AGA_CH", "C_M15_VENTE"]),
+        ("nest          (SIGNAUX, ALL)",
+         ["M5_ET_YES", "M5_ET_NO_A", "M5_ET_NO_C", "M15_NO_MX"]),
+        ("trajectoire   (SIGNAUX, ALL)", ["M5_WIDE_CL", "M15_WIDE_CL"]),
+        ("RSI           (hors panneau)", ["RSI_M1_BU", "RSI_M15_BU"]),
+    ]
+    connues = set(c for c, _n, _p in cles)
+    for nom, membres in FAM:
+        m = [c for c in membres if c in connues]
+        if not m:
+            continue
+        bons = [c for c in m if bilan.get(c)]
+        etat = ("TOUTE la section" if len(bons) == len(m)
+                else ("aucune" if not bons else "%d sur %d" % (len(bons),
+                                                              len(m))))
+        add("  %-34s %-16s %s" % (nom, etat,
+                                  ", ".join(c for c in m if not bilan.get(c))))
+    add("")
 
     if a.cle:
         add("")
