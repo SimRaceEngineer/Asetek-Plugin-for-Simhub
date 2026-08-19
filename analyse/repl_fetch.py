@@ -3,8 +3,9 @@ r"""
 repl_fetch.py -- pourquoi la seconde reponse du REPL echoue
 
   python repl_fetch.py
-  python repl_fetch.py --max 600        plus de lignes par fichier
-  python repl_fetch.py --inventaire     la liste seule
+  python repl_fetch.py --fichier repl_web.py      un fichier, sans balayage
+  python repl_fetch.py --max 600                  plus de lignes
+  python repl_fetch.py --inventaire               la liste seule
 
 LECTEUR SEUL. N ECRIT RIEN, N APPELLE AUCUNE API, NE TOUCHE A RIEN.
 
