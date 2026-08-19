@@ -382,7 +382,7 @@ def h_croise(add, titre, legende, res):
         "<th class='num'>WR</th><th class='num'>PnL</th>"
         "<th>meilleur paper</th><th class='num'>son PnL</th>"
         "<th>pire paper</th><th class='num'>son PnL</th></tr>"
-        % esc(titre[:24]))
+        % esc(titre))
     for k, n, wr, tot, best, bp, pire, pp in res:
         add("<tr><td style='font-weight:700'>%s</td>"
             "<td class='num'>%d</td><td class='num'>%.0f%%</td>%s"
@@ -429,31 +429,31 @@ def t_positions(a, n_ouv, pos, n_papers):
         a("  que des trades clos, ou les ouverts tombent hors plage.")
         return
     a("  %d ticket(s) ouvert(s) dans la fenetre." % n_ouv)
-    a("  %-7s %-28s %4s  %-19s %-22s %s"
+    a("  %-7s %-40s %4s  %-19s %-34s %s"
       % ("MAGIC", "PAPER", "POS", "DEPUIS", "ACTIFS", "SENS"))
     for magic, nom, n, depuis, acts, sens in pos:
-        a("  %-7d %-28s %4d  %-19s %-22s %s"
-          % (magic, nom[:28], n, depuis, acts[:22], sens))
+        a("  %-7d %-40s %4d  %-19s %-34s %s"
+          % (magic, nom[:40], n, depuis, acts[:34], sens))
     a("  %d paper(s) sans aucune position ouverte." % (n_papers - len(pos)))
 
 
 def t_rendu(a, lignes, periode):
     a("")
     a("LE RENDU -- un paper par ligne")
-    a("-" * 118)
+    a("-" * 132)
     if periode:
         a("  periode couverte : %s -> %s" % periode)
-    a("  %-7s %-26s %-6s %5s %5s %6s %9s %8s %5s %5s %7s %7s %7s %8s %9s"
+    a("  %-7s %-40s %-6s %5s %5s %6s %9s %8s %5s %5s %7s %7s %7s %8s %9s"
       % ("MAGIC", "PAPER", "ACTIF", "n", "WR", "WILSON", "PnL", "PnL/tr",
          "RR", "RReq", "SHARPE", "MFE", "MAE", "CREUX", "BALANCE"))
     for magic, nom, actif, s in lignes:
         if not s:
-            a("  %-7d %-26s %-6s %5d   aucune prise"
-              % (magic, nom[:26], actif or "tous", 0))
+            a("  %-7d %-40s %-6s %5d   aucune prise"
+              % (magic, nom[:40], actif or "tous", 0))
             continue
-        a("  %-7d %-26s %-6s %5d %4.0f%% %5.0f%% %+9.0f %+8.2f %5s %5.2f "
+        a("  %-7d %-40s %-6s %5d %4.0f%% %5.0f%% %+9.0f %+8.2f %5s %5.2f "
           "%7s %+7.1f %+7.1f %+8.0f %9.0f"
-          % (magic, nom[:26], actif or "tous", s["n"], s["wr"], s["wilson"],
+          % (magic, nom[:40], actif or "tous", s["n"], s["wr"], s["wilson"],
              s["tot"], s["moy"],
              ("%.2f" % s["rr"]) if s["rr"] is not None else "-",
              s["rr_eq"],
@@ -468,27 +468,27 @@ def t_croise(a, titre, res):
         return
     a("")
     a(titre)
-    a("-" * 88)
-    a("  %-22s %6s %5s %9s   %-8s %9s   %-8s %9s"
+    a("-" * 98)
+    a("  %-32s %6s %5s %9s   %-8s %9s   %-8s %9s"
       % ("", "PRISES", "WR", "PnL", "MEILLEUR", "SON PnL", "PIRE", "SON PnL"))
     for k, n, wr, tot, best, bp, pire, pp in res:
-        a("  %-22s %6d %4.0f%% %+9.0f   %-8s %+9.0f   %-8s %+9.0f"
-          % (str(k)[:22], n, wr, tot, best, bp, pire, pp))
+        a("  %-32s %6d %4.0f%% %+9.0f   %-8s %+9.0f   %-8s %+9.0f"
+          % (str(k)[:32], n, wr, tot, best, bp, pire, pp))
 
 
 def t_detail(a, derniers, tick, combien):
     a("")
     a("DETAIL -- les %d dernieres prises" % combien)
-    a("-" * 96)
-    a("  %-12s %-7s %-24s %-6s %-5s %-12s %6s %9s %9s"
+    a("-" * 112)
+    a("  %-12s %-7s %-40s %-6s %-5s %-16s %6s %9s %9s"
       % ("QUAND", "MAGIC", "PAPER", "ACTIF", "SENS", "SETUP", "LOT",
          "PnL", "BALANCE"))
     for p in derniers:
         t = tick.get(p.get("ticket")) or {}
-        a("  %-12s %-7s %-24s %-6s %-5s %-12s %6.2f %+9.2f %9.0f"
+        a("  %-12s %-7s %-40s %-6s %-5s %-16s %6.2f %+9.2f %9.0f"
           % ((p.get("ts") or "")[5:16], p.get("magic"),
-             (p.get("nom") or "")[:24], p.get("actif") or "?",
-             p.get("sens") or "?", (t.get("rails_setup") or "?")[:12],
+             (p.get("nom") or "")[:40], p.get("actif") or "?",
+             p.get("sens") or "?", (t.get("rails_setup") or "?")[:16],
              p.get("lot") or 0.0, p.get("pnl") or 0.0,
              p.get("balance") or 0.0))
 
@@ -498,8 +498,8 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--source", default=SOURCE)
     p.add_argument("--journal", default=JOURNAL)
-    p.add_argument("--detail", type=int, default=60)
-    p.add_argument("--detail-texte", type=int, default=25,
+    p.add_argument("--detail", type=int, default=150)
+    p.add_argument("--detail-texte", type=int, default=60,
                    dest="detail_texte")
     a = p.parse_args()
 

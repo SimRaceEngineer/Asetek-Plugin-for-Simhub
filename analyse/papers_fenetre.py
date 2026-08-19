@@ -182,8 +182,8 @@ def partie_source(add, racines, maxl):
         for nom, rx in JETONS:
             hits = [i + 1 for i, l in enumerate(lignes) if rx.search(l)]
             if hits:
-                apercu = ", ".join(str(h) for h in hits[:18])
-                if len(hits) > 18:
+                apercu = ", ".join(str(h) for h in hits[:80])
+                if len(hits) > 80:
                     apercu += ", ... (%d au total)" % len(hits)
                 add("    %-6s %3d occurrence(s) : lignes %s"
                     % (nom, len(hits), apercu))
@@ -245,11 +245,11 @@ def partie_source(add, racines, maxl):
             marque = ""
             if ou:
                 marque = "  [mot aux lignes %s]" % ", ".join(
-                    str(x) for x in ou[:10])
+                    str(x) for x in ou[:40])
             add("  --- %s  (ligne %d, %d lignes)%s"
                 % (nom, i + 1, len(b), marque))
             for k, l in enumerate(b[:maxl]):
-                add("    %5d  %s" % (i + 1 + k, l.rstrip()[:104]))
+                add("    %5d  %s" % (i + 1 + k, l.rstrip()[:220]))
             if len(b) > maxl:
                 add("    ... %d lignes de plus" % (len(b) - maxl))
             add("")
@@ -259,8 +259,8 @@ def partie_source(add, racines, maxl):
         if hors:
             plat = sorted(set(x for sub in hors for x in sub))
             add("  HORS FONCTION (constantes, tables) : lignes %s"
-                % ", ".join(str(x) for x in plat[:24]))
-            for n in plat[:24]:
+                % ", ".join(str(x) for x in plat[:80]))
+            for n in plat[:80]:
                 add("    %5d  %s" % (n, lignes[n - 1].rstrip()[:104]))
             add("")
 
@@ -461,7 +461,7 @@ def main():
     p.add_argument("--fichier", default=None)
     p.add_argument("--colonne", default="US", choices=["US", "EUR", "ALL"])
     p.add_argument("--coupure", default=None)
-    p.add_argument("--max", type=int, default=70)
+    p.add_argument("--max", type=int, default=200)
     a = p.parse_args()
 
     L = []

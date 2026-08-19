@@ -139,16 +139,16 @@ def partie_source(add, chemin, consts):
         if err:
             add("    %-16s %s" % (nom, err))
         else:
-            add("    %-16s %s" % (nom, repr(v)[:110]))
+            add("    %-16s %s" % (nom, repr(v)[:500]))
     add("")
 
     add("  D OU VIENNENT trades ET signals")
     pat = re.compile(r"^\s*(trades|signals)\s*=|\.jsonl|def\s+(charge|_load|load|_lire|lire)\b")
     hits = [(i + 1, l.rstrip()) for i, l in enumerate(lignes) if pat.search(l)]
-    for n, l in hits[:26]:
-        add("    %5d  [%s]  %s" % (n, enclosante(lignes, n - 1), l.strip()[:88]))
-    if len(hits) > 26:
-        add("    ... %d lignes de plus" % (len(hits) - 26))
+    for n, l in hits[:90]:
+        add("    %5d  [%s]  %s" % (n, enclosante(lignes, n - 1), l.strip()[:220]))
+    if len(hits) > 90:
+        add("    ... %d lignes de plus" % (len(hits) - 90))
     add("")
 
     add("  OU LE PANNEAU PARLE DE RSI")
@@ -163,7 +163,7 @@ def partie_source(add, chemin, consts):
             f = enclosante(lignes, n - 1)
             if f not in fns:
                 fns.append(f)
-            add("    %5d  [%s]  %s" % (n, f, l.strip()[:88]))
+            add("    %5d  [%s]  %s" % (n, f, l.strip()[:220]))
         add("")
         add("    Fonctions concernees : %s" % ", ".join(fns))
     add("")
