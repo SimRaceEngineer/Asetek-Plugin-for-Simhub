@@ -96,3 +96,63 @@ dans le panneau. Continuer a essayer des variantes serait refaire
 exactement la faute que ce carnet enregistre depuis le 14/08 :
 raisonner sur ma reconstruction alors que la definition est dans un
 fichier que j ai deja.
+
+---
+
+## 19/08, fin de journee : ce que les LIBELLES disaient deja
+
+`panels\panel_papers.txt` -- un fichier que j avais deja, produit par
+mon propre `papers_panel.py` -- porte les 35 lignes de l export avec
+leur libelle complet. Trois de ces libelles contenaient la reponse que
+j ai passe deux scripts a deduire par balayage :
+
+| libelle | ce qu il disait, et que je n ai pas lu |
+|---|---|
+| `M15 SCATTER / MIXED / ALL` | la colonne **ALL** etait ECRITE sur la ligne |
+| `M5 * NO / CLEAN` | l etoile = ancre M5 (panneau:878) ; l absence de WITH/AGAINST = la ligne `dv "-"` |
+| `M15 NO / MIXED` | pas d etoile -> ancre M15, meme ligne `"-"` |
+
+C est la meme faute que le 14/08 (`onglets()`), que le 18/08
+(`seau_churn`) et que les regles 220000 : raisonner sur ma
+reconstruction alors que la definition etait dans un fichier que
+j avais deja. Le balayage a donne le bon resultat, mais il n aurait
+pas du etre necessaire.
+
+## Les quatre qui resistent portent MON marqueur
+
+    M1 bull RSI dedans / achat    n= 171   [col. non identifiee : 15]
+    M15 bull RSI au-dessus/achat  n= 186   [col. non identifiee : 12]
+    M15 CONFLIT vente             n= 358   [col. non identifiee : 15]
+    M15 bull+                     n= 248   [col. non identifiee : 12]
+
+`[col. non identifiee]` est ecrit par `papers_panel.py`, de ma main.
+Il signale une ligne dont le parseur n a pas su quelle colonne portait
+l effectif. Ce sont EXACTEMENT les quatre lignes qui ne se
+reproduisent jamais -- et la quatrieme (248) n a meme pas ete encodee.
+
+Consequence : **171, 186, 358 et 248 sont suspects a la source.**
+Chercher un predicat qui les reproduit revenait a chercher la bonne
+cle pour une serrure dont je n avais pas verifie l adresse.
+
+## Et la section du CONFLIT n est pas celle que je testais
+
+`panels\panel_rails_trades.txt:1201` :
+
+    CONFLUENCE rails x HLC -- les deux d accord, meme sens, TF par TF
+    M15 | CONFLIT | achat | 401 | ...
+    M15 | CONFLIT | vente | 384 | ...
+
+C_M15_VENTE ne vient donc PAS de `_section_vs_pack` mais de
+**CONFLUENCE rails x HLC**, jamais ouverte. Le sens EST une dimension,
+mais seulement dans la branche CONFLIT -- mon `dir == "SELL"` n etait
+pas absurde, il etait applique a la mauvaise section.
+
+## Etat
+
+- **32 cles sur 35 reproduites**, dont 29 au meme instant
+  `2026-08-18 13:51:27`.
+- 3 non reproduites, toutes marquees `[col. non identifiee]` par mon
+  parseur : C_M15_VENTE, RSI_M1_BU, RSI_M15_BU.
+- 1 ligne de l export jamais encodee : `M15 bull+` n= 248.
+- Prochain pas : LIRE le source de CONFLUENCE et des lignes RSI, et
+  la mise en colonne d origine. Pas deduire.
