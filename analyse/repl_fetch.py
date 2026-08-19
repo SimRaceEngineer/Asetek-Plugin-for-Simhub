@@ -4,6 +4,7 @@ repl_fetch.py -- pourquoi la seconde reponse du REPL echoue
 
   python repl_fetch.py
   python repl_fetch.py --fichier repl_web.py      un fichier, sans balayage
+  python repl_fetch.py --lignes repl_web.py:225-270    ces lignes exactement
   python repl_fetch.py --max 600                  plus de lignes
   python repl_fetch.py --inventaire               la liste seule
 
@@ -24,6 +25,15 @@ CE QU IL CHERCHE
     Ce script sort le code qui APPELLE les modeles et le code qui
     ATTRAPE les erreurs. C est la seule facon de savoir laquelle des
     trois on regarde, plutot que d en supposer une.
+
+POURQUOI --lignes EXISTE
+
+    Un extrait par motif montre ce qui RESSEMBLE a la reponse. Il ne
+    montre pas ce qui la contredit : une ligne qui ne porte ni nom de
+    modele, ni verbe de requete, ni mot d erreur reste invisible --
+    et c est exactement le cas de l appel lui-meme. Quand on sait
+    quelles lignes manquent, il faut pouvoir les demander par leur
+    numero.
 
 CE QU IL SORT
 
