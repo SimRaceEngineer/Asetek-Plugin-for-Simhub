@@ -1,53 +1,64 @@
 # -*- coding: utf-8 -*-
 r"""
-papers_population.py -- laquelle des quatre populations produit l export
+papers_population.py -- ou le panneau va-t-il chercher chaque effectif
 
   python papers_population.py
   python papers_population.py --cle M5_AGA_CH
 
 LECTEUR SEUL. N ECRIT RIEN, NE PREND AUCUN TRADE.
 
-LE PROBLEME, ET POURQUOI IL N EST NI LA COUPURE NI LE PREDICAT
+CE QUE LE PREMIER ESSAI A APPRIS
 
-    Vingt cles sur trente-cinq retombent exactement sur leur effectif
-    annonce. Les quinze autres echouent, et huit d entre elles viennent
-    de sections que le panneau calcule au niveau SIGNAL --
-    _section_vs_pack, _section_mtf_nest, _section_mom.
+    J avais suppose que les quinze cles fausses venaient d une base plus
+    large : _load_trades fusionne churn_trades_archive.jsonl et
+    churn_trades.jsonl jusqu a 20 000 lignes, nous en lisons 4 681.
 
-    _load_trades (rails_trades_panel.py:119) fusionne DEUX fichiers :
+    Le decompte a repondu : churn 4 695, rails 4 689. Six lignes d ecart.
+    J avais lu limite=20000 comme une TAILLE alors que c est un PLAFOND.
+    L hypothese est morte, et c est le script qui l a tuee -- pas moi.
 
-        for path in (_ARCHIVE, _TRADES):
-            ...
-            merged[k] = r        # a ticket egal, le vivant ecrase
+    Deux fautes m appartenaient dans ce premier essai :
 
-    soit docs\churn_trades\churn_trades_archive.jsonl PUIS
-    churn_trades.jsonl, jusqu a 20 000 lignes. Nous lisons
-    tickets_rails.jsonl, 4 681 lignes. Ce n est pas le meme ensemble.
+      1. Je cherchais la coupure DANS chaque population, y compris les
+         populations de signaux. Or la coupure se deduit d effectifs
+         annonces au niveau TICKET. La demander a un ensemble
+         dedoublonne, c est demander l impossible : zero partout.
 
-    Et _signals (ligne 694) regroupe les JUMEAUX -- mais seulement les
-    familles 206 et 207 (magic // 1000), par (actif, sens, magic % 1000,
-    tranche de 30 s). Tout le reste compte pour un.
+      2. Je mesurais avec papers_encode.CLES -- les definitions dont je
+         savais deja qu elles etaient fausses. D ou 15 exactes au lieu
+         de 20, et cinq cles reparees rangees parmi les irreductibles.
 
-    Deux effets en sens CONTRAIRE : une base plus large, un
-    dedoublonnage qui la reduit. C est pourquoi certaines cles debordent
-    et d autres manquent -- une seule explication ne pouvait pas rendre
-    compte des deux.
+CE QUE FAIT CETTE VERSION : elle ne cherche plus, elle verifie
 
-CE QUE FAIT CE SCRIPT
+    Le panneau DIT, section par section, sur quoi il compte. La table
+    SECTIONS ci-dessous ne fait que transcrire ce que son code fait :
 
-    Il ne choisit pas la population : il les essaie toutes les quatre,
-    sur les trois colonnes de session, et laisse les effectifs annonces
-    designer la bonne.
+      _section_vs_pack, _section_mtf_nest, _section_mom  -> signals
+          (signals = _signals(trades), jumeaux 206/207 regroupes)
+      _section_hlc_churn vue A                           -> ("ALL", s)
+      vue B (self_role) et vue C (transition)            -> "ALL" seul
+      tout le reste                                      -> trades
 
-        rails         tickets_rails.jsonl, ce qu on lit aujourd hui
-        churn         churn_trades.jsonl + son archive, fusionnes
-        rails/sig     rails, jumeaux regroupes
-        churn/sig     churn + archive, jumeaux regroupes
+    Les predicats viennent de papers_repare -- les corriges, ceux qui
+    tombent juste sur vingt cles -- et non plus de papers_encode.
 
-    Pour chacune, la coupure est DEDUITE comme dans papers_constate --
-    le trou commun aux quatre effectifs de la section ecartement -- puis
-    les 35 cles sont comptees. La population qui en rend le plus est la
-    bonne, et ce n est pas un avis : c est un decompte.
+    La coupure est deduite UNE fois, sur les tickets, par intersection
+    des fenetres [Nieme, (N+1)ieme). Les populations de signaux en
+    heritent : elles descendent des memes tickets.
+
+    Et la conclusion se lit PAR FAMILLE, pas cle par cle. Une cle qui
+    tombe juste seule peut le devoir au hasard. Une section entiere qui
+    tombe juste ne le peut pas.
+
+CE QUE LE RESULTAT TRANCHERA
+
+    Si une famille tombe juste avec la population que son code designe,
+    la lecture est confirmee et les cles restantes de cette famille
+    n ont plus qu un predicat a corriger.
+
+    Si une famille echoue avec TOUTES les populations et TOUTES les
+    colonnes, alors la cause n est ni la base, ni la coupure, ni la
+    session : c est le predicat. Le script le dira dans ces termes.
 
 LA SEULE CHOSE QUE JE SUPPOSE, ET ELLE EST MARQUEE
 
@@ -57,6 +68,11 @@ LA SEULE CHOSE QUE JE SUPPOSE, ET ELLE EST MARQUEE
     QUE les paires a cheval sur une frontiere de 30 s -- le script
     compte donc les groupes formes et le dit, pour qu une erreur de
     base se voie au lieu de se cacher.
+
+    RSI_M1_BU et RSI_M15_BU ne sont produites par AUCUNE section du
+    panneau. Le mot rsi n y apparait que dans des legendes. Elles sont
+    marquees hors panneau et non comptees comme des echecs : leur
+    source est ailleurs, et c est la qu il faudra la chercher.
 """
 import argparse
 import calendar
