@@ -274,10 +274,10 @@ def ligne_strategie(magic, nom, profil, cles, actif):
 def tableau():
     """Le tableau de bord : une ligne par magic, ATTENDU puis CONSTATE.
 
-    Les quatre dernieres colonnes sont VIDES et le resteront tant que
-    rien n executera ces definitions. C est le fait le plus important
-    du panneau, et il doit se voir au premier coup d oeil plutot que
-    de se deduire d une absence."""
+    CONSTATE se lit dans le journal du moteur depuis le 19/08. Ce
+    docstring annoncait des colonnes vides "tant que rien n executera
+    ces definitions" -- c etait le fait le plus important du panneau
+    tant que c etait vrai, et c est devenu le plus trompeur ensuite."""
     L = []
     a = L.append
     a("=" * 132)
@@ -309,25 +309,32 @@ def tableau():
         a("  pose la question. Les confondre ferait passer une absence")
         a("  de mesure pour un resultat.")
     a("")
-    a("  ET LA COLONNE ATTENDU N EST PAS VERIFIABLE SUR L HISTORIQUE.")
-    a("  Mesure du 18/08 (papers_regime.py) : sept lectures du regime")
-    a("  ont ete confrontees aux effectifs annonces par l export sur la")
-    a("  section ecartement -- 214 / 154 / 251 / 231. AUCUNE ne les")
-    a("  reproduit ; la moins eloignee est a 494. Les ecarts vont dans")
-    a("  LES DEUX SENS (93 contre 214, mais 391 contre 154), ce qui")
-    a("  exclut l explication d une periode plus courte : une fenetre")
-    a("  trop petite produit des manques, jamais des exces.")
+    a("  LA COLONNE ATTENDU EST MAINTENANT REPRODUCTIBLE AUX DEUX")
+    a("  TIERS, ET CE PARAGRAPHE DISAIT LE CONTRAIRE.")
     a("")
-    a("  Je ne sais donc pas reproduire la population dont ces chiffres")
-    a("  sont issus. ATTENDU reste affiche parce qu il documente ce qui")
-    a("  a ete promis, mais il ne peut etre ni confirme ni infirme ici.")
-    a("  Le seul juge possible reste la mesure EN AVANT.")
+    a("  Il affirmait, sur la mesure du 18/08 : AUCUNE lecture du regime")
+    a("  ne reproduit 214 / 154 / 251 / 231, la moins eloignee est a")
+    a("  494. C etait exact ce jour-la et faux le lendemain. Le 19/08,")
+    a("  papers_encode et papers_repare retombent EXACTEMENT sur ces")
+    a("  quatre effectifs, et sur 20 des 35 cles au total.")
     a("")
-    a("  Par ailleurs 14 des 36 magics reposent sur des etats que rien")
-    a("  ne journalise : le T/S (6 cles), l etoile (4), le with/against")
-    a("  (3), les pentes (1). Ce ne sont pas des donnees egarees -- ces")
-    a("  etats n ont jamais ete ecrits. 220001, designe comme socle de")
-    a("  reference, en cumule deux.")
+    a("  Ce qui manquait n etait ni la periode ni le regime, mais trois")
+    a("  lectures :")
+    a("    - le regime est verdict dans (CLEAN, OK, TRADE), lu dans")
+    a("      _bucket du panneau et non devine ;")
+    a("    - la coupure se DEDUIT -- 17/08 19:26:10, seul instant")
+    a("      compatible avec 16 effectifs qu on n a pas choisis ;")
+    a("    - 'US30 BEAR' est la config leader, pas le sens du trade.")
+    a("")
+    a("  IL RESTE 15 CLES FAUSSES, et leur cause est identifiee : huit")
+    a("  viennent de sections calculees au niveau SIGNAL (jumeaux")
+    a("  206/207 dedoublonnes), et le moteur compte des tickets. Ce n")
+    a("  est ni la coupure ni le predicat : c est la population.")
+    a("")
+    a("  Ce qui demeure vrai : ATTENDU reste IN ECHANTILLON. Reproduire")
+    a("  un effectif prouve qu on a compris la definition, pas que le")
+    a("  chiffre se repetera. Le seul juge reste la mesure EN AVANT --")
+    a("  et c est desormais la colonne CONSTATE, a droite.")
     a("")
     a("  %-7s %-3s %-8s %-10s %-11s | %5s %5s %5s %5s %7s | %6s %8s %6s"
       % ("MAGIC", "JEU", "ACTIF", "UNITE", "SENS",
