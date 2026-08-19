@@ -186,7 +186,6 @@ def ou_brancher(add, racine="."):
     add("  Le branchement sera ecrit contre ce code-la, lu. Pas contre")
     add("  une API supposee.")
     add("")
-    mots = ("churn_trades", "order_send", "206", "207")
     forts = ("churn_trades.jsonl", "order_send")
     vus = 0
     for f in sorted(os.listdir(racine)):
