@@ -180,12 +180,18 @@ def stats(prises, PM):
         "fin": max(q.get("ts") or "" for q in prises)}
 
 
-def calc_positions(jeu, tickets, PM):
-    """Rend (n_ouverts, [(magic, nom, n, depuis, actifs, sens)])."""
+def calc_positions(jeu, tickets, PM, fenetre):
+    """Rend (n_ouverts, [(magic, nom, n, depuis, actifs, sens)]).
+
+    La fenetre est celle du moteur, testee par sa propre fonction : un
+    paper ne peut pas etre montre en position sur un ticket qu il n
+    aurait jamais pris.
+    """
     ouverts = [t for t in tickets
                if isinstance(t.get("volume"), (int, float))
                and t.get("volume") > 0 and t.get("pnl_eur") is None
-               and isinstance(t.get("entry_ts"), str)]
+               and isinstance(t.get("entry_ts"), str)
+               and PM.dans_fenetre(t, fenetre)]
     out = []
     for magic, nom, actif, sens, pred in jeu:
         pris = [t for t in ouverts
@@ -505,6 +511,7 @@ def main():
         print("KO : introuvable(s) -- %s" % ", ".join(manque))
         return 1
     jeu = PM.papers(pe, pr)
+    fenetre = getattr(PM, "FENETRE", None)
 
     journal, ko_j = lire_jsonl(a.journal)
     tickets, ko_t = lire_jsonl(a.source)
@@ -518,7 +525,7 @@ def main():
         par[k].sort(key=lambda x: str(x.get("ts") or ""))
 
     # --- calcul, une seule fois
-    n_ouv, pos = calc_positions(jeu, tickets, PM)
+    n_ouv, pos = calc_positions(jeu, tickets, PM, fenetre)
     lignes = calc_rendu(jeu, par, PM) if journal else []
     periode = None
     if journal:
@@ -561,6 +568,9 @@ def main():
        % (len(jeu), len(journal), len(tickets)))
     at("=" * 118)
     at("  Lecture seule : aucun ordre envoye, MetaTrader5 non importe.")
+    at("  Fenetre observee : %s" % ("%s -> %s (fin exclue), heure Paris"
+                                    % fenetre if fenetre
+                                    else "AUCUNE -- toutes les heures"))
     at("  Les papers FILTRENT les entrees du moteur churn, ils ne les")
     at("  choisissent pas -- ils mesurent un filtre, pas un timing.")
     if ko_j or ko_t:
@@ -595,6 +605,25 @@ def main():
     add("<details><summary>voir le texte brut (repli si le bouton "
         "echoue : selectionner, Ctrl+C)</summary><pre>%s</pre></details>"
         % esc(txt))
+    if fenetre:
+        deborde = [x for x in journal
+                   if not (fenetre[0] <= (x.get("ts") or "")[11:16]
+                           < fenetre[1])]
+        add("<div class='leg'>Fenetre observee : <b style='color:%s'>%s "
+            "&rarr; %s</b> (fin exclue), heure de Paris. 14:00 est la "
+            "definition du panneau lui-meme (<b>_sess</b> : US si heure "
+            "&ge; 14) ; 19:00 vient de la consigne. Aucun ticket hors de "
+            "cette plage n est pris.</div>"
+            % (JAUNE, esc(fenetre[0]), esc(fenetre[1])))
+        if deborde:
+            add("<div class='leg' style='color:%s'><b>%d prise(s) du "
+                "journal tombent HORS fenetre</b> : elles datent d avant "
+                "la pose de la fenetre. Le rendu ci-dessous les compte "
+                "encore. Reconstruire : <b>python papers_moteur.py "
+                "--reset --oui</b></div>" % (ROUGE, len(deborde)))
+    else:
+        add("<div class='leg' style='color:%s'>Aucune fenetre horaire : "
+            "toutes les heures sont prises.</div>" % ROUGE)
     add("<div class='leg'>%d prise(s) au journal, %d ticket(s) source. "
         "Lecture seule : aucun ordre n a ete envoye, MetaTrader5 n est "
         "pas importe. Les papers FILTRENT les entrees du moteur churn, "

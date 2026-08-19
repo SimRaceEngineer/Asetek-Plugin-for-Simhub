@@ -74,6 +74,21 @@ DOSSIER = os.path.join("docs", "papers_live")
 JOURNAL = os.path.join(DOSSIER, "trades.jsonl")
 ETAT = os.path.join(DOSSIER, "etat.json")
 
+# LA FENETRE OBSERVEE. Ne prendre que ce qu on a vu.
+#
+# 14:00 n est pas un choix : c est la definition du panneau lui-meme.
+# rails_trades_panel._sess rend "US" si int(entry_ts[11:13]) >= 14, et
+# les 16 cles validees l ont ete sur cette colonne US. 19:00 vient de la
+# consigne d exploitation du 19/08.
+#
+# Bornes en HEURE DE PARIS. Le panneau traite entry_ts comme Paris en
+# deux endroits independants : _sess (coupure a 14h) et _section_hourly,
+# intitule "PAR HEURE (Paris)". Cela leve la reserve que papers_regles.py
+# portait sur une eventuelle heure serveur.
+#
+# Debut INCLUS, fin EXCLUE : 18:59:59 passe, 19:00:00 ne passe pas.
+FENETRE = ("14:00", "19:00")
+
 BALANCE0 = 20000.0
 LOT_PAR = 20000.0
 LOT_MINI = 0.01
@@ -186,6 +201,23 @@ def rr_equilibre(p):
     return (1.0 - p) / p if p > 0 else float("inf")
 
 
+def dans_fenetre(t, fenetre=FENETRE):
+    """L entree tombe-t-elle dans la fenetre observee ?
+
+    Cette question etait posee jusqu ici par le code de RAPPORT et non
+    par les predicats : papers_regles.py filtre HEURE_MINI dans son
+    main(), papers_encode.py filtre _sess dans le sien. Le moteur, qui
+    importe les predicats bruts, perdait les deux -- d ou des prises a
+    08h le 19/08. La contrainte est desormais dans le moteur, une fois.
+    """
+    if not fenetre:
+        return True
+    ts = t.get("entry_ts")
+    if not isinstance(ts, str) or len(ts) < 16:
+        return False
+    return fenetre[0] <= ts[11:16] < fenetre[1]
+
+
 def accepte(entry, t):
     """Ce paper aurait-il pris ce ticket ? Une seule definition.
 
@@ -206,9 +238,9 @@ def accepte(entry, t):
         return False
 
 
-def traite(jeu, tickets, etat):
-    """Une passe. Rend (prises, n_deja_vus, n_sans_volume)."""
-    prises, deja, sans_vol = [], 0, 0
+def traite(jeu, tickets, etat, fenetre=FENETRE):
+    """Une passe. Rend (prises, deja_vus, sans_volume, hors_fenetre)."""
+    prises, deja, sans_vol, hors = [], 0, 0, 0
     vus = set(etat.setdefault("vus", []))
     bal = etat.setdefault("balances", {})
     # On traite dans l ordre chronologique pour que la balance compose
@@ -224,6 +256,9 @@ def traite(jeu, tickets, etat):
             deja += 1
             continue
         vus.add(ident)
+        if not dans_fenetre(t, fenetre):
+            hors += 1
+            continue
         vol = t.get("volume")
         pnl_reel = t.get("pnl_eur")
         if not isinstance(vol, (int, float)) or vol <= 0 \
@@ -248,7 +283,7 @@ def traite(jeu, tickets, etat):
                 "mae": round((t.get("mae_eur") or 0.0) * f, 2),
                 "balance": round(bal[k], 2), "ticket": t.get("ticket")})
     etat["vus"] = sorted(vus, key=str)
-    return prises, deja, sans_vol
+    return prises, deja, sans_vol, hors
 
 
 def rapport(jeu, journal):
@@ -308,7 +343,19 @@ def main():
     p.add_argument("--reset", action="store_true")
     p.add_argument("--oui", action="store_true",
                    help="confirme le --reset")
+    p.add_argument("--fenetre", default="%s-%s" % FENETRE,
+                   help="fenetre observee, heure de Paris, fin exclue. "
+                        "'tout' pour ne rien filtrer.")
     a = p.parse_args()
+
+    if a.fenetre.strip().lower() in ("tout", "aucune", ""):
+        fenetre = None
+    else:
+        bouts = a.fenetre.split("-")
+        if len(bouts) != 2 or len(bouts[0].strip()) != 5:
+            print("KO : --fenetre s ecrit 'HH:MM-HH:MM', ou 'tout'.")
+            return 1
+        fenetre = (bouts[0].strip(), bouts[1].strip())
 
     pe, pr, manque = _charge_modules()
     if manque:
@@ -336,7 +383,7 @@ def main():
             return 1
         etat = lire_etat()
         avant = len(etat.get("vus") or [])
-        prises, deja, sans_vol = traite(jeu, tickets, etat)
+        prises, deja, sans_vol, hors = traite(jeu, tickets, etat, fenetre)
         if prises:
             if not os.path.isdir(DOSSIER):
                 os.makedirs(DOSSIER)
@@ -348,6 +395,9 @@ def main():
         print("  source   : %s  (%d tickets%s)"
               % (a.source, len(tickets),
                  ", %d illisibles" % ko_t if ko_t else ""))
+        print("  fenetre  : %s" % ("%s -> %s (fin exclue), heure Paris"
+                                   % fenetre if fenetre
+                                   else "AUCUNE -- toutes les heures"))
         print("  deja vus : %d ticket(s) avant cette passe" % avant)
         print("  nouveaux : %d ticket(s) traites" % (
             len(etat.get("vus") or []) - avant))
@@ -355,10 +405,27 @@ def main():
         if deja:
             print("  %d ticket(s) deja traites, ignores sans les rejouer."
                   % deja)
+        if hors:
+            print("  %d ticket(s) hors fenetre : non pris." % hors)
         if sans_vol:
             print("  %d ticket(s) sans volume ou sans pnl : non"
                   " dimensionnables." % sans_vol)
         print()
+
+    # Le journal peut contenir des prises d avant la pose de la fenetre.
+    # Les laisser passer en silence rendrait tout le rendu faux, sans
+    # que rien ne le signale.
+    if fenetre:
+        vieilles = [x for x in journal
+                    if not (fenetre[0] <= (x.get("ts") or "")[11:16]
+                            < fenetre[1])]
+        if vieilles:
+            print("  ATTENTION : %d prise(s) DEJA au journal tombent hors"
+                  " fenetre." % len(vieilles))
+            print("  Elles viennent d avant la pose de la fenetre. Le")
+            print("  journal doit etre reconstruit :")
+            print("      python papers_moteur.py --reset --oui")
+            print()
 
     L = rapport(jeu, journal)
     txt = "\n".join(L)
