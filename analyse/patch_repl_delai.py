@@ -25,7 +25,7 @@ CE QU IL CORRIGE, ET POURQUOI
     produire qu une erreur reseau. "Failed to fetch" n est pas le
     symptome d une panne, c est le symptome d une ABSENCE DE DELAI.
 
-LES QUATRE CHANGEMENTS, ET LEUR PORTEE
+LES CINQ CHANGEMENTS, ET LEUR PORTEE
 
     1. council_shadow._call_model gagne un parametre `timeout=None`,
        pose dans _kw SEULEMENT s il est fourni.
