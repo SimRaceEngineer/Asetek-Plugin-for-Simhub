@@ -68,8 +68,14 @@ IGNORE_DOSSIERS = (".git", "__pycache__", "node_modules", "site-packages",
                    "AppData", ".venv", "venv", "dist", "build")
 EXT_CODE = (".py", ".js", ".html", ".htm", ".json", ".yml", ".yaml",
             ".ini", ".cfg", ".ps1", ".bat")
-EXT_LOG = (".log", ".txt", ".err", ".out", ".jsonl")
-TAILLE_MAX = 8 * 1024 * 1024
+# .jsonl EXCLU volontairement : ce sont des donnees, pas des journaux.
+# Le motif \b500\b matche n importe quel 500 dans un ticket, ce qui
+# faisait exploser le comptage sur docs\ -- le script restait bloque.
+EXT_LOG = (".log", ".txt", ".err", ".out")
+TAILLE_MAX = 3 * 1024 * 1024
+# On ne compte que sur le debut du fichier : un score n a pas besoin du
+# fichier entier, et un gros fichier ne doit pas couter une minute.
+TETE = 400 * 1024
 
 
 def masque(l):
@@ -124,9 +130,10 @@ def balaye(racines):
                 except (IOError, OSError):
                     continue
                 lignes = src.split("\n")
-                n_mod = len(MODELES.findall(src))
-                n_app = len(APPELS.findall(src))
-                n_err = len(ERREURS.findall(src))
+                tete = src[:TETE]
+                n_mod = len(MODELES.findall(tete))
+                n_app = len(APPELS.findall(tete))
+                n_err = len(ERREURS.findall(tete))
                 if ext in EXT_CODE:
                     score = n_mod * 5 + n_app * 8
                     if score:
@@ -144,7 +151,11 @@ def balaye(racines):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--racine", action="append", default=None)
+    p.add_argument("--racine", action="append", default=None,
+                   help="defaut : le dossier courant seul")
+    p.add_argument("--fichier", action="append", default=None,
+                   help="lire CE fichier et rien d autre ; repetable. "
+                        "Aucun balayage : instantane.")
     p.add_argument("--inventaire", action="store_true")
     p.add_argument("--max", type=int, default=400,
                    help="lignes de contexte par fichier (defaut 400)")
@@ -153,7 +164,7 @@ def main():
                    help="lignes de log retenues par fichier")
     a = p.parse_args()
 
-    racines = a.racine or [".", "..", os.path.join("..", "..")]
+    racines = a.racine or ["."]
     L = []
     add = L.append
     add("=" * 100)
@@ -166,7 +177,27 @@ def main():
     add("  Racines : %s" % ", ".join(racines))
     add("")
 
-    code, logs = balaye(racines)
+    if a.fichier:
+        code, logs = [], []
+        for che in a.fichier:
+            if not os.path.isfile(che):
+                add("  INTROUVABLE : %s" % che)
+                continue
+            try:
+                src = io.open(che, encoding="utf-8",
+                              errors="replace").read()
+            except (IOError, OSError):
+                add("  ILLISIBLE : %s" % che)
+                continue
+            n = len(src.split("\n"))
+            t = os.path.getsize(che)
+            ext = os.path.splitext(che)[1].lower()
+            ligne = (999, che, t, n, len(MODELES.findall(src[:TETE])),
+                     len(APPELS.findall(src[:TETE])),
+                     len(ERREURS.findall(src[:TETE])))
+            (logs if ext in EXT_LOG else code).append(ligne)
+    else:
+        code, logs = balaye(racines)
     if not code and not logs:
         add("  RIEN TROUVE. Aucun fichier ne parle des modeles ni ne fait")
         add("  de requete sortante dans ces racines.")
