@@ -24,6 +24,13 @@ POURQUOI UN BOUTON COPIER DANS LA PAGE
     stats() et calc_croise() servent au HTML comme au texte. Deux
     calculs auraient diverge.
 
+LA FENETRE OBSERVEE
+
+    Le panneau lit FENETRE dans papers_moteur.py et teste les positions
+    ouvertes avec sa fonction dans_fenetre(). Montrer un paper en
+    position sur un ticket que le moteur n aurait jamais pris serait
+    pire qu une absence : ce serait faux sans en avoir l air.
+
 CE QU IL MONTRE, DANS CET ORDRE
 
  1. QUI EST EN POSITION, DEPUIS QUAND, COMBIEN.
@@ -40,7 +47,8 @@ CE QU IL MONTRE, DANS CET ORDRE
 
  3. PAR HEURE (Paris), PAR ACTIF, PAR SETUP, PAR UNITE DE TEMPS.
     Le journal des prises garde le TICKET, pas le setup : ces vues
-    viennent d une jointure sur tickets_rails.jsonl.
+    viennent d une jointure sur tickets_rails.jsonl. La vue PAR HEURE
+    sert aussi de controle : aucune ligne ne doit sortir de la fenetre.
 
  4. LE DETAIL des dernieres prises.
 
@@ -273,17 +281,18 @@ def h_positions(add, n_ouv, pos, n_papers):
     add("<h4>&#128308; QUI EST EN POSITION &mdash; maintenant, et depuis "
         "quand</h4>")
     add("<div class='leg'>Tickets du moteur churn encore OUVERTS "
-        "(volume present, pnl absent), passes au filtre de chaque paper "
-        "par <b>papers_moteur.accepte()</b> &mdash; la fonction du "
-        "moteur, importee, pas reecrite. Aucun ordre n est envoye : "
-        "c est ce que le paper AURAIT en position.</div>")
+        "(volume present, pnl absent) ET dans la fenetre, passes au "
+        "filtre de chaque paper par <b>papers_moteur.accepte()</b> "
+        "&mdash; la fonction du moteur, importee, pas reecrite. Aucun "
+        "ordre n est envoye : c est ce que le paper AURAIT en "
+        "position.</div>")
     if not n_ouv:
         add("<div class='leg' style='color:%s'>Aucun ticket ouvert dans "
-            "le journal : il ne contient que des trades clos. Cette "
-            "section restera vide tant que rails_join.py n y ecrira pas "
-            "les positions en cours.</div>" % JAUNE)
+            "la fenetre : le journal ne contient que des trades clos, ou "
+            "les ouverts tombent hors plage horaire. Cette section "
+            "restera vide tant que ce sera le cas.</div>" % JAUNE)
         return
-    add("<div class='leg'>%d ticket(s) ouvert(s) dans le journal.</div>"
+    add("<div class='leg'>%d ticket(s) ouvert(s) dans la fenetre.</div>"
         % n_ouv)
     add("<table><tr><th>magic</th><th>paper</th><th class='num'>pos.</th>"
         "<th>depuis</th><th>actifs</th><th>sens</th></tr>")
@@ -416,10 +425,10 @@ def t_positions(a, n_ouv, pos, n_papers):
     a("QUI EST EN POSITION -- maintenant, et depuis quand")
     a("-" * 100)
     if not n_ouv:
-        a("  Aucun ticket ouvert dans le journal : il ne contient que des")
-        a("  trades clos. Rien a montrer ici, et ce n est pas un bug.")
+        a("  Aucun ticket ouvert dans la fenetre : le journal ne contient")
+        a("  que des trades clos, ou les ouverts tombent hors plage.")
         return
-    a("  %d ticket(s) ouvert(s) dans le journal." % n_ouv)
+    a("  %d ticket(s) ouvert(s) dans la fenetre." % n_ouv)
     a("  %-7s %-28s %4s  %-19s %-22s %s"
       % ("MAGIC", "PAPER", "POS", "DEPUIS", "ACTIFS", "SENS"))
     for magic, nom, n, depuis, acts, sens in pos:
@@ -501,9 +510,10 @@ def main():
         print("Le filtre de chaque paper y est defini une seule fois ;")
         print("ce panneau l importe au lieu de le reecrire.")
         return 1
-    if not hasattr(PM, "accepte"):
-        print("KO : papers_moteur.py est la version d avant le 19/08.")
-        print("Il lui manque accepte(). Recopie papers_moteur_v2.py.")
+    if not hasattr(PM, "accepte") or not hasattr(PM, "dans_fenetre"):
+        print("KO : papers_moteur.py n est pas la version du 19/08.")
+        print("Il lui manque accepte() ou dans_fenetre().")
+        print("Recopie papers_moteur_v3.py.")
         return 1
 
     pe, pr, manque = PM._charge_modules()
@@ -535,8 +545,8 @@ def main():
     if journal:
         vues = [
             ("PAR HEURE (Paris)",
-             "L heure d entree du ticket. Les creneaux qui paient et ceux "
-             "qui saignent, avec le meilleur et le pire sur chacun.",
+             "L heure d entree du ticket. Sert aussi de controle : aucune "
+             "ligne ne doit sortir de la fenetre observee.",
              resume_croise(calc_croise(
                  jeu, par, lambda x: (x.get("ts") or "")[11:13] + "h"))),
             ("PAR ACTIF", "",
@@ -559,6 +569,11 @@ def main():
                             if x.get("ticket") in tick else None)))),
         ]
     ordonne = sorted(journal, key=lambda x: str(x.get("ts") or ""))
+    deborde = []
+    if fenetre:
+        deborde = [x for x in journal
+                   if not (fenetre[0] <= (x.get("ts") or "")[11:16]
+                           < fenetre[1])]
 
     # --- texte
     T = []
@@ -571,6 +586,10 @@ def main():
     at("  Fenetre observee : %s" % ("%s -> %s (fin exclue), heure Paris"
                                     % fenetre if fenetre
                                     else "AUCUNE -- toutes les heures"))
+    if deborde:
+        at("  ATTENTION : %d prise(s) du journal tombent HORS fenetre."
+           % len(deborde))
+        at("  Reconstruire : python papers_moteur.py --reset --oui")
     at("  Les papers FILTRENT les entrees du moteur churn, ils ne les")
     at("  choisissent pas -- ils mesurent un filtre, pas un timing.")
     if ko_j or ko_t:
@@ -606,9 +625,6 @@ def main():
         "echoue : selectionner, Ctrl+C)</summary><pre>%s</pre></details>"
         % esc(txt))
     if fenetre:
-        deborde = [x for x in journal
-                   if not (fenetre[0] <= (x.get("ts") or "")[11:16]
-                           < fenetre[1])]
         add("<div class='leg'>Fenetre observee : <b style='color:%s'>%s "
             "&rarr; %s</b> (fin exclue), heure de Paris. 14:00 est la "
             "definition du panneau lui-meme (<b>_sess</b> : US si heure "
@@ -659,7 +675,10 @@ def main():
     print("  papers   : %d" % len(jeu))
     print("  prises   : %d" % len(journal))
     print("  tickets  : %d" % len(tickets))
-    print("  ouverts  : %d" % n_ouv)
+    print("  ouverts  : %d  (dans la fenetre)" % n_ouv)
+    if deborde:
+        print("  HORS FENETRE au journal : %d -- relance avec"
+              " --reset --oui" % len(deborde))
     print("  ecrit    : %s   (bouton Copier dans la page)" % SORTIE_H)
     print("  ecrit    : %s   (type %s)" % (SORTIE_T, SORTIE_T))
     return 0
