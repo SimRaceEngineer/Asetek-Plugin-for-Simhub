@@ -21,17 +21,23 @@ PRECEDENTE.
 
 2. LA BASE. Une fois l heure alignee, l ecart median entre le prix
    CFD de tes tickets US30 et le prix YM au meme instant. Elle derive
-   vers l echeance : elle est donnee par semaine, pas en un chiffre.
-   La bande demandee est alors convertie en prix YM.
+   vers l echeance : elle est donnee par semaine, pas en un chiffre,
+   et c est celle de la semaine la plus RECENTE qui sert a convertir
+   la bande -- la mediane globale est celle du milieu de la periode,
+   donc fausse d autant pour un niveau regarde aujourd hui. Les
+   semaines portant moins de --minsem tickets sont ecartees : une
+   semaine de queue a neuf tickets suffirait a fausser le choix.
 
 3. LES VISITES. Un profil de six mois ecrase les passages successifs.
    Ici chaque visite est isolee -- une visite se termine quand le prix
    quitte la bande plus de --trou minutes. Pour chacune : date, heure,
-   duree, volume, bid, ask, delta. Puis le delta par heure de la
-   journee, toutes visites confondues.
+   duree, volume, bid, ask, delta. Une visite n est signalee que si
+   elle depasse 15 % ET porte au moins --plancher contrats : sans ce
+   plancher, une visite de dix-neuf contrats sort a -89 % et n est
+   qu une transaction ou deux. Puis le meme flux par heure.
 
 Sans tickets_rails.jsonl, les etapes 1 et 2 sont sautees et la bande
-est prise telle quelle, en prix YM.
+est prise telle quelle, en prix YM -- ou convertie par --base.
 """
 
 import argparse
@@ -204,6 +210,12 @@ def main():
     p.add_argument("--trou", type=int, default=30,
                    help="minutes hors bande qui terminent une visite")
     p.add_argument("--echantillon", type=int, default=1500)
+    p.add_argument("--base", type=float,
+                   help="force la base CFD-future au lieu de la mesurer")
+    p.add_argument("--minsem", type=int, default=30,
+                   help="tickets minimum pour qu une semaine serve de base")
+    p.add_argument("--plancher", type=int, default=500,
+                   help="volume minimum pour qu une visite soit signalee")
     a = p.parse_args()
     bas, haut = min(a.bas, a.haut), max(a.bas, a.haut)
 
@@ -238,6 +250,9 @@ def main():
         print("  Les etapes 1 et 2 sont sautees : la bande est prise")
         print("  telle quelle, en prix YM. Le resultat ne vaut alors")
         print("  que si tu as deja converti tes niveaux toi-meme.")
+        if a.base is not None:
+            base_med = a.base
+            print("  base FORCEE a %+.1f points (--base)" % base_med)
         print()
     else:
         ech = tickets[-a.echantillon:] if len(tickets) > a.echantillon else tickets
@@ -292,7 +307,7 @@ def main():
                 py = prix_a(temps, prix, sec + decalage)
                 if py is None:
                     continue
-                d = datetime.datetime.utcfromtimestamp(sec)
+                d = datetime.datetime.fromtimestamp(sec, datetime.timezone.utc)
                 cle = "%s-S%02d" % (d.strftime("%Y"), d.isocalendar()[1])
                 par_sem.setdefault(cle, []).append(pcfd - py)
             print("     semaine     n    base mediane   dispersion")
@@ -302,7 +317,47 @@ def main():
                 print("     %-10s %4d    %+10.1f    %10.1f"
                       % (cle, len(v), mediane(v), ecart_median(v)))
             print()
-            print("  base retenue pour la conversion : %+.1f points" % base_med)
+            # La base DERIVE vers l echeance. Prendre la mediane globale,
+            # c est prendre celle du milieu de la periode -- et donc se
+            # tromper d autant sur un niveau regarde aujourd hui.
+            # Une semaine de queue ne portant que quelques tickets
+            # donnerait une base fausse. On n en retient que les
+            # semaines assez fournies pour etre credibles.
+            solides = [c for c in sorted(par_sem)
+                       if len(par_sem[c]) >= a.minsem]
+            maigres = [c for c in sorted(par_sem)
+                       if len(par_sem[c]) < a.minsem]
+            if maigres:
+                print("  semaine(s) ecartee(s), moins de %d tickets : %s"
+                      % (a.minsem, ", ".join(maigres)))
+                print()
+            if len(solides) > 1:
+                sems = solides
+                recente = mediane(par_sem[sems[-1]])
+                ancienne = mediane(par_sem[sems[0]])
+                derive = (recente - ancienne) / max(1, len(sems) - 1)
+                print("  La base derive de %+.1f points par semaine." % derive)
+                print("  Un niveau trace sur le CFD il y a %d semaine(s) ne"
+                      % (len(sems) - 1))
+                print("  designe donc plus le meme prix future aujourd hui :")
+                print("  il a glisse de %.0f points." % abs(recente - ancienne))
+                print()
+                if a.base is None:
+                    base_med = recente
+                    print("  base retenue : celle de la semaine LA PLUS")
+                    print("  RECENTE ASSEZ FOURNIE (%s, %d tickets), %+.1f"
+                          % (sems[-1], len(par_sem[sems[-1]]), recente))
+                    print("  points -- pas la mediane globale, qui vaudrait")
+                    print("  %+.1f et decalerait la bande d autant."
+                          % mediane([x for v in par_sem.values() for x in v]))
+            elif len(solides) == 1 and a.base is None:
+                base_med = mediane(par_sem[solides[0]])
+                print("  une seule semaine assez fournie (%s) : base %+.1f"
+                      % (solides[0], base_med))
+            if a.base is not None:
+                base_med = a.base
+                print("  base FORCEE a %+.1f points (--base)" % base_med)
+            print()
             print("  (CFD moins future : un CFD au-dessus donne un chiffre")
             print("   positif, et la bande YM est donc plus BASSE)")
             print()
@@ -349,19 +404,40 @@ def main():
                 b += bids[i]
                 q += asks[i]
         duree = (temps[d1] - temps[d0]) / 60.0
-        t0 = datetime.datetime.utcfromtimestamp(temps[d0])
+        t0 = datetime.datetime.fromtimestamp(temps[d0], datetime.timezone.utc)
         lignes.append((t0, duree, v, b, q, q - b))
+    faibles = 0
     for t0, duree, v, b, q, delta in lignes:
         part = (100.0 * delta / v) if v else 0.0
-        marque = "  <<<" if v and abs(part) >= 15 else ""
+        if v < a.plancher:
+            marque = "   . trop peu de volume"
+            faibles += 1
+        elif abs(part) >= 15:
+            marque = "  <<<"
+        else:
+            marque = ""
         print("     %s  %6.0f mn %9d %9d %9d %9d %+6.1f %%%s"
               % (t0.strftime("%Y-%m-%d %H:%M"), duree, v, b, q, delta,
                  part, marque))
     print()
     print("  La colonne part est le delta rapporte au volume de la visite.")
-    print("  C est elle qui compte : un gros delta sur un gros volume peut")
-    print("  n etre que du bruit, un delta moyen sur peu de volume non.")
-    print("  Les visites marquees depassent 15 %.")
+    print("  Une visite est signalee <<< si elle depasse 15 %% ET porte au")
+    print("  moins %d contrats. Sans ce plancher, une visite de 19 contrats"
+          % a.plancher)
+    print("  sort a -89 %% et n est qu une transaction ou deux : du bruit")
+    print("  presente comme un signal.")
+    if faibles:
+        print("  %d visite(s) sous le plancher, ecartee(s) du jugement."
+              % faibles)
+    print()
+    gros = [l for l in lignes if l[2] >= a.plancher]
+    if gros:
+        gros.sort(key=lambda l: -l[2])
+        t0, duree, v, b, q, delta = gros[0]
+        print("  La visite la plus lourde : %s, %d contrats, delta %+.1f %%."
+              % (t0.strftime("%Y-%m-%d %H:%M"), v, 100.0 * delta / v))
+        print("  C est celle qui pese dans le jugement -- les autres")
+        print("  comptent a proportion de leur volume, pas de leur %.")
     print()
 
     # --- par heure ---------------------------------------------------------
@@ -371,7 +447,7 @@ def main():
     print()
     heures = {}
     for i in dedans:
-        h = datetime.datetime.utcfromtimestamp(temps[i]).hour
+        h = datetime.datetime.fromtimestamp(temps[i], datetime.timezone.utc).hour
         s = heures.setdefault(h, [0, 0, 0])
         s[0] += vols[i]
         s[1] += bids[i]
