@@ -31,13 +31,18 @@ LA REGLE, ET D OU ELLE VIENT
 
         on ne comprime que si le LECTEUR sait ouvrir un .gz.
 
-    extraire_cycles essaie cycles.jsonl puis cycles.jsonl.gz : sans
-    danger. extraire_snapshots et audit_cadence cherchent le nom exact
-    "snapshots.csv" : les gzipper ne provoquerait aucune erreur, ils
-    trouveraient zero journee et rendraient un rapport vide. C est le
-    piege que le propre en-tete d extraire_cycles decrit -- "un
-    chercheur de fichiers qui ignore silencieusement la majorite de ses
-    candidats rend un resultat plausible".
+    Gzipper un fichier que son lecteur cherche par son nom exact ne
+    provoque aucune erreur : il trouve zero journee et rend un rapport
+    vide. C est le piege que le propre en-tete d extraire_cycles
+    decrit -- "un chercheur de fichiers qui ignore silencieusement la
+    majorite de ses candidats rend un resultat plausible".
+
+    Cette condition n est PAS ecrite en dur ici. Une version
+    precedente la codait a la main, et elle a continue a repondre
+    "non" apres que les lecteurs eurent ete corriges : le script
+    protegeait deux Go contre un probleme qui n existait plus.
+    sait_gz() ouvre donc le source des lecteurs et y cherche ".gz".
+    Un fait sur le code se lit dans le code.
 
 CE QUE LA MESURE DU 20/08 A MONTRE
 
@@ -71,26 +76,27 @@ import time
 RACINE = "docs"
 CARTES = "cartes"
 
-# (dossier, motif, dossier reduit, prefixe reduit, gz_ok, consommateurs)
+# (dossier, motif, dossier reduit, prefixe reduit, fichiers lecteurs)
 #
-# gz_ok = les modules qui lisent ce fichier savent-ils ouvrir un .gz ?
-# La question n est pas theorique : gzipper un fichier que son lecteur
-# cherche par son nom exact ne provoque aucune erreur. Le lecteur
-# trouve zero journee et rend un rapport vide -- plausible, et faux.
+# On ne comprime que si le LECTEUR sait ouvrir un .gz. Gzipper un
+# fichier que son lecteur cherche par son nom exact ne provoque aucune
+# erreur : il trouve zero journee et rend un rapport vide -- plausible,
+# et faux.
+#
+# La reponse n est PAS ecrite ici en dur. Une version precedente la
+# codait a la main, et elle a continue a repondre "non" apres que les
+# lecteurs eurent ete corriges. Un fait sur le code se LIT dans le
+# code : sait_gz() ouvre les fichiers et cherche ".gz" dedans.
 FLUX = [
-    # extraire_cycles.source() essaie cycles.jsonl PUIS cycles.jsonl.gz,
-    # et ouvre() gere gzip. Compression sans danger.
     (os.path.join(RACINE, "buddha"), "cycles.jsonl",
-     os.path.join(CARTES, "cycles"), "cycles_", True,
-     "extraire_cycles"),
-    # extraire_snapshots.journees() et audit_cadence cherchent le nom
-    # EXACT "snapshots.csv". Les comprimer les rendrait aveugles.
+     os.path.join(CARTES, "cycles"), "cycles_",
+     ["extraire_cycles.py"]),
     (os.path.join(RACINE, "buddha"), "snapshots.csv",
-     os.path.join(CARTES, "snapshots"), "snap_", False,
-     "extraire_snapshots, audit_cadence"),
-    # Aucun module Python du depot ne lit lifecycle.
+     os.path.join(CARTES, "snapshots"), "snap_",
+     ["extraire_snapshots.py", "audit_cadence.py"]),
+    # Aucun module Python du depot ne lit lifecycle : rien a menager.
     (os.path.join(RACINE, "lifecycle"), "lifecycle.csv",
-     None, None, True, "aucun"),
+     None, None, []),
 ]
 
 FRAICHE = 3600          # une heure : en dessous, la stack ecrit peut-etre
@@ -122,6 +128,39 @@ def trouve_racine(dis):
         dis("    %s" % c)
     dis("  Relance depuis le dossier du stack, ou dis-le-moi.")
     return None
+
+
+def sait_gz(fichiers):
+    """(le lecteur gere-t-il .gz, pourquoi). Lu dans le code, pas suppose.
+
+    Sans lecteur declare, il n y a personne a menager : on comprime.
+    Un lecteur introuvable rend None -- ni oui ni non -- et le doute
+    empeche la compression au lieu de l autoriser."""
+    if not fichiers:
+        return True, "aucun lecteur declare"
+    absents, sourds = [], []
+    for f in fichiers:
+        c = None
+        for r in CANDIDATES:
+            q = os.path.join(r, f)
+            if os.path.isfile(q):
+                c = q
+                break
+        if c is None:
+            absents.append(f)
+            continue
+        try:
+            src = open(c, "r", encoding="utf-8", errors="replace").read()
+        except OSError:
+            absents.append(f)
+            continue
+        if ".gz" not in src:
+            sourds.append(f)
+    if absents:
+        return None, "introuvable : %s" % ", ".join(absents)
+    if sourds:
+        return False, "%s ne mentionne(nt) jamais .gz" % ", ".join(sourds)
+    return True, "%s gere(nt) le .gz" % ", ".join(fichiers)
 
 
 def humain(o):
@@ -224,11 +263,14 @@ def main():
     aujourd = time.strftime("%Y-%m-%d")
     gagne = 0
     bloques = []
-    for dossier, motif, red_dir, red_pre, gz_ok, lecteurs in FLUX:
+    for dossier, motif, red_dir, red_pre, fichiers_lecteurs in FLUX:
+        gz_ok, pourquoi = sait_gz(fichiers_lecteurs)
         dis("-" * 94)
         dis("%s   (%s)" % (dossier, motif))
-        dis("   lu par : %s%s" % (lecteurs,
-                                  "" if gz_ok else "  -- NE LIT PAS le .gz"))
+        dis("   %s -- %s"
+            % ({True: "compressible",
+                False: "NON compressible",
+                None: "compression suspendue"}[gz_ok], pourquoi))
         dis("-" * 94)
         if not os.path.isdir(dossier):
             dis("  absent.")
@@ -262,7 +304,13 @@ def main():
                 rc = os.path.join(red_dir, "%s%s.csv" % (red_pre, j))
                 a_reduit = os.path.isfile(rc)
                 reduit = "oui" if a_reduit else "NON"
-            frais = (time.time() - os.path.getmtime(ici)) < FRAICHE
+            # La fraicheur ne protege que le CLAIR : c est lui que la
+            # stack peut etre en train d ecrire. Un .gz qu on vient de
+            # produire n est ecrit par personne, et l afficher "en
+            # cours" faisait passer quinze journees deja traitees pour
+            # du travail en attente.
+            frais = (not ici.endswith(".gz")
+                     and (time.time() - os.path.getmtime(ici)) < FRAICHE)
             # L ordre des tests EST la politique. La reduction ne
             # conditionne QUE la suppression : comprimer ne detruit
             # rien et reste reversible. Les lier, comme le faisait la
@@ -277,6 +325,8 @@ def main():
                             if rang >= a.garde else "comprime, garde")
             elif rang < a.clair:
                 etat = "en clair, recent -- garde"
+            elif gz_ok is None:
+                etat = "EN CLAIR -- lecteur introuvable, on s abstient"
             elif not gz_ok:
                 etat = "EN CLAIR -- son lecteur ignore le .gz"
             else:
@@ -298,18 +348,17 @@ def main():
                 bloc_o += taille
                 bloc_n += 1
         if bloc_n:
-            bloques.append((motif, lecteurs, bloc_o, bloc_n))
+            bloques.append((motif, pourquoi, bloc_o, bloc_n))
         dis("")
 
     dis("=" * 94)
     if bloques:
         dis("BLOQUE PAR LE LECTEUR, ET NON PAR LA PRUDENCE")
         dis("=" * 94)
-        for motif, lecteurs, o, n in bloques:
+        for motif, pourquoi, o, n in bloques:
             dis("  %-16s %10s en clair sur %d journee(s)"
                 % (motif, humain(o), n))
-            dis("      %s cherche(nt) le nom exact, sans variante .gz."
-                % lecteurs)
+            dis("      %s" % pourquoi)
         dis("")
         dis("  Ce n est pas une donnee a proteger, c est un lecteur a")
         dis("  corriger. extraire_cycles le fait deja en six lignes :")
