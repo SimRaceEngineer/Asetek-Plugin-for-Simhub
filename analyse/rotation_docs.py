@@ -17,14 +17,27 @@ LA REGLE, ET D OU ELLE VIENT
     et ecrit cartes\cycles\cycles_<jour>.csv. extraire_snapshots.py fait
     de meme vers cartes\snapshots\snap_<jour>.csv.
 
-    Donc la condition de suppression n est pas l age, c est la
+    Donc la condition de SUPPRESSION n est pas l age, c est la
     REDUCTION :
 
         un jour brut ne peut disparaitre que si son extraction existe.
 
-    Un jour non extrait est intouchable, quel que soit son age. Le
-    script le classe A EXTRAIRE et s arrete la pour lui. C est le
-    pipeline du depot qui decide, pas moi.
+    Elle ne conditionne QUE la suppression. La premiere version liait
+    aussi la compression a la reduction, et gelait ainsi deux Go de
+    snapshots en clair pour rien : comprimer ne detruit pas, et se
+    defait.
+
+    La compression a sa propre condition, et elle est ailleurs :
+
+        on ne comprime que si le LECTEUR sait ouvrir un .gz.
+
+    extraire_cycles essaie cycles.jsonl puis cycles.jsonl.gz : sans
+    danger. extraire_snapshots et audit_cadence cherchent le nom exact
+    "snapshots.csv" : les gzipper ne provoquerait aucune erreur, ils
+    trouveraient zero journee et rendraient un rapport vide. C est le
+    piege que le propre en-tete d extraire_cycles decrit -- "un
+    chercheur de fichiers qui ignore silencieusement la majorite de ses
+    candidats rend un resultat plausible".
 
 CE QUE LA MESURE DU 20/08 A MONTRE
 
