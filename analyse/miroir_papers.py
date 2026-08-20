@@ -57,7 +57,7 @@ VERROU_PERIME = 15 * 60
 # sont pas renseignes ici, le miroir les ignore et le dit. Il ne les
 # devine pas.
 #   exemple :  TEMOINS = {220004: ("US30", "BUY"), 220014: ("US30", "SELL")}
-TEMOINS = {}
+TEMOINS = {220004: ('US30', 'SELL'), 220014: ('US500', 'BUY')}
 
 COLONNES = [
     "horodatage", "evenement", "ticket_parent", "magic_parent",
