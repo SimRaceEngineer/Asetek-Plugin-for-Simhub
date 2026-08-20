@@ -1,75 +1,49 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-miroir_papers.py -- passer 19 magics paper en ordres reels, et mesurer
-                    ce que le paper ne pouvait pas voir.
+miroir_papers.py -- les magics paper en ordres reels.
 
-CE QU IL FAIT
--------------
-Un magic paper n est pas une strategie : c est un FILTRE sur le flux
-d entrees reel. Son PnL vaut pnl_reel x (lot / volume) -- le PnL du
-trade parent, remis a l echelle. Il n a pas de sortie propre.
+SOURCE : churn_trade_logger._save_open() ecrit un JSON atomique
+{ticket: record} A L ENTREE du trade, avec l instantane complet
+(churn_entry, rails_entry, hlc_churn_entry, epoch_entry, ll_entry).
+C est le meme dictionnaire que celui des predicats. Le miroir le LIT.
+Il n appelle aucune fonction du journaliseur, n en recalcule aucune,
+et ne modifie rien : deux calculs du meme etat pourraient differer,
+une lecture non.
 
-Le miroir reproduit donc exactement ca, mais en vrai :
-  - il surveille les nouveaux tickets des bras 206xxx / 207xxx,
-  - pour chaque nouveau trade parent, il evalue les 19 predicats,
-  - pour ceux qui passent, il envoie un ordre reel au lot minimum
-    avec le magic paper, meme sens, meme SL que le parent,
-  - il ferme sa ligne quand le parent ferme.
+Pour chaque nouveau trade parent (206xxx / 207xxx) capture en direct,
+il evalue les regles, envoie un ordre au LOT MINIMUM avec le magic
+paper -- meme sens, meme SL que le parent -- et ferme quand le
+parent ferme.
 
-Ce que le paper supposait et qui devient mesurable :
-  - la LATENCE entre l entree du parent et la decision du filtre,
-  - le PRIX reellement obtenu a ce moment-la,
-  - le SPREAD paye a cet instant precis,
-  - le SLIPPAGE entre prix demande et prix obtenu.
+Mesure alors ce que le paper ne pouvait pas voir : latence entre
+l entree du parent et l envoi, prix obtenu, spread paye, slippage.
 
-TROIS MODES
------------
-  (aucun flag)  SONDE. Ne touche a rien. Cherche ou vivent les
-                predicats, verifie les 19, et montre ce qu il ferait
-                sur les positions actuellement ouvertes.
-  --tourner     BOUCLE INERTE. Tourne en continu, journalise chaque
-                decision, N ENVOIE AUCUN ORDRE.
-  --armer       BOUCLE REELLE. Envoie. Ferme. Journalise tout.
+MODES
+  (rien)      sonde : lecture seule, montre la table et l etat courant
+  --tourner   boucle inerte : journalise, n envoie rien
+  --armer     boucle reelle
 
-Ne lance --armer qu apres avoir lu le rapport de la sonde.
-
-JOURNAL
--------
-  docs/miroir_papers.csv   une ligne par decision, puis completee
-                           a la fermeture. C est ce fichier qui
-                           repond a la question live/paper.
+JOURNAL  docs/miroir_papers.csv
 """
 
 from __future__ import annotations
 
 import csv
+import json
 import os
 import sys
 import time
-import types
 import traceback
 import datetime
 
 SEP = "=" * 92
 
-# --- les 19 magics demandes -------------------------------------------------
-MAGICS = [240007, 220014, 230207, 240004, 230201, 240005, 240002,
-          230205, 240001, 220004, 230210, 240008, 240003, 240006,
-          230106, 230307, 230102, 230202, 230107]
-
-# les deux temoins sans regle : ils prennent tout leur actif+sens
-TEMOINS = {220004, 220014}
-
-# --- les bras dont on miroite les entrees -----------------------------------
-# 206102 // 1000 == 206
 PARENTS = (206, 207)
-
-# --- garde-fous -------------------------------------------------------------
-MAX_MIROIRS = 60        # jamais plus de miroirs ouverts en meme temps
-POLL_SEC = 1.0          # la latence mesuree ne peut pas descendre sous ca
-DEVIATION = 20          # points de tolerance au slippage
-LOG_MAX = 4000          # lignes conservees dans le journal texte
+MAX_MIROIRS = 60
+POLL_SEC = 0.5
+DEVIATION = 20
+LOG_MAX = 4000
 
 DOSSIER_DOCS = "docs"
 CSV_JOURNAL = os.path.join(DOSSIER_DOCS, "miroir_papers.csv")
@@ -77,21 +51,28 @@ TXT_JOURNAL = os.path.join(DOSSIER_DOCS, "miroir_papers.log")
 VERROU = os.path.join(DOSSIER_DOCS, "miroir_papers.lock")
 VERROU_PERIME = 15 * 60
 
+# --- les deux temoins sans regle -------------------------------------------
+# Ils prennent TOUT leur actif et leur sens, sans condition. Leur actif
+# et leur sens ne sont ecrits nulle part dans le code : tant qu ils ne
+# sont pas renseignes ici, le miroir les ignore et le dit. Il ne les
+# devine pas.
+#   exemple :  TEMOINS = {220004: ("US30", "BUY"), 220014: ("US30", "SELL")}
+TEMOINS = {}
+
 COLONNES = [
-    "horodatage", "evenement",
-    "ticket_parent", "magic_parent", "symbole", "sens",
-    "prix_parent", "volume_parent", "sl_parent",
-    "magic_paper", "decision", "raison",
+    "horodatage", "evenement", "ticket_parent", "magic_parent",
+    "symbole", "actif", "sens", "prix_parent", "volume_parent", "sl_parent",
+    "magic_paper", "regle", "decision", "raison",
     "latence_ms", "prix_demande", "prix_obtenu", "slippage_pts",
     "spread_pts", "bid", "ask",
     "retcode", "ticket_miroir", "volume_miroir",
     "prix_sortie_miroir", "pnl_miroir", "pnl_parent_pts",
 ]
 
+SENS_VERS_DIR = {"achat": "BUY", "vente": "SELL"}
 
-# ============================================================================
-# journalisation
-# ============================================================================
+
+# ---------------------------------------------------------------- journal
 def maintenant():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -109,7 +90,6 @@ def dit(msg):
 
 
 def taille_journal():
-    """Borne le journal texte, comme papers_boucle."""
     try:
         if not os.path.exists(TXT_JOURNAL):
             return
@@ -122,7 +102,7 @@ def taille_journal():
         pass
 
 
-def csv_ligne(donnees):
+def csv_ligne(d):
     try:
         os.makedirs(DOSSIER_DOCS, exist_ok=True)
         neuf = not os.path.exists(CSV_JOURNAL)
@@ -130,132 +110,117 @@ def csv_ligne(donnees):
             w = csv.DictWriter(f, fieldnames=COLONNES, extrasaction="ignore")
             if neuf:
                 w.writeheader()
-            donnees.setdefault("horodatage", maintenant())
-            w.writerow(donnees)
+            d.setdefault("horodatage", maintenant())
+            w.writerow(d)
     except Exception as e:
         dit("  journal csv impossible : %s" % e)
 
 
-# ============================================================================
-# trouver les predicats -- on cherche, on ne suppose pas
-# ============================================================================
-def fichiers_citant(magics, racine="."):
-    """Quels fichiers .py citent ces magics ? Reponse par lecture."""
-    cibles = [str(m) for m in magics]
-    trouves = {}
-    for courant, sous, fichiers in os.walk(racine):
-        sous[:] = [s for s in sous
-                   if s not in (".git", "__pycache__", "docs", "_legacy")]
-        for f in fichiers:
-            if not f.endswith(".py"):
-                continue
-            p = os.path.join(courant, f)
+# ---------------------------------------------------------------- la table
+class Regle(object):
+    """Un magic, sa fonction, son sens impose, sa provenance."""
+
+    def __init__(self, magic, nom, sens, fn, source):
+        self.magic = magic
+        self.nom = nom
+        self.sens = sens            # "achat", "vente" ou None
+        self.fn = fn
+        self.source = source
+
+    def dir_impose(self):
+        return SENS_VERS_DIR.get(self.sens)
+
+    def prend(self, rec):
+        """(bool, raison). Une exception rend None, jamais un faux vrai."""
+        d = self.dir_impose()
+        if d and rec.get("dir") != d:
+            return False, "sens impose %s" % d
+        try:
+            r = self.fn(rec)
+        except Exception as e:
+            return None, "%s: %s" % (type(e).__name__, e)
+        if isinstance(r, tuple):        # gate_230207.decide -> (bool, raison)
+            return bool(r[0]), (r[1] if len(r) > 1 else None)
+        return bool(r), None
+
+
+def charge_table():
+    """Les regles reellement disponibles. Rien n est suppose."""
+    table, notes = {}, []
+
+    # --- serie 240000 : liste de tuples (magic, nom, sens, fonction)
+    try:
+        import papers_regles
+        for t in getattr(papers_regles, "REGLES", []):
             try:
-                with open(p, encoding="utf-8", errors="replace") as fh:
-                    texte = fh.read()
+                magic, nom, sens, fn = t[0], t[1], t[2], t[3]
             except Exception:
                 continue
-            combien = sum(1 for c in cibles if c in texte)
-            if combien >= 3:
-                trouves[p] = combien
-    return trouves
+            if isinstance(magic, int) and callable(fn):
+                table[magic] = Regle(magic, nom, sens, fn, "papers_regles")
+        notes.append("papers_regles : %d regle(s)" % len(table))
+    except Exception as e:
+        notes.append("papers_regles indisponible : %s" % e)
 
+    # --- 230207 : une fonction posee a la racine de son module
+    try:
+        import gate_230207
+        fn = getattr(gate_230207, "decide", None)
+        if callable(fn):
+            table[230207] = Regle(230207, "GATE 230207", None, fn,
+                                  "gate_230207.decide")
+            notes.append("gate_230207.decide : 1 regle")
+        else:
+            notes.append("gate_230207 sans fonction decide")
+    except Exception as e:
+        notes.append("gate_230207 indisponible : %s" % e)
 
-def tables_du_module(mod):
-    """Les dicts du module dont les cles couvrent nos magics."""
-    sortie = []
-    for nom in dir(mod):
-        if nom.startswith("__"):
-            continue
+    # --- les temoins, uniquement si renseignes
+    for magic, spec in TEMOINS.items():
         try:
-            obj = getattr(mod, nom)
+            actif, sens_dir = spec
         except Exception:
             continue
-        if not isinstance(obj, dict) or not obj:
-            continue
-        cles = list(obj.keys())
-        entieres = [k for k in cles if isinstance(k, int)]
-        couvre = [m for m in MAGICS if m in entieres]
-        if len(couvre) >= 3:
-            appelables = sum(1 for v in obj.values() if callable(v))
-            sortie.append((nom, len(cles), len(couvre), appelables))
-    return sortie
+
+        def fabrique(a, s):
+            def f(rec):
+                return rec.get("asset") == a and rec.get("dir") == s
+            return f
+        table[magic] = Regle(magic, "TEMOIN %s %s" % (actif, sens_dir),
+                             None, fabrique(actif, sens_dir), "TEMOINS")
+    if TEMOINS:
+        notes.append("temoins : %d" % len(TEMOINS))
+    else:
+        notes.append("temoins 220004/220014 NON DEFINIS -- ignores")
+
+    return table, notes
 
 
-def importe(nom):
+def fichier_open():
+    """Le chemin du JSON des trades ouverts, lu dans le module."""
     try:
-        return __import__(nom), None
+        import churn_trade_logger as c
+    except Exception as e:
+        return None, "churn_trade_logger indisponible : %s" % e
+    for nom in ("_OPEN_STATE", "OPEN_STATE", "_OPEN"):
+        v = getattr(c, nom, None)
+        if isinstance(v, str) and v:
+            return v, None
+    return None, "aucun chemin d etat trouve dans churn_trade_logger"
+
+
+def lit_open(chemin):
+    try:
+        with open(chemin, encoding="utf-8") as f:
+            d = json.load(f)
+        return {int(k): v for k, v in d.items()}, None
+    except FileNotFoundError:
+        return {}, None
     except Exception as e:
         return None, "%s: %s" % (type(e).__name__, e)
 
 
-# ============================================================================
-# representer un trade parent pour un predicat
-# ============================================================================
-def etats_possibles(pos):
-    """Deux representations du meme trade parent.
-
-    Je ne sais pas si les predicats attendent un dict ou un objet.
-    On fabrique les deux, on essaie l un puis l autre, et on retient
-    celui qui a marche.
-    """
-    sens = "BUY" if pos.type == 0 else "SELL"
-    base = {
-        "ticket": pos.ticket,
-        "magic": pos.magic,
-        "symbol": pos.symbol,
-        "symbole": pos.symbol,
-        "actif": pos.symbol,
-        "asset": pos.symbol,
-        "type": pos.type,
-        "sens": sens,
-        "direction": sens,
-        "side": sens,
-        "price_open": pos.price_open,
-        "prix": pos.price_open,
-        "prix_ouverture": pos.price_open,
-        "volume": pos.volume,
-        "lot": pos.volume,
-        "sl": pos.sl,
-        "tp": pos.tp,
-        "time": pos.time,
-        "ts": pos.time,
-        "comment": pos.comment,
-        "commentaire": pos.comment,
-        "profit": pos.profit,
-    }
-    objet = types.SimpleNamespace(**base)
-    return base, objet
-
-
-def evalue(predicat, dict_etat, obj_etat, memo, cle):
-    """Appelle le predicat sans savoir ce qu il attend.
-
-    La forme retenue est memorisee PAR PREDICAT : rien ne garantit
-    que les 19 aient tous la meme signature, et un memo global
-    faisait osciller les essais d un magic a l autre.
-    """
-    connue = memo.get(cle)
-    essais = [connue] if connue else ["dict", "objet"]
-    derniere = None
-    for forme in essais:
-        arg = dict_etat if forme == "dict" else obj_etat
-        try:
-            r = predicat(arg)
-            memo[cle] = forme
-            return bool(r), None
-        except Exception as e:
-            derniere = "%s: %s" % (type(e).__name__, e)
-    if connue:
-        # la forme memorisee ne marche plus : on repart de zero
-        memo.pop(cle, None)
-        return evalue(predicat, dict_etat, obj_etat, memo, cle)
-    return None, derniere
-
-
-# ============================================================================
-# verrou atomique
-# ============================================================================
+# ---------------------------------------------------------------- verrou
 def prend_verrou():
     os.makedirs(DOSSIER_DOCS, exist_ok=True)
     try:
@@ -285,31 +250,26 @@ def rend_verrou():
         pass
 
 
-# ============================================================================
-# le miroir
-# ============================================================================
+# ---------------------------------------------------------------- miroir
 class Miroir(object):
 
-    def __init__(self, mt5, table, armer):
+    def __init__(self, mt5, table, chemin, armer):
         self.mt5 = mt5
-        self.table = table          # magic -> predicat
+        self.table = table
+        self.chemin = chemin
         self.armer = armer
-        self.memo = {}
-        self.vus = set()            # tickets parents deja traites
-        self.liens = {}             # ticket_parent -> [(magic, ticket_miroir)]
-        # dernier etat connu de chaque parent : quand il disparait, on ne
-        # peut plus l interroger, or c est son PnL qui sert de reference.
-        self.dernier = {}           # ticket_parent -> dict
+        self.vus = set()
+        self.liens = {}
+        self.dernier = {}
         self.premier_tour = True
 
-    # -- envoi ------------------------------------------------------------
-    def envoie(self, pos, magic_paper, t_signal):
+    # -- envoi -----------------------------------------------------------
+    def envoie(self, pos, rec, regle, t_signal):
         mt5 = self.mt5
         info = mt5.symbol_info(pos.symbol)
         tick = mt5.symbol_info_tick(pos.symbol)
         if info is None or tick is None:
             return None, "pas de cotation"
-
         achat = (pos.type == 0)
         prix = tick.ask if achat else tick.bid
         spread = (tick.ask - tick.bid) / info.point if info.point else 0.0
@@ -322,11 +282,10 @@ class Miroir(object):
             "type": mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL,
             "price": prix,
             "deviation": DEVIATION,
-            "magic": int(magic_paper),
+            "magic": int(regle.magic),
             "comment": "mir%d" % (pos.magic % 1000),
             "type_time": mt5.ORDER_TIME_GTC,
-            # FOK d abord : la reconnaissance a montre que l IOC
-            # n est pas supporte sur ces trois symboles.
+            # FOK d abord : l IOC n est pas supporte sur US30/NAS100/SPX500
             "type_filling": mt5.ORDER_FILLING_FOK,
         }
         if pos.sl:
@@ -339,7 +298,6 @@ class Miroir(object):
             req["type_filling"] = mt5.ORDER_FILLING_IOC
             res = mt5.order_send(req)
 
-        latence = (time.time() - t_signal) * 1000.0
         rc = res.retcode if res else None
         obtenu = res.price if res and res.retcode == 10009 else None
         slip = None
@@ -348,98 +306,30 @@ class Miroir(object):
             if not achat:
                 slip = -slip
 
-        commun = {
-            "evenement": "ENVOI" if self.armer else "SIMULE",
-            "ticket_parent": pos.ticket,
-            "magic_parent": pos.magic,
-            "symbole": pos.symbol,
+        csv_ligne({
+            "evenement": "ENVOI",
+            "ticket_parent": pos.ticket, "magic_parent": pos.magic,
+            "symbole": pos.symbol, "actif": rec.get("asset"),
             "sens": "BUY" if achat else "SELL",
-            "prix_parent": pos.price_open,
-            "volume_parent": pos.volume,
+            "prix_parent": pos.price_open, "volume_parent": pos.volume,
             "sl_parent": pos.sl,
-            "magic_paper": magic_paper,
+            "magic_paper": regle.magic, "regle": regle.nom,
             "decision": "PRIS",
-            "latence_ms": round(latence, 1),
-            "prix_demande": prix,
-            "prix_obtenu": obtenu,
+            "latence_ms": round((time.time() - t_signal) * 1000.0, 1),
+            "prix_demande": prix, "prix_obtenu": obtenu,
             "slippage_pts": None if slip is None else round(slip, 1),
             "spread_pts": round(spread, 1),
-            "bid": tick.bid,
-            "ask": tick.ask,
+            "bid": tick.bid, "ask": tick.ask,
             "retcode": rc,
             "ticket_miroir": res.order if res and res.retcode == 10009 else None,
             "volume_miroir": lot,
-        }
-        csv_ligne(commun)
-
+        })
         if res and res.retcode == 10009:
             return res.order, None
-        cm = res.comment if res else "pas de reponse"
-        return None, "retcode=%s %s" % (rc, cm)
+        return None, "retcode=%s %s" % (rc, res.comment if res else "sans reponse")
 
-    # -- fermeture --------------------------------------------------------
-    def ferme(self, ticket_miroir, magic_paper, ticket_parent, ref=None):
-        mt5 = self.mt5
-        ref = ref or {}
-        pnl_parent = self._pnl_parent_pts(ref)
-        trouve = mt5.positions_get(ticket=ticket_miroir)
-        if not trouve:
-            # le miroir est parti avant le parent : SL touche, ou ferme
-            # a la main. On le consigne, sinon la ligne reste orpheline.
-            csv_ligne({
-                "evenement": "MIROIR_DEJA_FERME",
-                "ticket_parent": ticket_parent, "magic_paper": magic_paper,
-                "ticket_miroir": ticket_miroir,
-                "symbole": ref.get("symbole"),
-                "pnl_parent_pts": pnl_parent,
-            })
-            return False, "deja fermee"
-        p = trouve[0]
-        info = mt5.symbol_info(p.symbol)
-        tick = mt5.symbol_info_tick(p.symbol)
-        if info is None or tick is None:
-            return False, "pas de cotation"
-        achat = (p.type == 0)
-        prix = tick.bid if achat else tick.ask
-        req = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "position": ticket_miroir,
-            "symbol": p.symbol,
-            "volume": p.volume,
-            "type": mt5.ORDER_TYPE_SELL if achat else mt5.ORDER_TYPE_BUY,
-            "price": prix,
-            "deviation": DEVIATION,
-            "magic": int(magic_paper),
-            "comment": "mirX",
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_FOK,
-        }
-        res = mt5.order_send(req)
-        if res and res.retcode == 10030:
-            req["type_filling"] = mt5.ORDER_FILLING_IOC
-            res = mt5.order_send(req)
-        ok = bool(res and res.retcode == 10009)
-        csv_ligne({
-            "evenement": "SORTIE",
-            "ticket_parent": ticket_parent,
-            "symbole": p.symbol,
-            "magic_paper": magic_paper,
-            "ticket_miroir": ticket_miroir,
-            "prix_sortie_miroir": res.price if ok else None,
-            "pnl_miroir": p.profit,
-            "pnl_parent_pts": pnl_parent,
-            "volume_parent": ref.get("volume"),
-            "magic_parent": ref.get("magic"),
-            "retcode": res.retcode if res else None,
-        })
-        return ok, None if ok else (res.comment if res else "pas de reponse")
-
+    # -- fermeture -------------------------------------------------------
     def _pnl_parent_pts(self, ref):
-        """PnL du parent en points d indice, dernier etat connu.
-
-        C est la reference : le paper vaut pnl_parent x (lot/volume).
-        Sans elle, la colonne pnl_miroir ne se compare a rien.
-        """
         if not ref:
             return None
         info = self.mt5.symbol_info(ref.get("symbole") or "")
@@ -448,326 +338,276 @@ class Miroir(object):
             return None
         ecart = (ref.get("prix_courant") or 0) - (ref.get("prix_open") or 0)
         if not ref.get("achat", True):
-            ecart = -ecart      # sur un SELL, un prix qui baisse est un gain
+            ecart = -ecart
         return round(ecart / pt, 1)
 
-    # -- un tour ----------------------------------------------------------
+    def ferme(self, tm, magic, tp, ref):
+        mt5 = self.mt5
+        pnl_parent = self._pnl_parent_pts(ref)
+        trouve = mt5.positions_get(ticket=tm)
+        if not trouve:
+            csv_ligne({"evenement": "MIROIR_DEJA_FERME", "ticket_parent": tp,
+                       "magic_paper": magic, "ticket_miroir": tm,
+                       "symbole": ref.get("symbole"),
+                       "pnl_parent_pts": pnl_parent})
+            return False, "deja fermee"
+        p = trouve[0]
+        tick = mt5.symbol_info_tick(p.symbol)
+        if tick is None:
+            return False, "pas de cotation"
+        achat = (p.type == 0)
+        req = {
+            "action": mt5.TRADE_ACTION_DEAL, "position": tm,
+            "symbol": p.symbol, "volume": p.volume,
+            "type": mt5.ORDER_TYPE_SELL if achat else mt5.ORDER_TYPE_BUY,
+            "price": tick.bid if achat else tick.ask,
+            "deviation": DEVIATION, "magic": int(magic), "comment": "mirX",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_FOK,
+        }
+        res = mt5.order_send(req)
+        if res and res.retcode == 10030:
+            req["type_filling"] = mt5.ORDER_FILLING_IOC
+            res = mt5.order_send(req)
+        ok = bool(res and res.retcode == 10009)
+        csv_ligne({"evenement": "SORTIE", "ticket_parent": tp,
+                   "symbole": p.symbol, "magic_paper": magic,
+                   "ticket_miroir": tm,
+                   "prix_sortie_miroir": res.price if ok else None,
+                   "pnl_miroir": p.profit, "pnl_parent_pts": pnl_parent,
+                   "volume_parent": ref.get("volume"),
+                   "magic_parent": ref.get("magic"),
+                   "retcode": res.retcode if res else None})
+        return ok, None if ok else (res.comment if res else "sans reponse")
+
+    # -- un tour ---------------------------------------------------------
     def tour(self):
         mt5 = self.mt5
         t_signal = time.time()
-        positions = mt5.positions_get() or []
-        vivants = set(p.ticket for p in positions)
-
-        parents = [p for p in positions if p.magic // 1000 in PARENTS]
-
-        for p in parents:
-            self.dernier[p.ticket] = {
-                "profit": p.profit, "prix_courant": p.price_current,
-                "prix_open": p.price_open, "volume": p.volume,
-                "symbole": p.symbol, "magic": p.magic,
-                "achat": (p.type == 0),
-            }
-
-        if self.premier_tour:
-            # on n emboite pas les 27 positions deja ouvertes :
-            # leur entree est passee, leur latence n est pas mesurable.
-            self.vus = set(p.ticket for p in parents)
-            self.premier_tour = False
-            dit("  %d parent(s) deja ouvert(s) : ignores (entree passee)"
-                % len(parents))
+        ouverts, err = lit_open(self.chemin)
+        if ouverts is None:
+            dit("  etat illisible : %s" % err)
             return
 
-        # --- fermetures : le parent a disparu -----------------------------
+        for tk, rec in ouverts.items():
+            if not isinstance(rec, dict):
+                continue
+            p = mt5.positions_get(ticket=tk)
+            if p:
+                self.dernier[tk] = {
+                    "prix_courant": p[0].price_current,
+                    "prix_open": p[0].price_open,
+                    "volume": p[0].volume, "symbole": p[0].symbol,
+                    "magic": p[0].magic, "achat": (p[0].type == 0),
+                }
+
+        if self.premier_tour:
+            self.vus = set(ouverts.keys())
+            self.premier_tour = False
+            dit("  %d trade(s) deja ouvert(s) : ignores (entree passee)"
+                % len(ouverts))
+            return
+
+        # --- fermetures
         for tp in list(self.liens.keys()):
-            if tp in vivants:
+            if tp in ouverts:
                 continue
             ref = self.dernier.pop(tp, {})
-            for magic_paper, tm in self.liens.pop(tp, []):
+            for magic, tm in self.liens.pop(tp, []):
                 if not self.armer:
-                    dit("  [SIMULE] sortie miroir M%s (parent %s ferme)"
-                        % (magic_paper, tp))
+                    dit("  [inerte] sortie M%s (parent %s ferme)" % (magic, tp))
                     continue
-                ok, err = self.ferme(tm, magic_paper, tp, ref)
-                dit("  sortie M%s ticket %s : %s"
-                    % (magic_paper, tm, "ok" if ok else err))
+                ok, e = self.ferme(tm, magic, tp, ref)
+                dit("  sortie M%s ticket %s : %s" % (magic, tm, "ok" if ok else e))
 
-        # --- nouvelles entrees --------------------------------------------
-        ouverts = sum(len(v) for v in self.liens.values())
-        for p in parents:
-            if p.ticket in self.vus:
+        # --- entrees
+        deja = sum(len(v) for v in self.liens.values())
+        for tk, rec in ouverts.items():
+            if tk in self.vus or not isinstance(rec, dict):
                 continue
-            self.vus.add(p.ticket)
-            d, o = etats_possibles(p)
-            sens = "BUY" if p.type == 0 else "SELL"
-            dit("  parent %s M%s %s %s @ %.2f vol %.2f"
-                % (p.ticket, p.magic, p.symbol, sens, p.price_open, p.volume))
+            self.vus.add(tk)
+            magic_parent = rec.get("magic") or 0
+            if magic_parent // 1000 not in PARENTS:
+                continue
+            dit("  parent %s M%s %s %s @ %s vol %s"
+                % (tk, magic_parent, rec.get("asset"), rec.get("dir"),
+                   rec.get("entry_price"), rec.get("volume")))
+
+            if not rec.get("entry_captured_live"):
+                dit("    instantane absent (entry_captured_live faux) -- ignore")
+                csv_ligne({"evenement": "IGNORE", "ticket_parent": tk,
+                           "magic_parent": magic_parent,
+                           "actif": rec.get("asset"), "sens": rec.get("dir"),
+                           "decision": "IGNORE",
+                           "raison": "entry_captured_live faux"})
+                continue
 
             pris = []
-            for magic_paper in MAGICS:
-                pred = self.table.get(magic_paper)
-                if pred is None:
-                    continue
-                r, err = evalue(pred, d, o, self.memo, magic_paper)
+            for magic in sorted(self.table):
+                regle = self.table[magic]
+                r, raison = regle.prend(rec)
                 if r is None:
-                    dit("    M%s predicat en erreur : %s" % (magic_paper, err))
-                    csv_ligne({"evenement": "ERREUR",
-                               "ticket_parent": p.ticket,
-                               "magic_paper": magic_paper,
-                               "symbole": p.symbol, "sens": sens,
-                               "decision": "ERREUR", "raison": err})
+                    dit("    M%s en erreur : %s" % (magic, raison))
+                    csv_ligne({"evenement": "ERREUR", "ticket_parent": tk,
+                               "magic_paper": magic, "regle": regle.nom,
+                               "actif": rec.get("asset"), "sens": rec.get("dir"),
+                               "decision": "ERREUR", "raison": raison})
                     continue
                 if not r:
                     continue
-                if ouverts + len(pris) >= MAX_MIROIRS:
-                    dit("    plafond de %d miroirs atteint, M%s NON pris"
-                        % (MAX_MIROIRS, magic_paper))
-                    csv_ligne({"evenement": "PLAFOND",
-                               "ticket_parent": p.ticket,
-                               "magic_paper": magic_paper,
-                               "decision": "REFUSE", "raison": "plafond"})
+                if deja + len(pris) >= MAX_MIROIRS:
+                    dit("    plafond %d atteint, M%s non pris" % (MAX_MIROIRS, magic))
+                    csv_ligne({"evenement": "PLAFOND", "ticket_parent": tk,
+                               "magic_paper": magic, "decision": "REFUSE",
+                               "raison": "plafond"})
                     continue
-                pris.append(magic_paper)
+                pris.append(regle)
 
             if not pris:
-                dit("    aucun des 19 ne prend ce trade")
+                dit("    aucune regle ne prend ce trade")
                 continue
-            dit("    pris par : %s"
-                % ", ".join("M%s%s" % (m, "*" if m in TEMOINS else "")
-                            for m in pris))
+            dit("    pris par : %s" % ", ".join("M%s" % r.magic for r in pris))
 
-            for magic_paper in pris:
+            pos = mt5.positions_get(ticket=tk)
+            if not pos:
+                dit("    position deja fermee, rien a miroiter")
+                continue
+            pos = pos[0]
+
+            for regle in pris:
                 if not self.armer:
-                    info = mt5.symbol_info(p.symbol)
-                    tick = mt5.symbol_info_tick(p.symbol)
+                    info = mt5.symbol_info(pos.symbol)
+                    tick = mt5.symbol_info_tick(pos.symbol)
                     sp = ((tick.ask - tick.bid) / info.point
                           if tick and info and info.point else 0)
                     csv_ligne({
-                        "evenement": "SIMULE",
-                        "ticket_parent": p.ticket, "magic_parent": p.magic,
-                        "symbole": p.symbol, "sens": sens,
-                        "prix_parent": p.price_open,
-                        "volume_parent": p.volume, "sl_parent": p.sl,
-                        "magic_paper": magic_paper, "decision": "PRIS",
+                        "evenement": "SIMULE", "ticket_parent": tk,
+                        "magic_parent": magic_parent, "symbole": pos.symbol,
+                        "actif": rec.get("asset"), "sens": rec.get("dir"),
+                        "prix_parent": pos.price_open,
+                        "volume_parent": pos.volume, "sl_parent": pos.sl,
+                        "magic_paper": regle.magic, "regle": regle.nom,
+                        "decision": "PRIS",
                         "latence_ms": round((time.time() - t_signal) * 1000, 1),
-                        "prix_demande": (tick.ask if p.type == 0 else tick.bid)
+                        "prix_demande": (tick.ask if pos.type == 0 else tick.bid)
                                         if tick else None,
                         "spread_pts": round(sp, 1),
                         "bid": tick.bid if tick else None,
                         "ask": tick.ask if tick else None,
-                        "volume_miroir": info.volume_min if info else None,
-                    })
+                        "volume_miroir": info.volume_min if info else None})
                     continue
-                tm, err = self.envoie(p, magic_paper, t_signal)
+                tm, e = self.envoie(pos, rec, regle, t_signal)
                 if tm:
-                    self.liens.setdefault(p.ticket, []).append((magic_paper, tm))
-                    dit("    M%s envoye, ticket %s" % (magic_paper, tm))
+                    self.liens.setdefault(tk, []).append((regle.magic, tm))
+                    dit("    M%s envoye, ticket %s" % (regle.magic, tm))
                 else:
-                    dit("    M%s REFUSE : %s" % (magic_paper, err))
+                    dit("    M%s REFUSE : %s" % (regle.magic, e))
 
 
-# ============================================================================
-# sonde
-# ============================================================================
-def sonde(mt5=None):
-    print(SEP)
-    print("SONDE -- OU VIVENT LES 19 PREDICATS")
-    print(SEP)
-    print()
-    print("  Rien n est envoye, rien n est ferme, rien n est modifie.")
-    print()
-
-    print("  Fichiers citant au moins 3 des 19 magics :")
-    print()
-    cands = fichiers_citant(MAGICS)
-    if not cands:
-        print("    aucun. Les predicats ne sont pas dans ce dossier.")
-    for p in sorted(cands, key=lambda k: -cands[k]):
-        print("    %-52s %2d magics cites" % (p, cands[p]))
-    print()
-
-    print(SEP)
-    print("CE QUE CES MODULES EXPOSENT")
-    print(SEP)
-    table = {}
-    origine = None
-    for p in sorted(cands, key=lambda k: -cands[k]):
-        nom = os.path.splitext(os.path.basename(p))[0]
-        if os.sep in os.path.dirname(p).strip("."):
-            continue
-        mod, err = importe(nom)
-        print()
-        print("  %s" % nom)
-        if mod is None:
-            print("    import impossible : %s" % err)
-            continue
-        trouvees = tables_du_module(mod)
-        if not trouvees:
-            print("    aucun dictionnaire indexe par nos magics")
-            continue
-        for tnom, ncles, ncouvre, nappel in trouvees:
-            print("    %-28s %3d cles, couvre %2d/19, %d appelable(s)"
-                  % (tnom, ncles, ncouvre, nappel))
-            if nappel and ncouvre > (0 if origine is None else -1):
-                if origine is None or ncouvre > origine[2]:
-                    origine = (nom, tnom, ncouvre)
-                    table = dict(getattr(mod, tnom))
-    print()
-
-    print(SEP)
-    print("COUVERTURE DES 19")
-    print(SEP)
-    print()
-    if not table:
-        print("  Aucune table de predicats trouvee automatiquement.")
-        print("  Colle-moi la liste ci-dessus, je te dirai quoi extraire.")
-        return None
-    print("  table retenue : %s.%s" % (origine[0], origine[1]))
-    print()
-    manquants = []
-    for m in MAGICS:
-        pred = table.get(m)
-        etat = "ok" if callable(pred) else "ABSENT"
-        if not callable(pred):
-            manquants.append(m)
-        marque = " (temoin sans regle)" if m in TEMOINS else ""
-        print("    M%-8s %s%s" % (m, etat, marque))
-    print()
-    if manquants:
-        print("  %d magic(s) sans predicat : %s"
-              % (len(manquants), ", ".join(str(x) for x in manquants)))
-        print("  Le miroir les ignorera. Dis-moi si c est acceptable.")
-    else:
-        print("  Les 19 ont un predicat.")
-    print()
-    return table
-
-
-def sonde_a_blanc(mt5, table):
-    """Evalue les predicats sur les positions parentes deja ouvertes."""
-    print(SEP)
-    print("CE QUE LE MIROIR FERAIT SUR LES POSITIONS ACTUELLES")
-    print(SEP)
-    print()
-    positions = mt5.positions_get() or []
-    parents = [p for p in positions if p.magic // 1000 in PARENTS]
-    if not parents:
-        print("  aucun parent 206xxx/207xxx ouvert.")
-        return
-    memo = {}
-    for p in parents:
-        d, o = etats_possibles(p)
-        sens = "BUY" if p.type == 0 else "SELL"
-        pris, erreurs = [], []
-        for m in MAGICS:
-            pred = table.get(m)
-            if pred is None:
-                continue
-            r, err = evalue(pred, d, o, memo, m)
-            if r is None:
-                erreurs.append((m, err))
-            elif r:
-                pris.append(m)
-        print("  parent %s M%s %-8s %-4s @ %9.2f  ->  %d/19"
-              % (p.ticket, p.magic, p.symbol, sens, p.price_open, len(pris)))
-        if pris:
-            print("      %s" % ", ".join("M%s%s" % (m, "*" if m in TEMOINS else "")
-                                          for m in pris))
-        for m, err in erreurs[:3]:
-            print("      M%s erreur : %s" % (m, err))
-    print()
-    formes = {}
-    for m, f in memo.items():
-        formes.setdefault(f, []).append(m)
-    if not formes:
-        print("  aucun predicat n a pu etre appele.")
-    for f in sorted(formes):
-        print("  appeles avec un %-6s : %s"
-              % (f, ", ".join("M%s" % x for x in sorted(formes[f]))))
-    print()
-
-
-# ============================================================================
-# main
-# ============================================================================
+# ---------------------------------------------------------------- main
 def main():
     args = sys.argv[1:]
     armer = "--armer" in args
     tourner = "--tourner" in args or armer
 
     print(SEP)
-    print("MIROIR PAPERS -- 19 MAGICS")
+    print("MIROIR PAPERS")
     print(SEP)
     print()
-    if armer:
-        print("  MODE ARME : DES ORDRES REELS VONT ETRE ENVOYES.")
-    elif tourner:
-        print("  MODE INERTE : boucle active, aucun ordre envoye.")
-    else:
-        print("  MODE SONDE : lecture seule, aucune boucle.")
+    print("  mode : %s" % ("ARME -- DES ORDRES REELS PARTENT" if armer
+                           else ("inerte -- aucun ordre" if tourner
+                                 else "sonde -- lecture seule")))
     print()
 
-    table = sonde()
+    table, notes = charge_table()
+    for n in notes:
+        print("  %s" % n)
+    print()
+    print(SEP)
+    print("REGLES QUI PRODUIRONT DES ORDRES")
+    print(SEP)
+    print()
+    print("    magic     sens impose   source                 regle")
+    print("    " + "-" * 84)
+    for magic in sorted(table):
+        r = table[magic]
+        print("    %-9s %-13s %-22s %s"
+              % (r.magic, r.dir_impose() or "les deux", r.source, r.nom))
+    print()
+    print("  %d regle(s) active(s)." % len(table))
+    print()
+
+    chemin, err = fichier_open()
+    if not chemin:
+        print("  %s" % err)
+        return
+    print("  etat des trades ouverts : %s" % chemin)
+    ouverts, e = lit_open(chemin)
+    if ouverts is None:
+        print("  illisible : %s" % e)
+        return
+    print("  %d trade(s) dedans" % len(ouverts))
+    print()
 
     try:
         import MetaTrader5 as mt5
     except ImportError:
-        print("  MetaTrader5 absent de ce python : on s arrete a la sonde.")
+        print("  MetaTrader5 absent de ce python.")
         return
-
     if not mt5.initialize():
         print("  connexion MT5 impossible : %s" % (mt5.last_error(),))
         return
 
     try:
-        ti = mt5.terminal_info()
         ai = mt5.account_info()
-        print(SEP)
-        print("TERMINAL")
-        print(SEP)
-        print("  %s" % (getattr(ti, "path", "?")))
-        print("  %s / %s"
-              % (getattr(ai, "server", "?"),
-                 {0: "DEMO", 1: "CONCOURS", 2: "REEL"}.get(
-                     getattr(ai, "trade_mode", -1), "?")))
+        print("  %s / %s" % (getattr(ai, "server", "?"),
+                             {0: "DEMO", 1: "CONCOURS", 2: "REEL"}.get(
+                                 getattr(ai, "trade_mode", -1), "?")))
         if getattr(ai, "margin_mode", -1) != 2:
-            print()
-            print("  Le compte n est PAS en hedging. Les miroirs")
-            print("  fusionneraient. On s arrete.")
+            print("  compte NON hedging : les miroirs fusionneraient. Arret.")
             return
         print()
 
-        if table:
-            sonde_a_blanc(mt5, table)
-
         if not tourner:
             print(SEP)
+            print("  CE QUE LES REGLES DONNENT SUR LES TRADES OUVERTS")
+            print(SEP)
+            print()
+            for tk, rec in sorted(ouverts.items()):
+                if not isinstance(rec, dict):
+                    continue
+                if (rec.get("magic") or 0) // 1000 not in PARENTS:
+                    continue
+                pris = []
+                for magic in sorted(table):
+                    r, _ = table[magic].prend(rec)
+                    if r:
+                        pris.append(magic)
+                print("    %s M%s %-6s %-4s live=%-5s -> %s"
+                      % (tk, rec.get("magic"), rec.get("asset"),
+                         rec.get("dir"), rec.get("entry_captured_live"),
+                         ", ".join("M%s" % m for m in pris) or "aucune"))
+            print()
+            print(SEP)
             print("  Sonde terminee. Rien n a ete envoye.")
-            print("  Colle-moi ce rapport avant de lancer --tourner.")
             print(SEP)
             return
 
         if not table:
-            print("  Pas de table de predicats : la boucle n a rien a evaluer.")
+            print("  aucune regle : la boucle n aurait rien a evaluer.")
             return
-
         if not prend_verrou():
-            print("  une autre instance tourne deja (verrou present).")
+            print("  une autre instance tourne deja.")
             return
-
         try:
             if armer:
-                print(SEP)
                 print("  ARMEMENT DANS 10 SECONDES -- Ctrl+C pour annuler")
-                print("  lot minimum, meme sens et meme SL que le parent,")
-                print("  plafond de %d miroirs simultanes." % MAX_MIROIRS)
-                print(SEP)
                 for i in range(10, 0, -1):
                     sys.stdout.write("\r  %2d " % i)
                     sys.stdout.flush()
                     time.sleep(1)
                 print()
-
-            m = Miroir(mt5, table, armer)
+            m = Miroir(mt5, table, chemin, armer)
             dit("boucle demarree (%s), poll %.1f s"
                 % ("ARMEE" if armer else "inerte", POLL_SEC))
             while True:
@@ -781,14 +621,11 @@ def main():
             dit("arret demande")
         finally:
             rend_verrou()
-
     finally:
         mt5.shutdown()
 
     print()
-    print(SEP)
     print("  Journal : %s" % CSV_JOURNAL)
-    print(SEP)
 
 
 if __name__ == "__main__":
