@@ -24,6 +24,7 @@ questions dont depend toute la suite :
 Usage :
     python live_reconnaissance.py
     python live_reconnaissance.py --spread 60     (echantillonne 60 s)
+    python live_reconnaissance.py --brut          (tous les champs)
 """
 
 import sys
@@ -46,6 +47,39 @@ def masque_compte(n):
     if len(s) <= 4:
         return "*" * len(s)
     return s[:2] + "*" * (len(s) - 4) + s[-2:]
+
+
+def attr(obj, nom, defaut="(absent)"):
+    """Lit un attribut SANS supposer qu il existe.
+
+    Les noms de champs de MetaTrader5 changent d une version a
+    l autre. Supposer un nom, c est planter au premier terminal
+    qui ne l a pas -- ce qui est exactement arrive en v1.
+    """
+    try:
+        v = getattr(obj, nom)
+    except AttributeError:
+        return defaut
+    return defaut if v is None else v
+
+
+def champs(obj):
+    """Tous les champs reellement portes par l objet."""
+    try:
+        return obj._asdict()
+    except Exception:
+        pass
+    d = {}
+    for n in dir(obj):
+        if n.startswith("_"):
+            continue
+        try:
+            v = getattr(obj, n)
+        except Exception:
+            continue
+        if not callable(v):
+            d[n] = v
+    return d
 
 
 def main():
@@ -84,10 +118,18 @@ def main():
         print("TERMINAL ATTACHE")
         print(SEP)
         if ti:
-            print("  chemin        : %s" % ti.path)
-            print("  societe       : %s" % ti.company)
-            print("  trade permis  : %s" % ti.trade_allowed)
-            print("  algo permis   : %s" % ti.trade_expert)
+            print("  chemin        : %s" % attr(ti, "path"))
+            print("  societe       : %s" % attr(ti, "company"))
+            print("  nom           : %s" % attr(ti, "name"))
+            print("  build         : %s" % attr(ti, "build"))
+            print("  connecte      : %s" % attr(ti, "connected"))
+            print("  trade permis  : %s" % attr(ti, "trade_allowed"))
+            # ce champ n existe pas partout : on demande, on ne suppose pas
+            for possible in ("trade_expert", "dlls_allowed", "tradeapi_disabled"):
+                v = attr(ti, possible, None)
+                if v is not None:
+                    print("  %-13s : %s" % (possible, v))
+            print("  donnees       : %s" % attr(ti, "data_path"))
         print()
         print("  VERIFIE CE CHEMIN. Si ce n est pas le terminal live,")
         print("  arrete tout de suite : il y a cinq terminaux sur ce VPS.")
@@ -100,23 +142,26 @@ def main():
         print(SEP)
         print("COMPTE")
         print(SEP)
-        print("  numero        : %s" % masque_compte(ai.login))
-        print("  serveur       : %s" % ai.server)
-        print("  devise        : %s" % ai.currency)
-        print("  levier        : 1:%d" % ai.leverage)
-        print("  solde         : %.2f" % ai.balance)
-        print("  equity        : %.2f" % ai.equity)
-        print("  marge libre   : %.2f" % ai.margin_free)
-        reel = {0: "DEMO", 1: "CONCOURS", 2: "REEL"}.get(ai.trade_mode, "?")
+        print("  numero        : %s" % masque_compte(attr(ai, "login", 0)))
+        print("  serveur       : %s" % attr(ai, "server"))
+        print("  devise        : %s" % attr(ai, "currency"))
+        print("  levier        : 1:%s" % attr(ai, "leverage"))
+        print("  solde         : %s" % attr(ai, "balance"))
+        print("  equity        : %s" % attr(ai, "equity"))
+        print("  marge libre   : %s" % attr(ai, "margin_free"))
+        reel = {0: "DEMO", 1: "CONCOURS", 2: "REEL"}.get(
+            attr(ai, "trade_mode", -1), "?")
         print("  type          : %s" % reel)
-        print("  ordres max    : %s" % (ai.limit_orders or "illimite"))
+        print("  ordres max    : %s" % (attr(ai, "limit_orders", 0) or "illimite"))
+        print("  trade permis  : %s" % attr(ai, "trade_allowed"))
+        print("  algo permis   : %s" % attr(ai, "trade_expert"))
         print()
 
         print(SEP)
         print("*** LA QUESTION QUI DECIDE DE TOUT ***")
         print(SEP)
         modes = {0: "RETAIL_NETTING", 1: "EXCHANGE", 2: "RETAIL_HEDGING"}
-        m = ai.margin_mode
+        m = attr(ai, "margin_mode", -1)
         print("  margin_mode : %d  = %s" % (m, modes.get(m, "inconnu")))
         print()
         if m == 2:
@@ -163,18 +208,23 @@ def main():
             print()
             print("  %s" % s.name)
             print("    lot min / pas / max : %s / %s / %s"
-                  % (s.volume_min, s.volume_step, s.volume_max))
-            print("    point / digits      : %s / %d" % (s.point, s.digits))
-            print("    spread courant      : %d points" % s.spread)
-            print("    stops / freeze      : %d / %d"
-                  % (s.trade_stops_level, s.trade_freeze_level))
+                  % (attr(s, "volume_min"), attr(s, "volume_step"),
+                     attr(s, "volume_max")))
+            print("    point / digits      : %s / %s"
+                  % (attr(s, "point"), attr(s, "digits")))
+            print("    spread courant      : %s points" % attr(s, "spread"))
+            print("    stops / freeze      : %s / %s"
+                  % (attr(s, "trade_stops_level"),
+                     attr(s, "trade_freeze_level")))
             tm = {0: "desactive", 1: "long seul", 2: "short seul",
-                  3: "cloture seule", 4: "complet"}.get(s.trade_mode, "?")
+                  3: "cloture seule", 4: "complet"}.get(
+                      attr(s, "trade_mode", -1), "?")
             print("    trade_mode          : %s" % tm)
             remplis = []
-            if s.filling_mode & 1:
+            fm = attr(s, "filling_mode", 0) or 0
+            if fm & 1:
                 remplis.append("FOK")
-            if s.filling_mode & 2:
+            if fm & 2:
                 remplis.append("IOC")
             remplis.append("RETURN (si autorise)")
             print("    remplissage         : %s" % ", ".join(remplis))
@@ -189,7 +239,7 @@ def main():
                                            tick.ask if tick else 0)
                 if mg:
                     print("    marge pour %s lot   : %.2f %s"
-                          % (s.volume_min, mg, ai.currency))
+                          % (s.volume_min, mg, attr(ai, "currency", "")))
                     besoin_total += mg * len(MAGICS)
             except Exception as e:
                 print("    marge : non calculable (%s)" % e)
@@ -200,11 +250,13 @@ def main():
         print(SEP)
         print("  19 magics x lot minimum, tous ouverts en meme temps,")
         print("  sur chacun des symboles trouves :")
-        print("    besoin   : %.2f %s" % (besoin_total, ai.currency))
-        print("    dispo    : %.2f %s" % (ai.margin_free, ai.currency))
-        if besoin_total and ai.margin_free:
+        libre = attr(ai, "margin_free", 0) or 0
+        devise = attr(ai, "currency", "")
+        print("    besoin   : %.2f %s" % (besoin_total, devise))
+        print("    dispo    : %.2f %s" % (libre, devise))
+        if besoin_total and libre:
             print("    ratio    : %.1f %% de la marge libre"
-                  % (100.0 * besoin_total / ai.margin_free))
+                  % (100.0 * besoin_total / libre))
         print()
         print("  C est le pire cas -- les 19 ne declenchent jamais")
         print("  ensemble. Mais deux d entre eux, %s, n ont AUCUNE"
@@ -267,6 +319,23 @@ def main():
             print("  Le spread median est le cout fixe de chaque prise.")
             print("  Le p90 est celui que tu paieras sur les entrees")
             print("  qui suivent une nouvelle -- donc sur les meilleures.")
+            print()
+
+        if "--brut" in args:
+            print(SEP)
+            print("TOUS LES CHAMPS REELLEMENT PORTES PAR LES OBJETS")
+            print(SEP)
+            for nom, obj in (("terminal_info", ti), ("account_info", ai)):
+                print()
+                print("  %s" % nom)
+                for cle in sorted(champs(obj)):
+                    val = champs(obj)[cle]
+                    if cle in ("login",):
+                        val = masque_compte(val)
+                    if any(x in cle.lower() for x in
+                           ("password", "token", "secret", "key")):
+                        val = "[masque, %d caracteres]" % len(str(val))
+                    print("    %-24s %s" % (cle, val))
             print()
 
     finally:
