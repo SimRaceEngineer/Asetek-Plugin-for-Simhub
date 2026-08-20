@@ -11,39 +11,47 @@ LECTEUR SEUL. N ECRIT RIEN.
 
 POURQUOI
 
-    Un ticket porte plus de cent cinquante champs : churn_entry (6),
+    Un ticket porte plus de deux cent cinquante champs : churn_entry,
     hlc_churn_entry x 4 unites (15 chacune), rails_entry x 3 actifs
-    x 4 unites (8 chacune), epoch_entry x 4 (11), ll_entry (6), plus
-    les champs a plat. Les regles de la stack n en utilisent qu une
-    poignee -- consensus, leader, laggard, self_mom, transition,
-    rails_pos, rsi_pos.
+    x 4 unites (8 chacune), epoch_entry x 4 (11), ll_entry, plus les
+    champs a plat. Les regles de la stack en consomment moins de
+    vingt.
 
     Conclure qu une zone n a rien de particulier en n ayant lu que
-    ces sept-la, c est conclure sur ce qu on avait deja sous la main.
+    ceux-la, c est conclure sur ce qu on avait deja sous la main.
 
 CE QUE FAIT CE SCRIPT
 
     Il parcourt CHAQUE champ terminal, compare sa distribution chez
     les trades entres DANS la bande et chez tous les autres, et
-    classe les ecarts par ampleur.
+    classe les ecarts par ampleur -- en DEUX classements separes.
 
-    Champs textuels : ecart de proportion, valeur par valeur.
-    Champs numeriques : ecart des medianes, rapporte a l ecart
-    interquartile du dehors -- une mesure robuste, insensible aux
-    valeurs extremes.
+    Numeriques : ecart des medianes rapporte a l ecart interquartile
+    du dehors. Robuste, mais sans borne haute.
+    Textuels : ecart de proportion, borne a 1.0.
+
+    Les melanger enfouissait les colonnes textuelles, qui sont
+    pourtant les plus lisibles : un basculement de leader a 50 points
+    de pourcentage se classait sous un decalage numerique modeste.
+
+ECHELLES MELANGEES
+
+    epoch_entry decrit l epoque DU LEADER. Quand le leader change
+    d actif, la meme colonne empile des prix S&P a 7800 et des prix
+    Dow a 53000 : l ecart mesure alors un changement d UNITE, pas un
+    changement d etat. Les colonnes concernees sont detectees et
+    marquees. A ecarter de toute lecture.
 
 CE QU IL FAUT SAVOIR AVANT DE LIRE LA SORTIE
 
-    Avec cent cinquante colonnes testees, certaines differeront PAR
-    HASARD. C est mecanique. Le classement est donc donne par
-    AMPLEUR et avec les effectifs, jamais comme une liste de
-    decouvertes. Une colonne en tete de liste est une PISTE, pas un
-    resultat -- il faudra la verifier sur une autre bande, ou sur
-    une autre periode, avant d en faire quoi que ce soit.
+    Avec deux cent cinquante colonnes testees, certaines differeront
+    PAR HASARD. C est mecanique. Le classement donne des PISTES, pas
+    des resultats. Une piste ne devient un fait qu apres avoir tenu
+    sur une AUTRE bande, ou une AUTRE periode, choisie avant de
+    regarder.
 
     Et un ecart peut n etre qu un reflet du niveau de prix lui-meme :
     a 53600 le marche n etait pas dans le meme regime qu a 52000.
-    Comparer une bande a TOUT le reste melange les epoques.
 """
 
 import argparse
@@ -213,7 +221,23 @@ def main():
         print("  en sachant ce que tu perds.")
         return
 
-    ecarts = []
+    def echelles_melangees(vals):
+        """Les valeurs couvrent-elles plusieurs ordres de grandeur ?
+
+        epoch_entry decrit l epoque DU LEADER : quand le leader change
+        d actif, la meme colonne empile des prix S&P a 7800 et des prix
+        Dow a 53000. L ecart mesure alors un changement d UNITE, pas un
+        changement d etat. Ce garde-fou existe parce que l artefact a
+        occupe huit des vingt-cinq premieres lignes.
+        """
+        p = sorted(v for v in vals if v > 0)
+        if len(p) < 20:
+            return False
+        bas = p[len(p) // 10]
+        haut = p[(9 * len(p)) // 10]
+        return bas > 0 and haut / bas > 3.0
+
+    nombres, textes = [], []
     for col in sorted(colonnes):
         vd = [pl[col] for pl in dedans if col in pl and pl[col] is not None]
         vh = [pl[col] for pl in dehors if col in pl and pl[col] is not None]
@@ -225,10 +249,11 @@ def main():
             if q1 is None or q3 is None or q3 == q1:
                 continue
             taille = abs(md - mh) / float(q3 - q1)
-            ecarts.append((taille, col, "nombre",
-                           "median %.3g dedans contre %.3g dehors "
-                           "(ecart = %.2f interquartile)" % (md, mh, taille),
-                           len(vd)))
+            suspect = echelles_melangees(vd + vh)
+            nombres.append((taille, col,
+                            "median %.3g dedans contre %.3g dehors "
+                            "(ecart = %.2f interquartile)" % (md, mh, taille),
+                            len(vd), suspect))
         else:
             valeurs = set(str(x) for x in vd) | set(str(x) for x in vh)
             if len(valeurs) > 30:
@@ -241,27 +266,50 @@ def main():
                     pire = (abs(pd - ph), val, pd, ph)
             if pire[1] is None:
                 continue
-            ecarts.append((pire[0], col, "texte",
+            textes.append((pire[0], col,
                            "%s : %.0f %% dedans contre %.0f %% dehors"
                            % (pire[1], 100 * pire[2], 100 * pire[3]),
-                           len(vd)))
+                           len(vd), False))
 
+    ecarts = nombres + textes
     if not ecarts:
         print("  aucune colonne ne reunit assez d observations des deux")
         print("  cotes pour etre comparee.")
         return
 
-    ecarts.sort(reverse=True)
-    print(SEP)
-    print("LES %d PLUS GROS ECARTS" % min(a.tete, len(ecarts)))
-    print(SEP)
-    print()
-    for taille, col, genre, texte, n in ecarts[:a.tete]:
-        feuille = col.split(".")[-1]
-        neuf = "" if feuille in DEJA_VUS else "  [jamais lue]"
-        print("  %-46s n=%4d%s" % (col, n, neuf))
-        print("      %s" % texte)
-    print()
+    def montre(titre, liste, note=None):
+        liste.sort(reverse=True)
+        print(SEP)
+        print(titre)
+        print(SEP)
+        print()
+        if note:
+            print("  %s" % note)
+            print()
+        for taille, col, texte, n, suspect in liste[:a.tete]:
+            feuille = col.split(".")[-1]
+            marque = "" if feuille in DEJA_VUS else "  [jamais lue]"
+            if suspect:
+                marque += "  [ECHELLES MELANGEES]"
+            print("  %-46s n=%4d%s" % (col, n, marque))
+            print("      %s" % texte)
+        print()
+
+    # Les deux familles ne se comparent PAS : un ecart numerique se
+    # mesure en interquartiles, sans borne, un ecart de proportion est
+    # borne a 1.0. Les melanger enfouissait les colonnes textuelles,
+    # qui sont pourtant les plus lisibles.
+    montre("LES %d PLUS GROS ECARTS NUMERIQUES" % min(a.tete, len(nombres)),
+           nombres,
+           "en interquartiles du dehors. Une colonne marquee ECHELLES "
+           "MELANGEES\n  empile des valeurs d ordres de grandeur "
+           "differents -- typiquement\n  des prix de plusieurs indices : "
+           "l ecart y mesure un changement\n  d unite, pas un changement "
+           "d etat. A ecarter.")
+    montre("LES %d PLUS GROS ECARTS CATEGORIELS" % min(a.tete, len(textes)),
+           textes,
+           "en points de pourcentage. Ce sont souvent les plus "
+           "interpretables.")
 
     print(SEP)
     print("COMMENT LIRE CE CLASSEMENT")
