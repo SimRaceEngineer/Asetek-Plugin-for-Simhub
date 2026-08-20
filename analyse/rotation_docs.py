@@ -3,6 +3,7 @@ r"""
 rotation_docs.py -- comprimer ce qui dort, ne supprimer que ce qui est deja reduit
 
   python rotation_docs.py                    rapport seul, rien n est touche
+                                             (trouve la racine tout seul)
   python rotation_docs.py --comprimer        gzip les journees mures, verifie
   python rotation_docs.py --supprimer --oui  efface le brut DEJA reduit et gzip
 
@@ -68,6 +69,34 @@ FLUX = [
 ]
 
 FRAICHE = 3600          # une heure : en dessous, la stack ecrit peut-etre
+
+# Ou chercher la racine du stack, dans l ordre. Un script qui depend du
+# repertoire courant echoue le jour ou on le lance d ailleurs -- ou
+# depuis une tache planifiee, qui demarre ou elle veut.
+CANDIDATES = [
+    os.getcwd(),
+    os.path.dirname(os.path.abspath(__file__)) or ".",
+    os.path.join(os.path.expanduser("~"), "Downloads",
+                 "Scalp-EA-main", "Scalp-EA-main"),
+]
+
+
+def trouve_racine(dis):
+    """Le premier endroit qui porte docs\buddha ou docs\lifecycle."""
+    vus = []
+    for c in CANDIDATES:
+        if c in vus:
+            continue
+        vus.append(c)
+        for sonde in (os.path.join("docs", "buddha"),
+                      os.path.join("docs", "lifecycle")):
+            if os.path.isdir(os.path.join(c, sonde)):
+                return c
+    dis("  Racine du stack introuvable. Cherche dans :")
+    for c in vus:
+        dis("    %s" % c)
+    dis("  Relance depuis le dossier du stack, ou dis-le-moi.")
+    return None
 
 
 def humain(o):
@@ -157,6 +186,14 @@ def main():
     dis("  mode : %s" % mode)
     dis("  %d journee(s) laissee(s) en clair, suppression au-dela de %d j."
         % (a.clair, a.garde))
+    dis("")
+
+    racine = trouve_racine(dis)
+    if racine is None:
+        return 1
+    if os.path.abspath(racine) != os.path.abspath(os.getcwd()):
+        dis("  racine trouvee : %s" % racine)
+        os.chdir(racine)
     dis("")
 
     aujourd = time.strftime("%Y-%m-%d")
