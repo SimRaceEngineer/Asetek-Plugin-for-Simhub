@@ -7,8 +7,8 @@ LECTEUR SEUL. N ECRIT RIEN.
 
   python es_pilote.py --es "C:\\SierraChart\\Data\\MESU26-CME.scid" \\
                       --ym "C:\\SierraChart\\Data\\YMU26-CBOT.scid"
-  python es_pilote.py ... --jour 2026-08-20 --pas 250
-  python es_pilote.py ... --instant "2026-08-20 15:45" --fenetre 10
+  python es_pilote.py ... --jour 2026-08-19 --heures 13:00-20:00
+  python es_pilote.py ... --instant "2026-08-19 15:45" --fenetre 15
 
 CE QUE CA TESTE, ET CE QUE CA NE TESTE PAS
 
@@ -32,6 +32,9 @@ CE QUE CA TESTE, ET CE QUE CA NE TESTE PAS
 
     La correlation ne dit jamais la causalite. Elle peut seulement
     la refuter -- et c est deja beaucoup.
+
+    --heures compte : la nuit, le YM ne cote quasiment pas, et des
+    milliers de seaux a rendement nul diluent toutes les correlations.
 """
 
 import argparse
@@ -210,6 +213,10 @@ def main():
     p.add_argument("--pas", type=int, default=250, help="taille du seau, ms")
     p.add_argument("--portee", type=int, default=12,
                    help="nombre de seaux de decalage explores de chaque cote")
+    p.add_argument("--heures",
+                   help="restreint aux heures UTC, ex 13:00-20:00. La nuit "
+                        "le YM ne cote presque pas et des milliers de seaux "
+                        "a rendement nul ecrasent les correlations.")
     p.add_argument("--instant")
     p.add_argument("--fenetre", type=int, default=10, help="minutes")
     a = p.parse_args()
@@ -260,8 +267,53 @@ def main():
     n = min(len(de), len(dy))
     de, ve, re = de[:n], ve[:n], re[:n]
     dy, vy, ry = dy[:n], vy[:n], ry[:n]
+    # apres l alignement, l origine commune est la PLUS TARDIVE des deux.
+    # Prendre celle du YM sans y penser decalait tous les index de la
+    # section --instant.
+    origine = max(o_es, o_ym)
+    debut = datetime.datetime.fromtimestamp(origine / 10 ** 6,
+                                            datetime.timezone.utc)
+    fin = datetime.datetime.fromtimestamp((origine + n * pas_us) / 10 ** 6,
+                                          datetime.timezone.utc)
     print("  %d seau(x) alignes, soit %.1f h" % (n, n * a.pas / 3600000.0))
+    print("  couverture reelle : %s -> %s UTC"
+          % (debut.strftime("%Y-%m-%d %H:%M:%S"), fin.strftime("%H:%M:%S")))
     print()
+
+    DE, RE, DY, RY = list(de), list(re), list(dy), list(ry)
+    garde = None
+    if a.heures:
+        try:
+            h0, h1 = a.heures.split("-")
+            m0 = int(h0[:2]) * 60 + int(h0[3:5])
+            m1 = int(h1[:2]) * 60 + int(h1[3:5])
+        except (ValueError, IndexError):
+            print("  --heures mal forme, attendu HH:MM-HH:MM. Ignore.")
+            print()
+            m0 = m1 = None
+        if m0 is not None:
+            garde = []
+            for k in range(n):
+                t = datetime.datetime.fromtimestamp(
+                    (origine + k * pas_us) / 10 ** 6, datetime.timezone.utc)
+                mn = t.hour * 60 + t.minute
+                if (m0 <= mn < m1) if m0 <= m1 else (mn >= m0 or mn < m1):
+                    garde.append(k)
+            if len(garde) < 100:
+                print("  la plage %s ne laisse que %d seau(x) : ignoree."
+                      % (a.heures, len(garde)))
+                print()
+                garde = None
+            else:
+                de = [de[k] for k in garde]
+                re = [re[k] for k in garde]
+                dy = [dy[k] for k in garde]
+                ry = [ry[k] for k in garde]
+                print("  restreint a %s UTC : %d seau(x) sur %d, soit %.1f h"
+                      % (a.heures, len(de), n, len(de) * a.pas / 3600000.0))
+                print("  Les seaux ecartes sont ceux ou le YM ne cote")
+                print("  quasiment pas -- leur rendement nul diluait tout.")
+                print()
 
     A = tableau("A. DELTA ES  ->  RENDEMENT YM   (l hypothese)",
                 de, ry, a.pas, a.portee)
@@ -299,6 +351,11 @@ def main():
             print("  dit qu on ne peut pas les separer a ce pas de temps.")
             print("  Pour trancher il faudrait descendre sous la")
             print("  milliseconde, ce que ce fichier ne permet pas.")
+            if abs(rb) > abs(ra):
+                print()
+                print("  Et le YM s explique MIEUX par son propre flux")
+                print("  (%+.4f) que par celui de l ES (%+.4f)." % (rb, ra))
+                print("  L hypothese du pilotage n est pas soutenue ici.")
         elif ka < 0:
             print("  Le maximum est a %d ms : c est le YM qui devance."
                   % (ka * a.pas))
@@ -321,20 +378,34 @@ def main():
         except ValueError:
             print("  format attendu : \"AAAA-MM-JJ HH:MM\"")
             return
+        if garde is not None:
+            print("  --heures est actif : le deroule ci-dessous ignore ce")
+            print("  filtre et repart de la serie complete.")
+            print()
         c = int((t0 - datetime.datetime(1970, 1, 1)).total_seconds()) * 10 ** 6
-        i0 = max(0, int((c - a.fenetre * 60 * 10 ** 6 - o_ym) // pas_us))
-        i1 = min(n, int((c + a.fenetre * 60 * 10 ** 6 - o_ym) // pas_us))
+        i0 = max(0, int((c - a.fenetre * 60 * 10 ** 6 - origine) // pas_us))
+        i1 = min(n, int((c + a.fenetre * 60 * 10 ** 6 - origine) // pas_us))
         if i1 <= i0:
-            print("  cet instant n est pas dans le jour charge.")
+            print("  Cet instant n est pas couvert par le fichier.")
+            print("  Plage disponible ce jour-la : %s -> %s UTC."
+                  % (debut.strftime("%H:%M:%S"), fin.strftime("%H:%M:%S")))
+            demande = t0.strftime("%H:%M")
+            if c >= origine + n * pas_us:
+                print("  %s UTC est APRES la fin des donnees : ce moment n a"
+                      % demande)
+                print("  pas encore ete enregistre. Choisis un jour anterieur")
+                print("  avec --jour, ou une heure plus tot.")
+            else:
+                print("  %s UTC est AVANT le debut des donnees." % demande)
             return
         print("     heure UTC        dES     rES      dYM     rYM")
         print("     " + "-" * 60)
         pas_aff = max(1, (i1 - i0) // 60)
         for k in range(i0, i1, pas_aff):
-            t = datetime.datetime.fromtimestamp((o_ym + k * pas_us) / 10 ** 6,
+            t = datetime.datetime.fromtimestamp((origine + k * pas_us) / 10 ** 6,
                                                 datetime.timezone.utc)
             print("     %s  %+8.0f %+7.2f %+8.0f %+7.2f"
-                  % (t.strftime("%H:%M:%S.%f")[:12], de[k], re[k], dy[k], ry[k]))
+                  % (t.strftime("%H:%M:%S.%f")[:12], DE[k], RE[k], DY[k], RY[k]))
         print()
         print("  dES / dYM : delta du seau. rES / rYM : variation de prix.")
         print("  Une ligne ou dES est fort et rYM suit au seau SUIVANT")
