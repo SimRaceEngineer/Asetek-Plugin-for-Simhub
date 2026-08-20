@@ -13,6 +13,17 @@ POURQUOI UN SCRIPT ET PAS UNE LIGNE POWERSHELL
     les tirets bas de $_.Name manges par l italique, puis [int](...)
     avale comme un lien. Le canal fichier, lui, n a jamais echoue.
 
+POURQUOI IL PARLE PENDANT QU IL TRAVAILLE
+
+    La premiere version accumulait tout et n imprimait qu a la fin.
+    Sur 80 Go elle restait muette plusieurs minutes -- indiscernable
+    d un blocage. Un lecteur qui met du temps DOIT dire ou il en est,
+    sinon on l interrompt en croyant qu il est mort.
+
+    Elle pouvait aussi boucler : une jonction Windows qui remonte sur
+    elle-meme fait tourner os.walk indefiniment. Les points de
+    reparse sont donc ecartes, et comptes a part.
+
 POURQUOI L INVENTAIRE PASSE AVANT LE TRANSFERT
 
     80 Go annonces. Sur un stack de trading, la masse est presque
@@ -39,8 +50,11 @@ CE QU IL DONNE
 """
 import argparse
 import os
+import stat as statmod
 import sys
 import time
+
+REPARSE = getattr(statmod, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 
 RACINES = [
     r"C:\Users\Administrator\Downloads\Scalp-EA-main\Scalp-EA-main",
@@ -74,10 +88,35 @@ def duree(octets, mo_par_s):
     return "%.1f h" % (s / 3600.0)
 
 
-def pese(chemin, gros, plafond=12):
-    """(octets, fichiers, mtime le plus recent). Ne leve jamais."""
-    total, n, recent = 0, 0, 0
+def est_reparse(chemin):
+    """Jonction, lien symbolique, point de montage : a NE PAS suivre.
+
+    Une jonction qui remonte vers un parent fait tourner os.walk sans
+    fin. On les ecarte et on les compte, pour que leur absence du
+    total se voie au lieu de se deviner."""
+    try:
+        if os.path.islink(chemin):
+            return True
+        st = os.stat(chemin, follow_symlinks=False)
+        return bool(getattr(st, "st_file_attributes", 0) & REPARSE)
+    except OSError:
+        return False
+
+
+def pese(chemin, gros, plafond=12, dire=None):
+    """(octets, fichiers, mtime le plus recent, liens ecartes)."""
+    total, n, recent, liens = 0, 0, 0, 0
+    dernier = time.time()
     for dossier, sous, fichiers in os.walk(chemin, onerror=lambda e: None):
+        # elaguer AVANT de descendre : c est la seule facon d eviter la
+        # boucle, pas de la detecter apres coup.
+        garde = []
+        for d in sous:
+            if est_reparse(os.path.join(dossier, d)):
+                liens += 1
+            else:
+                garde.append(d)
+        sous[:] = garde
         for f in fichiers:
             c = os.path.join(dossier, f)
             try:
@@ -93,7 +132,11 @@ def pese(chemin, gros, plafond=12):
                 if len(gros) > 400:
                     gros.sort(reverse=True)
                     del gros[plafond * 4:]
-    return total, n, recent
+        if dire and time.time() - dernier > 5:
+            dire("      ... %s : %d fichiers, %s"
+                 % (os.path.basename(chemin)[:24], n, humain(total)))
+            dernier = time.time()
+    return total, n, recent, liens
 
 
 def quand(t):
@@ -106,8 +149,12 @@ def main():
     p.add_argument("--gros", type=int, default=12)
     a = p.parse_args()
 
-    L = []
-    add = L.append
+    def add(x):
+        # imprime TOUT DE SUITE : sur 80 Go, un script muet est un
+        # script qu on interrompt en croyant qu il est mort.
+        print(x)
+        sys.stdout.flush()
+
     add("=" * 92)
     add("INVENTAIRE AVANT SAUVEGARDE")
     add("=" * 92)
@@ -135,14 +182,23 @@ def main():
             add("  illisible : %s" % e)
             add("")
             continue
-        lache_o, lache_n = 0, 0
+        lache_o, lache_n, liens_r = 0, 0, 0
         for nom in entrees:
             c = os.path.join(racine, nom)
             if os.path.isdir(c):
-                o, n, t = pese(c, gros, a.gros)
+                if est_reparse(c):
+                    liens_r += 1
+                    add("  %-34s %10s   <- jonction, non suivie"
+                        % (nom[:34], "-"))
+                    continue
+                o, n, t, li = pese(c, gros, a.gros, dire=add)
+                liens_r += li
                 lignes.append((o, nom, n, t))
                 total_r += o
                 n_r += n
+                add("  %-34s %10s %9d %12s%s"
+                    % (nom[:34], humain(o), n, quand(t),
+                       "  <- regenerable" if nom in REGENERABLE else ""))
             else:
                 try:
                     st = os.stat(c)
@@ -150,6 +206,8 @@ def main():
                     lache_n += 1
                 except OSError:
                     pass
+        add("")
+        add("  --- le meme, du plus gros au plus petit ---")
         for o, nom, n, t in sorted(lignes, reverse=True):
             marque = ""
             if nom in REGENERABLE:
@@ -167,6 +225,10 @@ def main():
         if recup:
             add("  %-34s %10s   (a exclure, se reconstruit)"
                 % ("dont regenerable", humain(recup)))
+        if liens_r:
+            add("  %d jonction(s) ou lien(s) ecarte(s) : leur contenu n est"
+                % liens_r)
+            add("  pas compte ici, et ne doit pas etre copie deux fois.")
         add("")
         grand_total += total_r
 
@@ -195,7 +257,6 @@ def main():
     add("=" * 92)
     add("  Ce script n a rien copie, rien efface, rien envoye.")
     add("=" * 92)
-    print("\n".join(L))
     return 0
 
 
