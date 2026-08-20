@@ -58,14 +58,26 @@ import time
 RACINE = "docs"
 CARTES = "cartes"
 
-# (dossier, motif du brut, dossier de reduction, prefixe reduit)
+# (dossier, motif, dossier reduit, prefixe reduit, gz_ok, consommateurs)
+#
+# gz_ok = les modules qui lisent ce fichier savent-ils ouvrir un .gz ?
+# La question n est pas theorique : gzipper un fichier que son lecteur
+# cherche par son nom exact ne provoque aucune erreur. Le lecteur
+# trouve zero journee et rend un rapport vide -- plausible, et faux.
 FLUX = [
+    # extraire_cycles.source() essaie cycles.jsonl PUIS cycles.jsonl.gz,
+    # et ouvre() gere gzip. Compression sans danger.
     (os.path.join(RACINE, "buddha"), "cycles.jsonl",
-     os.path.join(CARTES, "cycles"), "cycles_"),
+     os.path.join(CARTES, "cycles"), "cycles_", True,
+     "extraire_cycles"),
+    # extraire_snapshots.journees() et audit_cadence cherchent le nom
+    # EXACT "snapshots.csv". Les comprimer les rendrait aveugles.
     (os.path.join(RACINE, "buddha"), "snapshots.csv",
-     os.path.join(CARTES, "snapshots"), "snap_"),
+     os.path.join(CARTES, "snapshots"), "snap_", False,
+     "extraire_snapshots, audit_cadence"),
+    # Aucun module Python du depot ne lit lifecycle.
     (os.path.join(RACINE, "lifecycle"), "lifecycle.csv",
-     None, None),          # aucun consommateur connu : on comprime, point
+     None, None, True, "aucun"),
 ]
 
 FRAICHE = 3600          # une heure : en dessous, la stack ecrit peut-etre
@@ -82,7 +94,7 @@ CANDIDATES = [
 
 
 def trouve_racine(dis):
-    """Le premier endroit qui porte docs\buddha ou docs\lifecycle."""
+    r"""Le premier endroit qui porte docs\buddha ou docs\lifecycle."""
     vus = []
     for c in CANDIDATES:
         if c in vus:
@@ -198,9 +210,12 @@ def main():
 
     aujourd = time.strftime("%Y-%m-%d")
     gagne = 0
-    for dossier, motif, red_dir, red_pre in FLUX:
+    bloques = []
+    for dossier, motif, red_dir, red_pre, gz_ok, lecteurs in FLUX:
         dis("-" * 94)
         dis("%s   (%s)" % (dossier, motif))
+        dis("   lu par : %s%s" % (lecteurs,
+                                  "" if gz_ok else "  -- NE LIT PAS le .gz"))
         dis("-" * 94)
         if not os.path.isdir(dossier):
             dis("  absent.")
@@ -218,6 +233,7 @@ def main():
         rangs = {}
         for i, j in enumerate(reversed(jours)):
             rangs[j] = i          # 0 = la plus recente
+        bloc_o = bloc_n = 0
         for j in jours:
             clair = os.path.join(dossier, j, motif)
             gzp = clair + ".gz"
@@ -234,15 +250,22 @@ def main():
                 a_reduit = os.path.isfile(rc)
                 reduit = "oui" if a_reduit else "NON"
             frais = (time.time() - os.path.getmtime(ici)) < FRAICHE
+            # L ordre des tests EST la politique. La reduction ne
+            # conditionne QUE la suppression : comprimer ne detruit
+            # rien et reste reversible. Les lier, comme le faisait la
+            # premiere version, gelait 2 Go de snapshots en clair.
             if j == aujourd or frais:
                 etat = "en cours -- intouchable"
-            elif not a_reduit:
-                etat = "A EXTRAIRE d abord -- intouchable"
             elif ici.endswith(".gz"):
-                etat = ("effacable (reduit, %d j)" % rang
-                        if rang >= a.garde else "comprime, garde")
+                if not a_reduit:
+                    etat = "comprime, non reduit -- garde"
+                else:
+                    etat = ("effacable (reduit, %d j)" % rang
+                            if rang >= a.garde else "comprime, garde")
             elif rang < a.clair:
                 etat = "en clair, recent -- garde"
+            elif not gz_ok:
+                etat = "EN CLAIR -- son lecteur ignore le .gz"
             else:
                 etat = "A COMPRIMER"
             dis("  %-12s %10s %6d %-12s %s"
@@ -258,9 +281,28 @@ def main():
                     dis("      efface : %s (extraction conservee)" % humain(o))
                 except OSError as e:
                     dis("      echec suppression : %s" % e)
+            if etat.startswith("EN CLAIR"):
+                bloc_o += taille
+                bloc_n += 1
+        if bloc_n:
+            bloques.append((motif, lecteurs, bloc_o, bloc_n))
         dis("")
 
     dis("=" * 94)
+    if bloques:
+        dis("BLOQUE PAR LE LECTEUR, ET NON PAR LA PRUDENCE")
+        dis("=" * 94)
+        for motif, lecteurs, o, n in bloques:
+            dis("  %-16s %10s en clair sur %d journee(s)"
+                % (motif, humain(o), n))
+            dis("      %s cherche(nt) le nom exact, sans variante .gz."
+                % lecteurs)
+        dis("")
+        dis("  Ce n est pas une donnee a proteger, c est un lecteur a")
+        dis("  corriger. extraire_cycles le fait deja en six lignes :")
+        dis("  essayer le nom, puis le nom + .gz, et ouvrir via gzip si")
+        dis("  besoin. Tant que ce n est pas fait, je ne comprime pas.")
+        dis("=" * 94)
     if mode == "RAPPORT SEUL":
         dis("  Rien n a ete touche.")
         dis("")
