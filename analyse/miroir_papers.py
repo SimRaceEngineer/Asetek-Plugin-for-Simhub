@@ -3,6 +3,12 @@
 """
 miroir_papers.py -- les magics paper en ordres reels.
 
+REGLES : papers_moteur.papers(pe, pr) rend la liste complete
+(magic, nom, actif, sens, predicat) -- les SEPT, les LEADERS, les
+SANS_PREUVE et la serie 240000 de papers_regles. La decision est prise
+par papers_moteur.accepte(entry, t), qui filtre deja actif et sens.
+Le miroir ne reecrit aucune regle : il appelle celles du moteur.
+
 SOURCE : churn_trade_logger._save_open() ecrit un JSON atomique
 {ticket: record} A L ENTREE du trade, avec l instantane complet
 (churn_entry, rails_entry, hlc_churn_entry, epoch_entry, ll_entry).
@@ -12,9 +18,8 @@ et ne modifie rien : deux calculs du meme etat pourraient differer,
 une lecture non.
 
 Pour chaque nouveau trade parent (206xxx / 207xxx) capture en direct,
-il evalue les regles, envoie un ordre au LOT MINIMUM avec le magic
-paper -- meme sens, meme SL que le parent -- et ferme quand le
-parent ferme.
+il evalue les regles, envoie un ordre reel avec le magic paper --
+meme sens, meme SL que le parent -- et ferme quand le parent ferme.
 
 Mesure alors ce que le paper ne pouvait pas voir : latence entre
 l entree du parent et l envoi, prix obtenu, spread paye, slippage.
@@ -40,6 +45,22 @@ import datetime
 SEP = "=" * 92
 
 PARENTS = (206, 207)
+
+# --- VOLUME DU MIROIR -------------------------------------------------------
+# "parent" : meme volume que le trade parent. Seul choix qui mesure la
+#            VRAIE qualite d execution -- un remplissage a 0.01 n a rien
+#            a voir avec un remplissage a 0.91.
+# "min"    : volume minimum du symbole. Sans risque, mais le slippage
+#            mesure est alors systematiquement sous-estime.
+# un nombre (ex 0.10) : volume fixe.
+# une fraction ecrite "0.25x" : cette part du volume parent.
+LOT = "parent"
+
+# Refus si un ordre consommerait plus que cette part de la marge LIBRE
+# du moment. Verifie avant CHAQUE envoi, donc cumulatif : la marge libre
+# decroit a chaque ordre passe. 0.25 laisse toujours les trois quarts.
+MARGE_MAXI = 0.25
+
 MAX_MIROIRS = 60
 POLL_SEC = 0.5
 DEVIATION = 20
@@ -50,14 +71,6 @@ CSV_JOURNAL = os.path.join(DOSSIER_DOCS, "miroir_papers.csv")
 TXT_JOURNAL = os.path.join(DOSSIER_DOCS, "miroir_papers.log")
 VERROU = os.path.join(DOSSIER_DOCS, "miroir_papers.lock")
 VERROU_PERIME = 15 * 60
-
-# --- les deux temoins sans regle -------------------------------------------
-# Ils prennent TOUT leur actif et leur sens, sans condition. Leur actif
-# et leur sens ne sont ecrits nulle part dans le code : tant qu ils ne
-# sont pas renseignes ici, le miroir les ignore et le dit. Il ne les
-# devine pas.
-#   exemple :  TEMOINS = {220004: ("US30", "BUY"), 220014: ("US30", "SELL")}
-TEMOINS = {220004: ('US30', 'SELL'), 220014: ('US500', 'BUY')}
 
 COLONNES = [
     "horodatage", "evenement", "ticket_parent", "magic_parent",
@@ -116,84 +129,65 @@ def csv_ligne(d):
         dit("  journal csv impossible : %s" % e)
 
 
-# ---------------------------------------------------------------- la table
-class Regle(object):
-    """Un magic, sa fonction, son sens impose, sa provenance."""
+# ---------------------------------------------------------------- les regles
+def charge_jeu():
+    """Le jeu de papers du moteur. Rien n est reecrit ici.
 
-    def __init__(self, magic, nom, sens, fn, source):
-        self.magic = magic
-        self.nom = nom
-        self.sens = sens            # "achat", "vente" ou None
-        self.fn = fn
-        self.source = source
-
-    def dir_impose(self):
-        return SENS_VERS_DIR.get(self.sens)
-
-    def prend(self, rec):
-        """(bool, raison). Une exception rend None, jamais un faux vrai."""
-        d = self.dir_impose()
-        if d and rec.get("dir") != d:
-            return False, "sens impose %s" % d
-        try:
-            r = self.fn(rec)
-        except Exception as e:
-            return None, "%s: %s" % (type(e).__name__, e)
-        if isinstance(r, tuple):        # gate_230207.decide -> (bool, raison)
-            return bool(r[0]), (r[1] if len(r) > 1 else None)
-        return bool(r), None
-
-
-def charge_table():
-    """Les regles reellement disponibles. Rien n est suppose."""
-    table, notes = {}, []
-
-    # --- serie 240000 : liste de tuples (magic, nom, sens, fonction)
+    Rend (entrees, accepte, fenetre, notes) ou :
+      entrees : liste de (magic, nom, actif, sens, predicat)
+      accepte : la fonction du moteur, accepte(entry, ticket) -> bool
+      fenetre : la fonction du moteur, dans_fenetre(ticket) -> bool
+                (ou None si le moteur n en a pas)
+    """
+    notes = []
     try:
-        import papers_regles
-        for t in getattr(papers_regles, "REGLES", []):
-            try:
-                magic, nom, sens, fn = t[0], t[1], t[2], t[3]
-            except Exception:
-                continue
-            if isinstance(magic, int) and callable(fn):
-                table[magic] = Regle(magic, nom, sens, fn, "papers_regles")
-        notes.append("papers_regles : %d regle(s)" % len(table))
+        import papers_moteur as pm
     except Exception as e:
-        notes.append("papers_regles indisponible : %s" % e)
+        return None, None, None, ["papers_moteur illisible : %s: %s"
+                                  % (type(e).__name__, e)]
 
-    # --- 230207 : une fonction posee a la racine de son module
+    charge = getattr(pm, "_charge_modules", None)
+    fabrique = getattr(pm, "papers", None)
+    accepte = getattr(pm, "accepte", None)
+    fenetre = getattr(pm, "dans_fenetre", None)
+
+    for nom, obj in (("_charge_modules", charge), ("papers", fabrique),
+                     ("accepte", accepte)):
+        if not callable(obj):
+            return None, None, None, ["papers_moteur sans %s" % nom]
+
     try:
-        import gate_230207
-        fn = getattr(gate_230207, "decide", None)
-        if callable(fn):
-            table[230207] = Regle(230207, "GATE 230207", None, fn,
-                                  "gate_230207.decide")
-            notes.append("gate_230207.decide : 1 regle")
-        else:
-            notes.append("gate_230207 sans fonction decide")
+        mods = charge()
     except Exception as e:
-        notes.append("gate_230207 indisponible : %s" % e)
+        return None, None, None, ["_charge_modules a echoue : %s: %s"
+                                  % (type(e).__name__, e)]
+    if not isinstance(mods, (tuple, list)) or len(mods) != 2:
+        return None, None, None, ["_charge_modules rend %r, deux modules "
+                                  "attendus" % (type(mods).__name__,)]
 
-    # --- les temoins, uniquement si renseignes
-    for magic, spec in TEMOINS.items():
+    try:
+        entrees = list(fabrique(mods[0], mods[1]))
+    except Exception as e:
+        return None, None, None, ["papers() a echoue : %s: %s"
+                                  % (type(e).__name__, e)]
+
+    propres = []
+    for e in entrees:
         try:
-            actif, sens_dir = spec
+            magic, nom, actif, sens, pred = e[0], e[1], e[2], e[3], e[4]
         except Exception:
             continue
+        if isinstance(magic, int) and callable(pred):
+            propres.append((magic, nom, actif, sens, pred))
 
-        def fabrique(a, s):
-            def f(rec):
-                return rec.get("asset") == a and rec.get("dir") == s
-            return f
-        table[magic] = Regle(magic, "TEMOIN %s %s" % (actif, sens_dir),
-                             None, fabrique(actif, sens_dir), "TEMOINS")
-    if TEMOINS:
-        notes.append("temoins : %d" % len(TEMOINS))
+    notes.append("papers_moteur.papers() : %d paper(s)" % len(propres))
+    if not callable(fenetre):
+        notes.append("pas de dans_fenetre : aucune contrainte de session")
+        fenetre = None
     else:
-        notes.append("temoins 220004/220014 NON DEFINIS -- ignores")
-
-    return table, notes
+        f = getattr(pm, "FENETRE", None)
+        notes.append("fenetre de session : " + (str(f) if f else "aucune"))
+    return propres, accepte, fenetre, notes
 
 
 def fichier_open():
@@ -218,6 +212,51 @@ def lit_open(chemin):
         return {}, None
     except Exception as e:
         return None, "%s: %s" % (type(e).__name__, e)
+
+
+def calcule_lot(info, pos):
+    """Le volume du miroir, normalise au pas du symbole."""
+    if LOT == "parent":
+        v = float(pos.volume)
+    elif LOT == "min":
+        v = float(info.volume_min)
+    elif isinstance(LOT, str) and LOT.endswith("x"):
+        try:
+            v = float(pos.volume) * float(LOT[:-1])
+        except ValueError:
+            v = float(info.volume_min)
+    else:
+        try:
+            v = float(LOT)
+        except (TypeError, ValueError):
+            v = float(info.volume_min)
+    pas = float(getattr(info, "volume_step", 0) or 0.01)
+    v = round(round(v / pas) * pas, 8)
+    v = max(float(info.volume_min), v)
+    vmax = float(getattr(info, "volume_max", 0) or 0)
+    if vmax:
+        v = min(vmax, v)
+    return v
+
+
+def marge_tient(mt5, symbole, achat, lot, prix):
+    """(bool, message). Non calculable => on laisse passer, et on le dit."""
+    try:
+        besoin = mt5.order_calc_margin(
+            mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL,
+            symbole, lot, prix)
+    except Exception as e:
+        return True, "marge non calculable (%s)" % e
+    if not besoin:
+        return True, "marge non calculable"
+    ai = mt5.account_info()
+    libre = float(getattr(ai, "margin_free", 0) or 0)
+    if not libre:
+        return True, "marge libre inconnue"
+    if besoin > libre * MARGE_MAXI:
+        return False, ("besoin %.2f > %.0f %% de %.2f libre"
+                       % (besoin, MARGE_MAXI * 100, libre))
+    return True, None
 
 
 # ---------------------------------------------------------------- verrou
@@ -253,9 +292,11 @@ def rend_verrou():
 # ---------------------------------------------------------------- miroir
 class Miroir(object):
 
-    def __init__(self, mt5, table, chemin, armer):
+    def __init__(self, mt5, jeu, accepte, fenetre, chemin, armer):
         self.mt5 = mt5
-        self.table = table
+        self.jeu = jeu
+        self.accepte = accepte
+        self.fenetre = fenetre
         self.chemin = chemin
         self.armer = armer
         self.vus = set()
@@ -264,7 +305,7 @@ class Miroir(object):
         self.premier_tour = True
 
     # -- envoi -----------------------------------------------------------
-    def envoie(self, pos, rec, regle, t_signal):
+    def envoie(self, pos, rec, magic, nom, t_signal):
         mt5 = self.mt5
         info = mt5.symbol_info(pos.symbol)
         tick = mt5.symbol_info_tick(pos.symbol)
@@ -273,7 +314,18 @@ class Miroir(object):
         achat = (pos.type == 0)
         prix = tick.ask if achat else tick.bid
         spread = (tick.ask - tick.bid) / info.point if info.point else 0.0
-        lot = info.volume_min
+        lot = calcule_lot(info, pos)
+
+        ok_marge, note = marge_tient(mt5, pos.symbol, achat, lot, prix)
+        if not ok_marge:
+            csv_ligne({
+                "evenement": "MARGE", "ticket_parent": pos.ticket,
+                "magic_parent": pos.magic, "symbole": pos.symbol,
+                "actif": rec.get("asset"), "sens": "BUY" if achat else "SELL",
+                "magic_paper": magic, "regle": nom,
+                "decision": "REFUSE", "raison": note,
+                "volume_miroir": lot})
+            return None, "marge insuffisante : %s" % note
 
         req = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -282,7 +334,7 @@ class Miroir(object):
             "type": mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL,
             "price": prix,
             "deviation": DEVIATION,
-            "magic": int(regle.magic),
+            "magic": int(magic),
             "comment": "mir%d" % (pos.magic % 1000),
             "type_time": mt5.ORDER_TIME_GTC,
             # FOK d abord : l IOC n est pas supporte sur US30/NAS100/SPX500
@@ -313,7 +365,7 @@ class Miroir(object):
             "sens": "BUY" if achat else "SELL",
             "prix_parent": pos.price_open, "volume_parent": pos.volume,
             "sl_parent": pos.sl,
-            "magic_paper": regle.magic, "regle": regle.nom,
+            "magic_paper": magic, "regle": nom,
             "decision": "PRIS",
             "latence_ms": round((time.time() - t_signal) * 1000.0, 1),
             "prix_demande": prix, "prix_obtenu": obtenu,
@@ -442,31 +494,39 @@ class Miroir(object):
                            "raison": "entry_captured_live faux"})
                 continue
 
+            if self.fenetre is not None and not self.fenetre(rec):
+                dit("    hors fenetre de session -- ignore")
+                csv_ligne({"evenement": "HORS_FENETRE", "ticket_parent": tk,
+                           "magic_parent": magic_parent,
+                           "actif": rec.get("asset"), "sens": rec.get("dir"),
+                           "decision": "IGNORE", "raison": "hors fenetre"})
+                continue
+
             pris = []
-            for magic in sorted(self.table):
-                regle = self.table[magic]
-                r, raison = regle.prend(rec)
-                if r is None:
-                    dit("    M%s en erreur : %s" % (magic, raison))
+            for entree in self.jeu:
+                try:
+                    if not self.accepte(entree, rec):
+                        continue
+                except Exception as e:
+                    dit("    M%s accepte() en erreur : %s" % (entree[0], e))
                     csv_ligne({"evenement": "ERREUR", "ticket_parent": tk,
-                               "magic_paper": magic, "regle": regle.nom,
+                               "magic_paper": entree[0], "regle": entree[1],
                                "actif": rec.get("asset"), "sens": rec.get("dir"),
-                               "decision": "ERREUR", "raison": raison})
-                    continue
-                if not r:
+                               "decision": "ERREUR", "raison": str(e)})
                     continue
                 if deja + len(pris) >= MAX_MIROIRS:
-                    dit("    plafond %d atteint, M%s non pris" % (MAX_MIROIRS, magic))
+                    dit("    plafond %d atteint, M%s non pris"
+                        % (MAX_MIROIRS, entree[0]))
                     csv_ligne({"evenement": "PLAFOND", "ticket_parent": tk,
-                               "magic_paper": magic, "decision": "REFUSE",
+                               "magic_paper": entree[0], "decision": "REFUSE",
                                "raison": "plafond"})
                     continue
-                pris.append(regle)
+                pris.append(entree)
 
             if not pris:
-                dit("    aucune regle ne prend ce trade")
+                dit("    aucun paper ne prend ce trade")
                 continue
-            dit("    pris par : %s" % ", ".join("M%s" % r.magic for r in pris))
+            dit("    pris par : %s" % ", ".join("M%s" % e[0] for e in pris))
 
             pos = mt5.positions_get(ticket=tk)
             if not pos:
@@ -474,7 +534,8 @@ class Miroir(object):
                 continue
             pos = pos[0]
 
-            for regle in pris:
+            for entree in pris:
+                magic, nom = entree[0], entree[1]
                 if not self.armer:
                     info = mt5.symbol_info(pos.symbol)
                     tick = mt5.symbol_info_tick(pos.symbol)
@@ -486,7 +547,7 @@ class Miroir(object):
                         "actif": rec.get("asset"), "sens": rec.get("dir"),
                         "prix_parent": pos.price_open,
                         "volume_parent": pos.volume, "sl_parent": pos.sl,
-                        "magic_paper": regle.magic, "regle": regle.nom,
+                        "magic_paper": magic, "regle": nom,
                         "decision": "PRIS",
                         "latence_ms": round((time.time() - t_signal) * 1000, 1),
                         "prix_demande": (tick.ask if pos.type == 0 else tick.bid)
@@ -494,14 +555,15 @@ class Miroir(object):
                         "spread_pts": round(sp, 1),
                         "bid": tick.bid if tick else None,
                         "ask": tick.ask if tick else None,
-                        "volume_miroir": info.volume_min if info else None})
+                        "volume_miroir": (calcule_lot(info, pos)
+                                          if info else None)})
                     continue
-                tm, e = self.envoie(pos, rec, regle, t_signal)
+                tm, e = self.envoie(pos, rec, magic, nom, t_signal)
                 if tm:
-                    self.liens.setdefault(tk, []).append((regle.magic, tm))
-                    dit("    M%s envoye, ticket %s" % (regle.magic, tm))
+                    self.liens.setdefault(tk, []).append((magic, tm))
+                    dit("    M%s envoye, ticket %s" % (magic, tm))
                 else:
-                    dit("    M%s REFUSE : %s" % (regle.magic, e))
+                    dit("    M%s REFUSE : %s" % (magic, e))
 
 
 # ---------------------------------------------------------------- main
@@ -519,22 +581,36 @@ def main():
                                  else "sonde -- lecture seule")))
     print()
 
-    table, notes = charge_table()
+    jeu, accepte, fenetre, notes = charge_jeu()
     for n in notes:
         print("  %s" % n)
     print()
+    if not jeu:
+        print("  Aucun paper chargeable. Le miroir n a rien a evaluer.")
+        print("  Rien n a ete envoye.")
+        return
     print(SEP)
-    print("REGLES QUI PRODUIRONT DES ORDRES")
+    print("PAPERS QUI PRODUIRONT DES ORDRES")
     print(SEP)
     print()
-    print("    magic     sens impose   source                 regle")
-    print("    " + "-" * 84)
-    for magic in sorted(table):
-        r = table[magic]
-        print("    %-9s %-13s %-22s %s"
-              % (r.magic, r.dir_impose() or "les deux", r.source, r.nom))
+    print("    magic     actif    sens      regle")
+    print("    " + "-" * 80)
+    for magic, nom, actif, sens, _p in sorted(jeu, key=lambda e: e[0]):
+        print("    %-9s %-8s %-9s %s"
+              % (magic, actif or "tous", sens or "les deux", nom))
     print()
-    print("  %d regle(s) active(s)." % len(table))
+    print("  %d paper(s) actif(s)." % len(jeu))
+    print()
+    if LOT == "parent":
+        print("  volume : MEME QUE LE PARENT -- c est le seul reglage qui")
+        print("           mesure la vraie qualite d execution.")
+    elif LOT == "min":
+        print("  volume : minimum du symbole. Le slippage mesure sera")
+        print("           sous-estime : ce n est pas la taille reelle.")
+    else:
+        print("  volume : %s" % (LOT,))
+    print("  refus au-dela de %.0f %% de la marge libre, avant chaque ordre."
+          % (MARGE_MAXI * 100))
     print()
 
     chemin, err = fichier_open()
@@ -578,24 +654,25 @@ def main():
                     continue
                 if (rec.get("magic") or 0) // 1000 not in PARENTS:
                     continue
+                dedans = fenetre(rec) if fenetre is not None else True
                 pris = []
-                for magic in sorted(table):
-                    r, _ = table[magic].prend(rec)
-                    if r:
-                        pris.append(magic)
-                print("    %s M%s %-6s %-4s live=%-5s -> %s"
+                for e in sorted(jeu, key=lambda x: x[0]):
+                    try:
+                        if accepte(e, rec):
+                            pris.append(e[0])
+                    except Exception:
+                        pass
+                print("    %s M%s %-6s %-4s live=%-5s fen=%-5s -> %s"
                       % (tk, rec.get("magic"), rec.get("asset"),
                          rec.get("dir"), rec.get("entry_captured_live"),
-                         ", ".join("M%s" % m for m in pris) or "aucune"))
+                         dedans,
+                         ", ".join("M%s" % m for m in pris) or "aucun"))
             print()
             print(SEP)
             print("  Sonde terminee. Rien n a ete envoye.")
             print(SEP)
             return
 
-        if not table:
-            print("  aucune regle : la boucle n aurait rien a evaluer.")
-            return
         if not prend_verrou():
             print("  une autre instance tourne deja.")
             return
@@ -607,7 +684,7 @@ def main():
                     sys.stdout.flush()
                     time.sleep(1)
                 print()
-            m = Miroir(mt5, table, chemin, armer)
+            m = Miroir(mt5, jeu, accepte, fenetre, chemin, armer)
             dit("boucle demarree (%s), poll %.1f s"
                 % ("ARMEE" if armer else "inerte", POLL_SEC))
             while True:
