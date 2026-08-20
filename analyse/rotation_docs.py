@@ -62,8 +62,9 @@ CE QUE LA COMPRESSION GARANTIT
     l original. Si quoi que ce soit cloche, le .gz partiel est retire
     et le fichier d origine reste intact.
 
-    Rien n est touche pour la journee EN COURS ni pour un fichier
-    modifie dans l heure : la stack est peut-etre en train d y ecrire.
+    Rien n est touche pour la journee EN COURS ni pour un fichier en
+    clair modifie dans l heure : la stack est peut-etre en train d y
+    ecrire. Un .gz, lui, n est ecrit par personne.
 """
 import argparse
 import gzip
