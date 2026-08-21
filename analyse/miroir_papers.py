@@ -82,6 +82,16 @@ TOUR_LENT = 2.0         # au-dela, le tour est signale
 TOUR_BLOQUE = 30.0      # au-dela, l appel en cours ne rend pas la main
 RELIRE_ESSAIS = 4       # open_state.json est remplace atomiquement
 RELIRE_PAUSE = 0.05     # par l ecrivain : une lecture peut tomber dessus
+
+# Le miroir doit rester la copie de son parent APRES l entree : les
+# parents sont trailes et soldes partiellement, et depuis que les
+# autres modules ne touchent plus aux magics paper, personne d autre
+# ne le fera. La comparaison porte sur l etat REEL des deux positions,
+# pas sur un changement observe : c est ce qui la rend auto-reparatrice
+# apres un arret.
+SYNC_SEC = 2.0          # pas la peine d y revenir deux fois par seconde
+TOLERANCE_PRIX = 1e-4   # en-dessous, c est du bruit de flottant
+SL_ESSAIS_MAX = 3       # un SL refuse 3 fois n est plus retente
 DEVIATION = 20
 LOG_MAX = 4000
 
@@ -439,6 +449,8 @@ class Miroir(object):
         self.dernier = {}
         self.premier_tour = True
         self.rotation = 0
+        self.t_sync = 0.0
+        self.sl_refus = {}
 
     # -- envoi -----------------------------------------------------------
     def envoie(self, pos, rec, magic, nom, t_signal):
@@ -568,6 +580,109 @@ class Miroir(object):
                    "retcode": res.retcode if res else None})
         return ok, None if ok else (res.comment if res else "sans reponse")
 
+    # -- suivi du parent -------------------------------------------------
+    def synchronise(self, par_ticket):
+        """Recopie sur les miroirs ce qui a bouge chez le parent.
+
+        Deux choses bougent apres l entree : le SL, deplace par les
+        trailings de la stack, et le volume, reduit par les soldes
+        partiels. Tant que d autres modules fermaient les miroirs, ca
+        n avait pas d importance. Depuis qu ils en sont exemptes, le
+        miroir est SEUL a les gerer : s il ne suit pas, sa sortie n a
+        plus rien a voir avec celle de son parent et la comparaison
+        qu on cherche a faire perd son sens.
+
+        La regle compare les deux etats REELS plutot que de suivre les
+        changements. C est ce qui la rend auto-reparatrice : apres un
+        arret, le premier tour realigne au lieu d avoir rate le
+        deplacement survenu pendant la coupure.
+        """
+        for tp, paires in list(self.liens.items()):
+            parent = par_ticket.get(int(tp))
+            if parent is None:
+                continue
+            for magic, tm in list(paires):
+                m = par_ticket.get(int(tm))
+                if m is None:
+                    continue
+                try:
+                    self.aligne_sl(m, parent, magic, tp)
+                    self.aligne_volume(m, parent, magic, tp)
+                except Exception as e:
+                    dit("  suivi M%s ticket %s en erreur : %s"
+                        % (magic, tm, e))
+
+    def aligne_sl(self, m, parent, magic, tp):
+        """SL et TP du miroir = ceux du parent."""
+        if self.sl_refus.get(int(m.ticket), 0) >= SL_ESSAIS_MAX:
+            return
+        sl = float(parent.sl or 0.0)
+        cible_tp = float(parent.tp or 0.0)
+        if (abs(float(m.sl or 0.0) - sl) < TOLERANCE_PRIX
+                and abs(float(m.tp or 0.0) - cible_tp) < TOLERANCE_PRIX):
+            return
+        res = self.mt5.order_send({
+            "action": self.mt5.TRADE_ACTION_SLTP, "symbol": m.symbol,
+            "position": int(m.ticket), "sl": sl, "tp": cible_tp,
+            "magic": int(magic)})
+        ok = bool(res and res.retcode == 10009)
+        if ok:
+            self.sl_refus.pop(int(m.ticket), None)
+        else:
+            n = self.sl_refus.get(int(m.ticket), 0) + 1
+            self.sl_refus[int(m.ticket)] = n
+            if n == SL_ESSAIS_MAX:
+                dit("  SL M%s ticket %s refuse %d fois -- abandon"
+                    % (magic, m.ticket, n))
+        dit("  SL suivi M%s ticket %s : %s -> %s  %s"
+            % (magic, m.ticket, m.sl, sl, "ok" if ok else
+               (res.comment if res else "sans reponse")))
+        csv_ligne({"evenement": "SL_SUIVI", "ticket_parent": tp,
+                   "magic_paper": magic, "ticket_miroir": int(m.ticket),
+                   "symbole": m.symbol, "sl_parent": sl,
+                   "decision": "OK" if ok else "REFUSE",
+                   "retcode": res.retcode if res else None})
+
+    def aligne_volume(self, m, parent, magic, tp):
+        """Volume du miroir = volume courant du parent (solde partiel)."""
+        if LOT != "parent":
+            return
+        info = self.mt5.symbol_info(m.symbol)
+        pas = float(getattr(info, "volume_step", 0.01) or 0.01)
+        mini = float(getattr(info, "volume_min", 0.01) or 0.01)
+        trop = float(m.volume) - float(parent.volume)
+        if trop < mini - 1e-9:
+            return
+        vol = round(round(trop / pas) * pas, 8)
+        if vol < mini - 1e-9 or vol > float(m.volume) + 1e-9:
+            return
+        tick = self.mt5.symbol_info_tick(m.symbol)
+        if tick is None:
+            return
+        achat = (m.type == 0)
+        req = {"action": self.mt5.TRADE_ACTION_DEAL, "position": int(m.ticket),
+               "symbol": m.symbol, "volume": vol,
+               "type": self.mt5.ORDER_TYPE_SELL if achat
+                       else self.mt5.ORDER_TYPE_BUY,
+               "price": tick.bid if achat else tick.ask,
+               "deviation": DEVIATION, "magic": int(magic),
+               "comment": "mirPART", "type_time": self.mt5.ORDER_TIME_GTC,
+               "type_filling": self.mt5.ORDER_FILLING_FOK}
+        res = self.mt5.order_send(req)
+        if res and res.retcode == 10030:
+            req["type_filling"] = self.mt5.ORDER_FILLING_IOC
+            res = self.mt5.order_send(req)
+        ok = bool(res and res.retcode == 10009)
+        dit("  solde partiel suivi M%s ticket %s : %s -> %s  %s"
+            % (magic, m.ticket, m.volume, parent.volume,
+               "ok" if ok else (res.comment if res else "sans reponse")))
+        csv_ligne({"evenement": "PARTIEL_SUIVI", "ticket_parent": tp,
+                   "magic_paper": magic, "ticket_miroir": int(m.ticket),
+                   "symbole": m.symbol, "volume_miroir": vol,
+                   "volume_parent": parent.volume,
+                   "decision": "OK" if ok else "REFUSE",
+                   "retcode": res.retcode if res else None})
+
     # -- un tour ---------------------------------------------------------
     def tour(self):
         mt5 = self.mt5
@@ -577,16 +692,22 @@ class Miroir(object):
             dit("  etat illisible : %s" % err)
             return
 
+        # Un seul appel au lieu d un par ticket : avec quinze parents
+        # ouverts la version precedente faisait quinze aller-retours MT5
+        # par tour, deux fois par seconde. C est autant d occasions de
+        # rester bloque dans l IPC.
+        toutes = mt5.positions_get() or []
+        par_ticket = dict((int(p.ticket), p) for p in toutes)
         for tk, rec in ouverts.items():
             if not isinstance(rec, dict):
                 continue
-            p = mt5.positions_get(ticket=tk)
-            if p:
+            p = par_ticket.get(int(tk))
+            if p is not None:
                 self.dernier[tk] = {
-                    "prix_courant": p[0].price_current,
-                    "prix_open": p[0].price_open,
-                    "volume": p[0].volume, "symbole": p[0].symbol,
-                    "magic": p[0].magic, "achat": (p[0].type == 0),
+                    "prix_courant": p.price_current,
+                    "prix_open": p.price_open,
+                    "volume": p.volume, "symbole": p.symbol,
+                    "magic": p.magic, "achat": (p.type == 0),
                 }
 
         if self.premier_tour:
@@ -616,7 +737,7 @@ class Miroir(object):
             # ce que le journal ne connait pas ne sera pas ferme d office
             connus = set(t for v in self.liens.values() for _m, t in v)
             magics = set(e[0] for e in self.jeu)
-            inconnus = [p for p in (mt5.positions_get() or [])
+            inconnus = [p for p in toutes
                         if p.magic in magics and p.ticket not in connus]
             if inconnus:
                 dit("  ATTENTION : %d position(s) portant un magic paper"
@@ -627,6 +748,11 @@ class Miroir(object):
                     dit("    ticket %s  M%s  %s  vol %s"
                         % (p.ticket, p.magic, p.symbol, p.volume))
             return
+
+        # --- le miroir reste la copie de son parent
+        if self.armer and (time.time() - self.t_sync) >= SYNC_SEC:
+            self.t_sync = time.time()
+            self.synchronise(par_ticket)
 
         # --- fermetures
         for tp in list(self.liens.keys()):
