@@ -19,8 +19,25 @@ POURQUOI UN PANNEAU A PART
 
 CE QU IL MONTRE, ET CE QU IL NE PEUT PAS MONTRER
 
-    L ecart d entree est mesure contre le prix du parent, signe de sorte
-    qu un chiffre POSITIF veut dire  paye plus cher que le parent .
+    Deux ecarts, tous deux contre le parent et tous deux signes de sorte
+    qu un chiffre POSITIF est DEFAVORABLE au miroir :
+
+      entree  -- ce que coute la latence de ~200 ms. Median proche de
+                 zero, mais la queue est reelle : jusqu a 14 points sur
+                 un US30 qui bouge vite.
+      sortie  -- ce que coute le REGIME de sortie. C est la mesure du
+                 test : un miroir ferme par M154_FOLLOW sort a un prix
+                 qui n a rien a voir avec celui de son parent, et cet
+                 ecart-la chiffre exactement la difference.
+
+    Attention au signe : a l entree une vente veut un prix HAUT, a la
+    sortie elle veut un prix BAS. La convention est donc inversee entre
+    les deux colonnes. Les traiter pareil ferait passer pour un cout ce
+    qui est un gain -- verifie au banc, ou un miroir sorti 21 points
+    mieux que son parent s affichait a +2100 pts defavorable.
+
+    Un parent encore ouvert n a pas de prix de sortie : la colonne reste
+    vide plutot que d afficher un zero qui n apprend rien.
 
     Le P&L d un miroir n est comparable a celui du parent que si les
     deux portent le meme volume. C est le cas ici (LOT = parent), mais
@@ -48,7 +65,7 @@ import time
 DOSSIER = "docs"
 CSV_MIROIR = os.path.join(DOSSIER, "miroir_papers.csv")
 SORTIE = os.path.join("panels", "miroirs.txt")
-LARG = 118
+LARG = 134
 
 
 def miroir2(magic):
@@ -107,6 +124,16 @@ def sorties_du_jour(mt5):
     return d
 
 
+def med(v):
+    """Mediane, ou un tiret si la liste est vide. Pas de zero trompeur."""
+    if not v:
+        return "      --"
+    s = sorted(v)
+    n = len(s)
+    m = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2.0
+    return "%+.0f pts" % m
+
+
 def ecart_pts(prix_parent, prix_miroir, sens, point):
     if prix_parent is None or prix_miroir is None or not point:
         return None
@@ -118,7 +145,8 @@ def ecart_pts(prix_parent, prix_miroir, sens, point):
 
 def bloc(mt5, par_parent, positions, deals):
     lignes = []
-    tot = {"MIR1": [0.0, 0, 0], "MIR2": [0.0, 0, 0]}   # pnl, ouverts, fermes
+    # pnl, ouverts, fermes, ecarts de sortie, ecarts d entree
+    tot = {"MIR1": [0.0, 0, 0, [], []], "MIR2": [0.0, 0, 0, [], []]}
     for tp, envois in sorted(par_parent.items(), key=lambda kv: kv[0]):
         parent = positions.get(int(tp))
         fini = deals.get(int(tp))
@@ -131,19 +159,26 @@ def bloc(mt5, par_parent, positions, deals):
         pp = nombre(r0.get("prix_parent"))
         sens = r0.get("sens") or ""
 
+        # le prix de sortie du parent : la reference de l ecart de sortie
+        sortie_parent = fini[2] if fini else None
+
         lignes.append("")
         if parent is not None:
             lignes.append(
-                "  PARENT  %-9s %-7s %-4s  entree %10.2f  vol %5.2f"
-                "  SL %10.2f  P&L %8.2f   OUVERT"
+                "  PARENT %-8s %-7s %-4s  entree %10.2f"
+                "              sortie          --              "
+                "  vol %5.2f  P&L %8.2f  OUVERT"
                 % (parent.magic, sym, sens, parent.price_open,
-                   parent.volume, parent.sl or 0.0, parent.profit))
+                   parent.volume, parent.profit))
         else:
             lignes.append(
-                "  PARENT  %-9s %-7s %-4s  entree %10.2f"
-                "                                P&L %8.2f   ferme %s"
+                "  PARENT %-8s %-7s %-4s  entree %10.2f"
+                "              sortie %10.2f              "
+                "  vol %5.2f  P&L %8.2f  %s"
                 % (r0.get("magic_parent"), sym, sens, pp or 0.0,
-                   fini[0], (fini[1] or "?")[:22]))
+                   sortie_parent or 0.0,
+                   nombre(r0.get("volume_parent")) or 0.0,
+                   fini[0], (fini[1] or "?")[:24]))
 
         for r in sorted(envois, key=lambda x: (miroir2(x.get("magic_paper")),
                                                str(x.get("magic_paper")))):
@@ -160,21 +195,35 @@ def bloc(mt5, par_parent, positions, deals):
                 etat = "OUVERT"
                 pnl = vivant.profit
                 vol = vivant.volume
-                sl = vivant.sl or 0.0
+                po_sortie = None
             elif clos is not None:
                 tot[k][0] += clos[0]
                 tot[k][2] += 1
-                etat = "ferme %s" % (clos[1] or "?")[:22]
+                etat = (clos[1] or "?")[:24]
                 pnl = clos[0]
                 vol = nombre(r.get("volume_miroir")) or 0.0
-                sl = 0.0
+                po_sortie = clos[2]
             else:
                 continue
+            # A l entree une vente veut un prix HAUT ; a la sortie elle
+            # veut un prix BAS. La convention  positif = defavorable  est
+            # donc exactement inversee entre les deux, et reutiliser la
+            # meme formule ferait passer pour un cout ce qui est un gain.
+            es = ecart_pts(sortie_parent, po_sortie, sens, point)
+            if es is not None:
+                es = -es
+            if es is not None:
+                tot[k][3].append(es)
+            if ec is not None:
+                tot[k][4].append(ec)
             lignes.append(
-                "    %-5s %-9s %-7s      obtenu %10.2f  vol %5.2f"
-                "  SL %10.2f  P&L %8.2f   %s   ecart %s"
-                % (k, mg, tm, po or 0.0, vol, sl, pnl, etat,
-                   "%+7.1f pts" % ec if ec is not None else "      ?"))
+                "    %-5s %-8s %-9s  entree %10.2f %11s"
+                "  sortie %10.2f %11s  vol %5.2f  P&L %8.2f  %s"
+                % (k, mg, tm, po or 0.0,
+                   "%+.0f pts" % ec if ec is not None else "?",
+                   po_sortie or 0.0,
+                   "%+.0f pts" % es if es is not None else "?",
+                   vol, pnl, etat))
     return lignes, tot
 
 
@@ -198,14 +247,16 @@ def rendu(mt5):
     out += corps
     out += ["", "-" * LARG]
     for k in ("MIR1", "MIR2"):
-        p, o, f = tot[k]
+        p, o, f, es, ee = tot[k]
         out.append("  %-5s  P&L %9.2f   %3d ouvert(s)   %3d ferme(s)"
-                   % (k, p, o, f))
+                   "   ecart median  entree %s  sortie %s"
+                   % (k, p, o, f, med(ee), med(es)))
     d = tot["MIR1"][0] - tot["MIR2"][0]
     out.append("  ecart MIR1 - MIR2 : %+9.2f   "
                "(positif = sortir avec le parent rapporte plus)" % d)
     out += ["-" * LARG,
-            "  ecart d entree : positif = paye plus cher que le parent.",
+            "  les deux ecarts sont contre le parent, positif = defavorable.",
+            "  entree = le cout de la latence ; sortie = le cout du regime.",
             "  la colonne  ferme  dit QUI a decide : mirX = le miroir,",
             "  M154_FOLLOW / IGN_COVER / PREOPEN_75 = un autre module.",
             "  Lecture seule. Aucun ordre n a ete envoye.",
