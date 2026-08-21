@@ -60,6 +60,7 @@ CE QUE CA NE PROUVE PAS
 import argparse
 import io
 import json
+import math
 import os
 import random
 import sys
@@ -284,8 +285,9 @@ def bloc_conditionnel(jours, A, B, etiquette):
             print("       L effet DEPENDANCE n est pas etabli. Ce qui reste")
             print("       vrai, c est l effet creneau ci-dessus, et lui seul.")
         elif p > 0.05:
-            print("    -> a la limite. Avec %d seances, insuffisant pour")
-            print("       armer une regle." % len(b_val))
+            print("    -> a la limite. Avec %d seances, c est insuffisant"
+                  % len(b_val))
+            print("       pour armer une regle.")
         else:
             print("    -> l ecart resiste au rebattage.")
     rho = spearman(a_val, b_val)
@@ -319,8 +321,91 @@ def bloc_conditionnel(jours, A, B, etiquette):
 
     if len(b_val) < SEANCES_MINI:
         print("")
-        print("  A LIRE AVEC PRUDENCE : %d seances. Aucun p n est")
-        print("  interpretable a ce compte." % len(b_val))
+        print("  A LIRE AVEC PRUDENCE : %d seances seulement. Aucun p"
+              % len(b_val))
+        print("  n est interpretable a ce compte.")
+
+
+def binom_unilateral(k, n):
+    """P(X >= k) avec p = 1/2. Exact : n est petit, pas d approximation."""
+    if n == 0:
+        return 1.0
+    return sum(math.comb(n, i) for i in range(k, n + 1)) / float(2 ** n)
+
+
+def bloc_coupure(tk, dec):
+    """
+    L hypothese de depart parlait d une tranche qui rend le matin. Les
+    chiffres montrent autre chose : un bloc d heures perdantes suivi
+    d un bloc gagnant. Ce bloc-ci cherche ou passe la frontiere -- et
+    surtout, verifie qu elle tient SEANCE par seance, pas seulement en
+    somme. Une somme se fabrique avec deux mauvais jours.
+    """
+    titre("LA VRAIE COUPURE -- a quelle heure la stack bascule-t-elle ?")
+    heures = sorted(set((t["heure"] + dec) % 24 for t in tk))
+    print("")
+    print("   couper a    avant (jete)   apres (garde)   tickets gardes")
+    trait()
+    meilleur, best = None, None
+    for H in heures[1:]:
+        av = sum(t["pnl"] for t in tk if (t["heure"] + dec) % 24 < H)
+        ap = sum(t["pnl"] for t in tk if (t["heure"] + dec) % 24 >= H)
+        n_ap = sum(1 for t in tk if (t["heure"] + dec) % 24 >= H)
+        if best is None or ap > best:
+            best, meilleur = ap, H
+        print("     %02d h    %12.2f    %12.2f   %10d"
+              % (H, av, ap, n_ap))
+    trait()
+    print("   Le total sans coupure : %.2f" % sum(t["pnl"] for t in tk))
+    if meilleur is None:
+        return
+    print("")
+    print("  L heure qui maximise ce qu on garde est %02d h (%+.2f)."
+          % (meilleur, best))
+    print("  Elle est choisie APRES avoir vu les chiffres, sur %d seaux"
+          % (len(heures) - 1))
+    print("  possibles. C est un choix in-sample : le chiffre ci-dessus")
+    print("  est un plafond optimiste, jamais une esperance.")
+
+    print("")
+    print("  LE TEST QUI COMPTE -- le bloc jete est-il perdant SEANCE")
+    print("  par seance, et pas seulement en somme ?")
+    print("")
+    print("   seance        avant %02dh      n" % meilleur)
+    trait()
+    par = {}
+    for t in tk:
+        if (t["heure"] + dec) % 24 < meilleur:
+            p_, n_ = par.get(t["jour"], (0.0, 0))
+            par[t["jour"]] = (p_ + t["pnl"], n_ + 1)
+    lignes = sorted(par.items())
+    for j, (p_, n_) in lignes:
+        print("   %s  %11.2f   %4d" % (j, p_, n_))
+    trait()
+    vals = [p_ for _j, (p_, _n) in lignes]
+    if not vals:
+        return
+    neg = sum(1 for v in vals if v < 0)
+    n = len(vals)
+    print("  %d seances, total %.2f, mediane %.2f"
+          % (n, sum(vals), mediane(vals)))
+    print("  seances rouges : %d / %d" % (neg, n))
+    p = binom_unilateral(neg, n)
+    print("  binomial exact unilateral contre 50/50 : p = %.4f" % p)
+    if p > 0.05:
+        print("  -> a ce compte de seances, un bloc aussi rouge peut sortir")
+        print("     d une piece equilibree. Le total n est pas une preuve.")
+    else:
+        print("  -> le signe lui-meme est trop regulier pour du hasard.")
+    print("")
+    print("  Concentration -- le total tient-il sans les pires seances ?")
+    ordonne = sorted(vals)
+    for k in (1, 2, 3):
+        if n - k >= 3:
+            print("    sans les %d pire(s) : %11.2f  sur %d seances"
+                  % (k, sum(ordonne[k:]), n - k))
+    print("    Si le total vire au vert en retirant deux jours, il n y a")
+    print("    pas de creneau perdant : il y a eu deux mauvais jours.")
 
 
 def contrefactuel(tk, dec, h0, h1, r0, r1):
@@ -388,6 +473,7 @@ def main():
                               par_seance(sous, dec, r0, r1),
                               "-- %s" % nom)
 
+    bloc_coupure(tk, dec)
     contrefactuel(tk, dec, h0, h1, r0, r1)
 
     titre("ATTRIBUTION -- entree ou cloture ?")
