@@ -70,7 +70,22 @@ MARGE_MAXI = 0.25
 # vers 130 %, pas la marge libre qui manque. Ce plancher-ci mord.
 NIVEAU_MINI = 300.0     # en %, 0 pour desactiver
 
-MAX_MIROIRS = 60
+# --- MIROIR 2 : la meme entree, l ancien regime de sortie ------------------
+# Le miroir 1 (magics 220xxx/230xxx/240xxx) est exempte de M154_FOLLOW,
+# IGN_COVER et PREOPEN_75 : il sort quand son parent sort, point.
+# Le miroir 2 porte le meme magic prefixe d un 4 -- 240004 -> 4240004 --
+# donc hors de la plage 220000-249999 de papers_exempt, donc soumis aux
+# autres modules comme avant. Meme entree, meme lot, meme instant : le
+# seul ecart entre les deux est ce qui decide de la SORTIE.
+#
+# Deux differences separent les branches, pas une : l exemption ET la
+# recopie du SL (le miroir 2 ne la recoit pas, l ancien regime ne la
+# faisait pas). Le test compare donc deux REGIMES entiers, pas l effet
+# isole de l exemption. C est voulu, mais ca ne doit pas etre oublie au
+# moment de lire le resultat.
+MIROIR2 = True
+
+MAX_MIROIRS = 60        # compte les DEUX branches
 POLL_SEC = 0.5
 
 # Surveillance. Le 21/08 la boucle a tourne six heures sans ecrire une
@@ -327,6 +342,19 @@ def battement(m, n_tours, secondes):
                miroirs, vieux))
 
 
+def magic_double(magic):
+    """240004 -> 4240004. Hors de toute plage exemptee."""
+    return int("4%d" % int(magic))
+
+
+def est_miroir2(magic):
+    """Le 4 de tete pousse le magic au-dela du million."""
+    try:
+        return int(magic) >= 1000000
+    except (TypeError, ValueError):
+        return False
+
+
 def calcule_lot(info, pos):
     """Le volume du miroir, normalise au pas du symbole."""
     if LOT == "parent":
@@ -352,8 +380,14 @@ def calcule_lot(info, pos):
     return v
 
 
-def marge_tient(mt5, symbole, achat, lot, prix):
-    """(bool, message). Non calculable => on laisse passer, et on le dit."""
+def marge_tient(mt5, symbole, achat, lot, prix, combien=1):
+    """(bool, message). Non calculable => on laisse passer, et on le dit.
+
+    combien : nombre d ordres que l on s apprete a envoyer d un bloc.
+    Avec le miroir 2, les deux partent ensemble ou pas du tout : les
+    verifier un par un laisserait passer le premier et refuser le
+    second, ce qui casserait la paire et donc la comparaison.
+    """
     try:
         besoin = mt5.order_calc_margin(
             mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL,
@@ -362,6 +396,7 @@ def marge_tient(mt5, symbole, achat, lot, prix):
         return True, "marge non calculable (%s)" % e
     if not besoin:
         return True, "marge non calculable"
+    besoin = besoin * max(1, int(combien))
     ai = mt5.account_info()
     libre = float(getattr(ai, "margin_free", 0) or 0)
     if not libre:
@@ -453,7 +488,7 @@ class Miroir(object):
         self.sl_refus = {}
 
     # -- envoi -----------------------------------------------------------
-    def envoie(self, pos, rec, magic, nom, t_signal):
+    def envoie(self, pos, rec, magic, nom, t_signal, combien=1):
         mt5 = self.mt5
         info = mt5.symbol_info(pos.symbol)
         tick = mt5.symbol_info_tick(pos.symbol)
@@ -464,7 +499,8 @@ class Miroir(object):
         spread = (tick.ask - tick.bid) / info.point if info.point else 0.0
         lot = calcule_lot(info, pos)
 
-        ok_marge, note = marge_tient(mt5, pos.symbol, achat, lot, prix)
+        ok_marge, note = marge_tient(mt5, pos.symbol, achat, lot, prix,
+                                     combien)
         if not ok_marge:
             csv_ligne({
                 "evenement": "MARGE", "ticket_parent": pos.ticket,
@@ -605,6 +641,8 @@ class Miroir(object):
                 m = par_ticket.get(int(tm))
                 if m is None:
                     continue
+                if est_miroir2(magic):
+                    continue        # branche  ancien regime  : pas de suivi
                 try:
                     self.aligne_sl(m, parent, magic, tp)
                     self.aligne_volume(m, parent, magic, tp)
@@ -862,12 +900,27 @@ class Miroir(object):
                         "volume_miroir": (calcule_lot(info, pos)
                                           if info else None)})
                     continue
-                tm, e = self.envoie(pos, rec, magic, nom, t_signal)
-                if tm:
-                    self.liens.setdefault(tk, []).append((magic, tm))
-                    dit("    M%s envoye, ticket %s" % (magic, tm))
-                else:
+                combien = 2 if MIROIR2 else 1
+                tm, e = self.envoie(pos, rec, magic, nom, t_signal, combien)
+                if not tm:
                     dit("    M%s REFUSE : %s" % (magic, e))
+                    continue
+                self.liens.setdefault(tk, []).append((magic, tm))
+                dit("    M%s envoye, ticket %s" % (magic, tm))
+                if not MIROIR2:
+                    continue
+                # La marge a deja ete verifiee pour DEUX ordres avant le
+                # premier : le second ne peut donc pas se voir refuser
+                # pour cette raison, et la paire reste entiere.
+                m2 = magic_double(magic)
+                tm2, e2 = self.envoie(pos, rec, m2, nom, t_signal, 1)
+                if tm2:
+                    self.liens.setdefault(tk, []).append((m2, tm2))
+                    dit("    M%s envoye, ticket %s  (ancien regime)"
+                        % (m2, tm2))
+                else:
+                    dit("    M%s REFUSE : %s  -- paire incomplete,"
+                        " ce parent ne comptera pas" % (m2, e2))
             ecrit_liens(self.liens)
 
 
@@ -914,6 +967,13 @@ def main():
         print("           sous-estime : ce n est pas la taille reelle.")
     else:
         print("  volume : %s" % (LOT,))
+    if MIROIR2:
+        print()
+        print("  MIROIR 2 ACTIF : chaque paper envoie DEUX ordres.")
+        print("    magic tel quel  -> exempte, sort avec son parent")
+        print("    magic prefixe 4 -> soumis aux autres modules, comme avant")
+        print("    les deux partent ensemble ou pas du tout.")
+        print()
     print("  refus au-dela de %.0f %% de la marge libre, avant chaque ordre."
           % (MARGE_MAXI * 100))
     if NIVEAU_MINI:
