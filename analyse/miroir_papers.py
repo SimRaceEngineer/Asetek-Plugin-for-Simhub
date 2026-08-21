@@ -78,11 +78,11 @@ NIVEAU_MINI = 300.0     # en %, 0 pour desactiver
 # autres modules comme avant. Meme entree, meme lot, meme instant : le
 # seul ecart entre les deux est ce qui decide de la SORTIE.
 #
-# Deux differences separent les branches, pas une : l exemption ET la
-# recopie du SL (le miroir 2 ne la recoit pas, l ancien regime ne la
-# faisait pas). Le test compare donc deux REGIMES entiers, pas l effet
-# isole de l exemption. C est voulu, mais ca ne doit pas etre oublie au
-# moment de lire le resultat.
+# UNE SEULE difference separe les branches : qui decide de la SORTIE.
+# Tout le reste est tenu identique -- meme lot, meme SL a l entree,
+# meme recopie du SL apres l entree, meme suivi du volume sur solde
+# partiel. C est la condition pour que l ecart mesure entre les deux
+# soit attribuable au regime de sortie et a rien d autre.
 MIROIR2 = True
 
 MAX_MIROIRS = 60        # compte les DEUX branches
@@ -628,6 +628,11 @@ class Miroir(object):
         plus rien a voir avec celle de son parent et la comparaison
         qu on cherche a faire perd son sens.
 
+        Les DEUX branches en beneficient, miroir 2 compris : lui aussi
+        doit rester une copie fidele de son parent partout ailleurs,
+        sans quoi l ecart mesure entre les branches melangerait le
+        regime de sortie avec un stop qui a diverge en cours de route.
+
         La regle compare les deux etats REELS plutot que de suivre les
         changements. C est ce qui la rend auto-reparatrice : apres un
         arret, le premier tour realigne au lieu d avoir rate le
@@ -641,8 +646,6 @@ class Miroir(object):
                 m = par_ticket.get(int(tm))
                 if m is None:
                     continue
-                if est_miroir2(magic):
-                    continue        # branche  ancien regime  : pas de suivi
                 try:
                     self.aligne_sl(m, parent, magic, tp)
                     self.aligne_volume(m, parent, magic, tp)
