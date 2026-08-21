@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 hypothese_rails.py -- HYPOTHESES GELEES LE 20/08/2026, AVANT MESURE.
+                      v3 : seuil strict, et controle contre le meme sens.
 
 LECTEUR SEUL. N ECRIT RIEN.
 
@@ -30,6 +31,21 @@ L ENONCE, MOT POUR MOT
     "le m1 peut servir a reprendre sur un pullback sur une ma 50 100
      sur le mouvement precedent" -- les moyennes mobiles ne sont pas
      dans le journal.
+
+CE QUI A CHANGE EN v3
+
+    1. Le critere du meme signe dans les deux moities etait TROP
+       FAIBLE : la v2 en retenait 17 sur 24. Sur du bruit pur, la
+       moitie des tests passe deja ce filtre. Il faut desormais le
+       meme signe ET au moins --seuil points dans la PIRE moitie.
+
+    2. La periode est une baisse de trois semaines. Un reversal
+       baissier qui marche pendant que son miroir haussier echoue a
+       une explication plus simple que la regle : vendre marchait.
+       Comparer a TOUTES les entrees ne separe pas les deux. La v3
+       compare donc aussi la regle aux entrees DU MEME SENS sur la
+       MEME moitie -- si les ventes ordinaires font deja autant, la
+       regle ne fait que detecter la tendance.
 
 CE QUI EST TESTE
 
@@ -177,6 +193,11 @@ def main():
     p.add_argument("--sortie", default="pnl_eur",
                    choices=("pnl_eur", "mfe_pts", "mae_pts"))
     p.add_argument("--mini", type=int, default=20)
+    p.add_argument("--seuil", type=float, default=5.0,
+                   help="points minimum dans la PIRE moitie pour qu un "
+                        "resultat soit retenu. Le seul critere du meme "
+                        "signe est trop faible : sur du bruit, la moitie "
+                        "des tests le passe deja.")
     a = p.parse_args()
 
     print(SEP)
@@ -244,8 +265,12 @@ def main():
                 e1, e2 = p1 - refA, p2 - refB
                 if e1 * e2 > 0:
                     pire = min(abs(e1), abs(e2)) * (1 if e1 > 0 else -1)
-                    verdict = "TIENT %+.1f" % (100 * pire)
-                    tenus.append((abs(pire), tf, nom, titre[:17], pire, n1, n2))
+                    if abs(100 * pire) >= a.seuil:
+                        verdict = "RETENU %+.1f" % (100 * pire)
+                        tenus.append((abs(pire), tf, nom, titre[:17],
+                                      pire, n1, n2))
+                    else:
+                        verdict = "meme signe, mais %+.1f seulement" % (100 * pire)
                 else:
                     verdict = "ne tient pas"
                 print("   %-6s %-28s  n=%4d %5.1f%%(%+5.1f)  n=%4d %5.1f%%(%+5.1f)  %s"
@@ -254,36 +279,59 @@ def main():
             print()
 
     print(SEP)
-    print("SEPARER PAR SENS -- la marche la plus exigeante seulement")
+    print("LE CONTROLE QUI TRANCHE -- contre le MEME SENS, pas contre tout")
     print(SEP)
     print()
-    print("  Un reversal baissier devrait profiter aux VENTES. S il")
-    print("  ameliore autant les achats, ce n est pas un reversal.")
+    print("  La periode est une baisse de trois semaines. Un reversal")
+    print("  baissier qui marche pendant que son miroir haussier echoue")
+    print("  a une explication plus simple que la regle : VENDRE marchait,")
+    print("  acheter non.")
     print()
-    for hausse, nom in ((False, "REVERSAL BAISSIER"), (True, "REVERSAL HAUSSIER")):
-        print("  %s" % nom)
-        for tf in UNITES:
-            for sens in ("BUY", "SELL"):
-                lA = [t for t in A if t.get("dir") == sens
-                      and marches(t, ac, tf, hausse)[2]]
-                lB = [t for t in B if t.get("dir") == sens
-                      and marches(t, ac, tf, hausse)[2]]
-                n1, p1, _w, _m = juge(lA, a.sortie)
-                n2, p2, _w2, _m2 = juge(lB, a.sortie)
+    print("  Comparer la regle a TOUTES les entrees ne separe pas les deux.")
+    print("  La seule comparaison honnete est contre les entrees DU MEME")
+    print("  SENS sur la MEME moitie. Si les ventes ordinaires font deja")
+    print("  autant, la regle n apporte rien -- elle detecte la tendance.")
+    print()
+    for sens in ("BUY", "SELL"):
+        bA = [t for t in A if t.get("dir") == sens]
+        bB = [t for t in B if t.get("dir") == sens]
+        nb1, pb1, _w, _m = juge(bA, a.sortie)
+        nb2, pb2, _w2, _m2 = juge(bB, a.sortie)
+        print("  REFERENCE %s ORDINAIRE   n=%4d %5.1f %%      n=%4d %5.1f %%"
+              % (sens, nb1, 100 * pb1, nb2, 100 * pb2))
+        for hausse, nom in ((False, "reversal baissier"),
+                            (True, "reversal haussier")):
+            for tf in UNITES:
+                lA = [t for t in bA if marches(t, ac, tf, hausse)[2]]
+                lB = [t for t in bB if marches(t, ac, tf, hausse)[2]]
+                n1, p1, _w3, _m3 = juge(lA, a.sortie)
+                n2, p2, _w4, _m4 = juge(lB, a.sortie)
                 if n1 < a.mini or n2 < a.mini:
                     continue
-                print("    %-4s %-5s  n=%4d %5.1f%%(%+5.1f)   n=%4d %5.1f%%(%+5.1f)"
-                      % (tf, sens, n1, 100 * p1, 100 * (p1 - refA),
-                         n2, 100 * p2, 100 * (p2 - refB)))
+                g1, g2 = p1 - pb1, p2 - pb2
+                if g1 * g2 > 0 and abs(100 * min(abs(g1), abs(g2))) >= a.seuil:
+                    v = "APPORTE %+.1f" % (100 * min(abs(g1), abs(g2))
+                                           * (1 if g1 > 0 else -1))
+                else:
+                    v = "n apporte rien"
+                print("    %-18s %-4s n=%4d %5.1f%%(%+5.1f)  n=%4d %5.1f%%(%+5.1f)  %s"
+                      % (nom, tf, n1, 100 * p1, 100 * g1,
+                         n2, 100 * p2, 100 * g2, v))
         print()
 
     print(SEP)
     print("CE QUE CA VAUT")
     print(SEP)
     print()
-    print("  %d test(s) reellement effectue(s), %d tenu(s) dans les deux"
+    print("  %d test(s) reellement effectue(s), %d retenu(s) : meme signe"
           % (tests, len(tenus)))
-    print("  moities.")
+    print("  dans les deux moities ET au moins %.0f points dans la pire."
+          % a.seuil)
+    print()
+    print("  Le seul critere du meme signe serait trop faible : sur du")
+    print("  bruit pur, la moitie des tests le passe deja. C est pourquoi")
+    print("  le seuil existe -- et pourquoi la premiere version de ce")
+    print("  script en retenait 17 sur 24.")
     print()
     if tenus:
         tenus.sort(reverse=True)
@@ -292,8 +340,12 @@ def main():
         print("  deux, n=%d et n=%d." % (tenus[0][5], tenus[0][6]))
         print()
     print("  Avec %d tests, en attendre un ou deux qui passent par pure" % tests)
-    print("  chance est NORMAL. Le filtre des deux moities elimine les")
-    print("  accidents grossiers, pas la coincidence.")
+    print("  chance reste NORMAL. Les deux moities eliminent les accidents")
+    print("  grossiers, pas la coincidence.")
+    print()
+    print("  Et rien de tout cela ne vaut si le tableau du CONTROLE")
+    print("  ci-dessus dit que la regle n apporte rien contre son propre")
+    print("  sens : ce serait alors la tendance qu on mesure.")
     print()
     print("  La lecture qui compte n est pas le meilleur chiffre : c est")
     print("  la PROGRESSION. Si, sur une unite donnee, les rails seuls")
