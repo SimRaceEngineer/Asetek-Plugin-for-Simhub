@@ -193,6 +193,10 @@ def main():
     p.add_argument("--sortie", default="pnl_eur",
                    choices=("pnl_eur", "mfe_pts", "mae_pts"))
     p.add_argument("--mini", type=int, default=20)
+    p.add_argument("--parts", type=int, default=2,
+                   help="nombre de periodes egales. 2 = deux moities. 4 "
+                        "separe un avantage constant d un avantage qui n a "
+                        "vecu qu un seul quart.")
     p.add_argument("--seuil", type=float, default=5.0,
                    help="points minimum dans la PIRE moitie pour qu un "
                         "resultat soit retenu. Le seul critere du meme "
@@ -207,28 +211,49 @@ def main():
     print("  Lecture seule. Rien n est ecrit, rien n est envoye.")
     print()
 
+    if not (os.path.isfile(a.fichier) or os.path.isfile(a.fichier + ".gz")):
+        print("  FICHIER INTROUVABLE : %s" % a.fichier)
+        print()
+        print("  Le chemin est RELATIF au dossier courant, qui est :")
+        print("    %s" % os.getcwd())
+        print()
+        print("  Place-toi dans le dossier de la stack, ou donne le chemin")
+        print("  complet avec --fichier. Dire '0 ticket' au lieu de ca")
+        print("  aura coute deux allers-retours : c est repare.")
+        return
+
     tickets = lit(a.fichier, a.actif)
     tickets = [t for t in tickets
                if isinstance(t.get(a.sortie), (int, float))
                and isinstance(t.get("entry_ts"), str)]
     if len(tickets) < 4 * a.mini:
-        print("  %d ticket(s) exploitables : trop peu." % len(tickets))
+        print("  %d ticket(s) exploitables sur %s : trop peu."
+              % (len(tickets), a.actif))
         return
     tickets.sort(key=lambda t: t["entry_ts"])
-    c = len(tickets) // 2
-    A, B = tickets[:c], tickets[c:]
-    nA, refA, _wA, mA = juge(A, a.sortie)
-    nB, refB, _wB, mB = juge(B, a.sortie)
+    k = max(2, a.parts)
+    taille = len(tickets) // k
+    parts = [tickets[i * taille:(i + 1) * taille if i < k - 1 else None]
+             for i in range(k)]
+    refs = [juge(p, a.sortie)[1] for p in parts]
 
     print("  %d ticket(s) %s, sortie jugee : %s"
           % (len(tickets), a.actif, a.sortie))
-    print("  moitie 1 : %s -> %s   n=%d   %.1f %% gagnants   median %+.2f"
-          % (A[0]["entry_ts"][:10], A[-1]["entry_ts"][:10], nA, 100 * refA, mA))
-    print("  moitie 2 : %s -> %s   n=%d   %.1f %% gagnants   median %+.2f"
-          % (B[0]["entry_ts"][:10], B[-1]["entry_ts"][:10], nB, 100 * refB, mB))
+    for i, p in enumerate(parts):
+        n, r, _w, m = juge(p, a.sortie)
+        print("  periode %d : %s -> %s   n=%4d   %.1f %% gagnants"
+              "   median %+.2f"
+              % (i + 1, p[0]["entry_ts"][:10], p[-1]["entry_ts"][:10],
+                 n, 100 * r, m))
     print()
     print("  Les ecarts sont toujours calcules contre la reference de LA")
-    print("  MEME moitie, jamais contre l ensemble.")
+    print("  MEME periode, jamais contre l ensemble.")
+    if k > 2:
+        print()
+        print("  Avec %d periodes, un avantage n est RETENU que s il va" % k)
+        print("  dans le meme sens dans TOUTES. Un avantage qui n a vecu")
+        print("  qu une periode se voit alors, ce que deux moities ne")
+        print("  savaient pas separer.")
     print()
 
     ac = a.actif
@@ -246,36 +271,43 @@ def main():
         print()
         print("  %s" % enonce)
         print()
-        print("   unite  condition                     moitie 1"
-              "              moitie 2              verdict")
-        print("   " + "-" * 102)
+        entete = "   unite  condition             "
+        for i in range(k):
+            entete += "  periode %d      " % (i + 1)
+        print(entete + " verdict")
+        print("   " + "-" * (44 + 17 * k))
         for tf in UNITES:
             for rang, nom in ((0, "rails seuls"),
                               (1, "+ RSI du bon cote"),
                               (2, "+ RSI franchit 50")):
-                lotA = [t for t in A if marches(t, ac, tf, hausse)[rang]]
-                lotB = [t for t in B if marches(t, ac, tf, hausse)[rang]]
-                n1, p1, w1, m1 = juge(lotA, a.sortie)
-                n2, p2, w2, m2 = juge(lotB, a.sortie)
-                if n1 < a.mini or n2 < a.mini:
-                    print("   %-6s %-28s  n1=%4d  n2=%4d   sous le seuil de %d"
-                          % (tf, nom, n1, n2, a.mini))
+                lots = [[t for t in p if marches(t, ac, tf, hausse)[rang]]
+                        for p in parts]
+                res = [juge(l, a.sortie) for l in lots]
+                if any(r[0] < a.mini for r in res):
+                    faibles = ", ".join("p%d n=%d" % (i + 1, r[0])
+                                        for i, r in enumerate(res)
+                                        if r[0] < a.mini)
+                    print("   %-6s %-22s  sous le seuil de %d : %s"
+                          % (tf, nom, a.mini, faibles))
                     continue
                 tests += 1
-                e1, e2 = p1 - refA, p2 - refB
-                if e1 * e2 > 0:
-                    pire = min(abs(e1), abs(e2)) * (1 if e1 > 0 else -1)
+                ecarts = [res[i][1] - refs[i] for i in range(k)]
+                memes = all(e > 0 for e in ecarts) or all(e < 0 for e in ecarts)
+                if memes:
+                    pire = min(abs(e) for e in ecarts) * (1 if ecarts[0] > 0 else -1)
                     if abs(100 * pire) >= a.seuil:
                         verdict = "RETENU %+.1f" % (100 * pire)
-                        tenus.append((abs(pire), tf, nom, titre[:17],
-                                      pire, n1, n2))
+                        tenus.append((abs(pire), tf, nom, titre[:17], pire,
+                                      res[0][0], res[-1][0]))
                     else:
-                        verdict = "meme signe, mais %+.1f seulement" % (100 * pire)
+                        verdict = "meme sens, mais %+.1f seulement" % (100 * pire)
                 else:
                     verdict = "ne tient pas"
-                print("   %-6s %-28s  n=%4d %5.1f%%(%+5.1f)  n=%4d %5.1f%%(%+5.1f)  %s"
-                      % (tf, nom, n1, 100 * p1, 100 * e1,
-                         n2, 100 * p2, 100 * e2, verdict))
+                ligne = "   %-6s %-22s" % (tf, nom)
+                for i in range(k):
+                    ligne += " %4d %5.1f(%+5.1f)" % (res[i][0], 100 * res[i][1],
+                                                     100 * ecarts[i])
+                print(ligne + "  " + verdict)
             print()
 
     print(SEP)
@@ -293,40 +325,47 @@ def main():
     print("  autant, la regle n apporte rien -- elle detecte la tendance.")
     print()
     for sens in ("BUY", "SELL"):
-        bA = [t for t in A if t.get("dir") == sens]
-        bB = [t for t in B if t.get("dir") == sens]
-        nb1, pb1, _w, _m = juge(bA, a.sortie)
-        nb2, pb2, _w2, _m2 = juge(bB, a.sortie)
-        print("  REFERENCE %s ORDINAIRE   n=%4d %5.1f %%      n=%4d %5.1f %%"
-              % (sens, nb1, 100 * pb1, nb2, 100 * pb2))
+        bases = [[t for t in p if t.get("dir") == sens] for p in parts]
+        rb = [juge(b, a.sortie) for b in bases]
+        ligne = "  REFERENCE %-5s ORDINAIRE " % sens
+        for i in range(k):
+            ligne += " %4d %5.1f %%    " % (rb[i][0], 100 * rb[i][1])
+        print(ligne)
         for hausse, nom in ((False, "reversal baissier"),
                             (True, "reversal haussier")):
             for tf in UNITES:
-                lA = [t for t in bA if marches(t, ac, tf, hausse)[2]]
-                lB = [t for t in bB if marches(t, ac, tf, hausse)[2]]
-                n1, p1, _w3, _m3 = juge(lA, a.sortie)
-                n2, p2, _w4, _m4 = juge(lB, a.sortie)
-                if n1 < a.mini or n2 < a.mini:
+                # la marche 1 (sans le franchissement de 50) : la mesure a
+                # montre que la marche 2 n apporte rien et coute un tiers
+                # de l effectif.
+                lots = [[t for t in bases[i]
+                         if marches(t, ac, tf, hausse)[1]] for i in range(k)]
+                res = [juge(l, a.sortie) for l in lots]
+                if any(r[0] < a.mini for r in res):
                     continue
-                g1, g2 = p1 - pb1, p2 - pb2
-                if g1 * g2 > 0 and abs(100 * min(abs(g1), abs(g2))) >= a.seuil:
-                    v = "APPORTE %+.1f" % (100 * min(abs(g1), abs(g2))
-                                           * (1 if g1 > 0 else -1))
+                gains = [res[i][1] - rb[i][1] for i in range(k)]
+                memes = all(g > 0 for g in gains) or all(g < 0 for g in gains)
+                pire = min(abs(g) for g in gains) * (1 if gains[0] > 0 else -1)
+                if memes and abs(100 * pire) >= a.seuil:
+                    v = "APPORTE %+.1f" % (100 * pire)
+                elif memes:
+                    v = "meme sens, %+.1f seulement" % (100 * pire)
                 else:
                     v = "n apporte rien"
-                print("    %-18s %-4s n=%4d %5.1f%%(%+5.1f)  n=%4d %5.1f%%(%+5.1f)  %s"
-                      % (nom, tf, n1, 100 * p1, 100 * g1,
-                         n2, 100 * p2, 100 * g2, v))
+                l2 = "    %-18s %-4s" % (nom, tf)
+                for i in range(k):
+                    l2 += " %4d %5.1f(%+5.1f)" % (res[i][0], 100 * res[i][1],
+                                                  100 * gains[i])
+                print(l2 + "  " + v)
         print()
 
     print(SEP)
     print("CE QUE CA VAUT")
     print(SEP)
     print()
-    print("  %d test(s) reellement effectue(s), %d retenu(s) : meme signe"
+    print("  %d test(s) reellement effectue(s), %d retenu(s) : meme sens"
           % (tests, len(tenus)))
-    print("  dans les deux moities ET au moins %.0f points dans la pire."
-          % a.seuil)
+    print("  dans les %d periodes ET au moins %.0f points dans la pire."
+          % (k, a.seuil))
     print()
     print("  Le seul critere du meme signe serait trop faible : sur du")
     print("  bruit pur, la moitie des tests le passe deja. C est pourquoi")
