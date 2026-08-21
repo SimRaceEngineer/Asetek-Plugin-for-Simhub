@@ -139,6 +139,7 @@ def inventaire(racine):
           "  ratio   gain estime")
     print("   " + "-" * 84)
     lignes = []
+    vides = []
     for nom in sorted(os.listdir(racine)):
         chemin = os.path.join(racine, nom)
         if not os.path.isdir(chemin):
@@ -150,6 +151,11 @@ def inventaire(racine):
             continue
         total = sum(t for _r, t in fichiers)
         if total == 0:
+            # 0 octet sur le disque : dossier vide, ou -- bien plus probable --
+            # en ligne seulement, non materialise par Drive. On ne peut alors
+            # ni le mesurer ni l archiver, mais il pese dans le quota. Se taire
+            # ici donnerait un inventaire faussement complet.
+            vides.append((nom, len(fichiers)))
             continue
         ratio, n_ech, _b = compressibilite(chemin, fichiers)
         gain = int(total * (1 - ratio)) if ratio else 0
@@ -166,6 +172,16 @@ def inventaire(racine):
               % (nom[:36], humain(total), nf, ratio or 0, humain(gain),
                  verdict))
     print()
+    if vides:
+        print("")
+        print("  %d dossier(s) a 0 octet sur le disque, donc IGNORES :"
+              % len(vides))
+        for nom, nf in vides:
+            print("     %-36s %d fichier(s) vus" % (nom[:36], nf))
+        print("  Vides, ou en ligne seulement -- Drive ne les a pas")
+        print("  materialises. Dans ce second cas ils PESENT dans le quota")
+        print("  sans que ce script puisse les voir. A verifier a la main.")
+    print("")
     print("  ratio = taille comprimee / taille brute, MESURE sur un")
     print("  echantillon reellement compresse. Au-dessus de 0,92 le")
     print("  contenu est deja compresse et l archivage est inutile.")
