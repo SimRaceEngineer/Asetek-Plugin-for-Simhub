@@ -70,6 +70,11 @@ DOSSIER_DOCS = "docs"
 CSV_JOURNAL = os.path.join(DOSSIER_DOCS, "miroir_papers.csv")
 TXT_JOURNAL = os.path.join(DOSSIER_DOCS, "miroir_papers.log")
 VERROU = os.path.join(DOSSIER_DOCS, "miroir_papers.lock")
+# La table parent -> miroirs doit SURVIVRE a un arret. Sans elle, une
+# fenetre fermee laisse des positions ouvertes que plus personne ne
+# ferme : seul le SL du parent les protege, et le redemarrage les
+# ignore au lieu de les adopter.
+LIENS = os.path.join(DOSSIER_DOCS, "miroir_liens.json")
 VERROU_PERIME = 15 * 60
 
 COLONNES = [
@@ -286,6 +291,30 @@ def marge_tient(mt5, symbole, achat, lot, prix):
     return True, None
 
 
+def ecrit_liens(liens):
+    """Ecriture atomique : un arret pendant l ecriture ne corrompt rien."""
+    try:
+        os.makedirs(DOSSIER_DOCS, exist_ok=True)
+        tmp = LIENS + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({str(k): v for k, v in liens.items()}, f)
+        os.replace(tmp, LIENS)
+    except Exception as e:
+        dit("  liens non sauvegardes : %s" % e)
+
+
+def relit_liens():
+    try:
+        with open(LIENS, encoding="utf-8") as f:
+            d = json.load(f)
+        return {int(k): [(int(m), int(t)) for m, t in v] for k, v in d.items()}
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        dit("  liens illisibles (%s) : on repart a vide" % e)
+        return {}
+
+
 # ---------------------------------------------------------------- verrou
 def prend_verrou():
     os.makedirs(DOSSIER_DOCS, exist_ok=True)
@@ -327,9 +356,10 @@ class Miroir(object):
         self.chemin = chemin
         self.armer = armer
         self.vus = set()
-        self.liens = {}
+        self.liens = relit_liens()
         self.dernier = {}
         self.premier_tour = True
+        self.rotation = 0
 
     # -- envoi -----------------------------------------------------------
     def envoie(self, pos, rec, magic, nom, t_signal):
@@ -485,6 +515,38 @@ class Miroir(object):
             self.premier_tour = False
             dit("  %d trade(s) deja ouvert(s) : ignores (entree passee)"
                 % len(ouverts))
+            if self.liens:
+                repris = sum(len(v) for v in self.liens.values())
+                dit("  %d miroir(s) repris du tour precedent, sur %d parent(s)"
+                    % (repris, len(self.liens)))
+                # ceux dont le parent a disparu pendant l arret sont
+                # fermes tout de suite : c est exactement ce que la
+                # boucle aurait fait si elle avait tourne.
+                for tp in list(self.liens.keys()):
+                    if tp not in ouverts:
+                        ref = self.dernier.pop(tp, {})
+                        for magic, tm in self.liens.pop(tp, []):
+                            if not self.armer:
+                                dit("  [inerte] orphelin M%s (parent %s ferme"
+                                    " pendant l arret)" % (magic, tp))
+                                continue
+                            ok, e = self.ferme(tm, magic, tp, ref)
+                            dit("  orphelin M%s ticket %s ferme : %s"
+                                % (magic, tm, "ok" if ok else e))
+                ecrit_liens(self.liens)
+            # ce que le journal ne connait pas ne sera pas ferme d office
+            connus = set(t for v in self.liens.values() for _m, t in v)
+            magics = set(e[0] for e in self.jeu)
+            inconnus = [p for p in (mt5.positions_get() or [])
+                        if p.magic in magics and p.ticket not in connus]
+            if inconnus:
+                dit("  ATTENTION : %d position(s) portant un magic paper"
+                    % len(inconnus))
+                dit("  sans parent connu. Elles ne seront PAS fermees par")
+                dit("  le miroir -- il ne sait pas a quoi les rattacher.")
+                for p in inconnus[:10]:
+                    dit("    ticket %s  M%s  %s  vol %s"
+                        % (p.ticket, p.magic, p.symbol, p.volume))
             return
 
         # --- fermetures
@@ -498,6 +560,7 @@ class Miroir(object):
                     continue
                 ok, e = self.ferme(tm, magic, tp, ref)
                 dit("  sortie M%s ticket %s : %s" % (magic, tm, "ok" if ok else e))
+            ecrit_liens(self.liens)
 
         # --- entrees
         deja = sum(len(v) for v in self.liens.values())
@@ -529,8 +592,17 @@ class Miroir(object):
                            "decision": "IGNORE", "raison": "hors fenetre"})
                 continue
 
+            # L ordre de parcours TOURNE d un parent a l autre. Sans
+            # ca, le plafond refuserait toujours les memes papers -- les
+            # derniers de la liste, c est-a-dire la serie 240000 -- et
+            # l echantillon serait biaise par construction.
+            if self.jeu:
+                self.rotation = (self.rotation + 1) % len(self.jeu)
+            k = self.rotation
+            ordre = self.jeu[k:] + self.jeu[:k]
+
             pris = []
-            for entree in self.jeu:
+            for entree in ordre:
                 try:
                     if not self.accepte(entree, rec):
                         continue
@@ -591,6 +663,7 @@ class Miroir(object):
                     dit("    M%s envoye, ticket %s" % (magic, tm))
                 else:
                     dit("    M%s REFUSE : %s" % (magic, e))
+            ecrit_liens(self.liens)
 
 
 # ---------------------------------------------------------------- main
