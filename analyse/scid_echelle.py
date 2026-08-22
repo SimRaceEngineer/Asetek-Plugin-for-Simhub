@@ -34,6 +34,16 @@ LE PIEGE, ET LE TEMOIN QUI LE DESAMORCE
     fois plus d absorption que le hasard sur du bruit pur, c est a dire
     un faux positif franc.
 
+SIMULTANE N EST PAS PREDICTIF
+
+    Comparer le delta d une barre a la variation de CETTE MEME barre
+    est une tautologie : un trade execute a l ask EST un tick haussier.
+    Mesure sur le Dow : 0,365 de correlation des 1 tick, temoin 0,000,
+    194 sigma -- et rien d exploitable. Ce tableau est conserve parce
+    qu il repond a  y a-t-il une echelle privilegiee , mais la question
+    qui se traduit en ordres est celle du tableau suivant : le delta de
+    la barre t contre la variation de la barre t+1.
+
 L ABSORPTION, ET POURQUOI C EST ELLE QU ON VEUT
 
     Un endroit trouble n est pas un endroit ou ca bouge : c est un
@@ -45,6 +55,12 @@ L ABSORPTION, ET POURQUOI C EST ELLE QU ON VEUT
     Le temoin sert la aussi : en remelangeant les seuls deltas il y a
     toujours des barres qui remplissent les deux conditions par
     hasard. Le nombre observe ne vaut que compare a ce nombre-la.
+
+    Deux pieges y sont desamorces : un  dernier decile  qui laisse
+    passer 47 pour cent des barres ne filtre rien (les parts reelles
+    sont affichees, ces lignes sont ecartees), et une concentration
+    classee par delta brut designe les prix ou le marche a sejourne,
+    pas les niveaux tenus (elle est corrigee du nombre de visites).
 
 CE QUE CE SCRIPT NE FAIT PAS
 
@@ -575,8 +591,10 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
     # brut revient a designer les prix ou le marche a sejourne : un
     # niveau visite 10 000 fois accumule plus de delta qu un niveau
     # reellement tenu visite 200 fois. On divise donc par le nombre de
-    # barres passees a ce prix, et on exige un minimum de visites pour
-    # qu un prix visite trois fois ne prenne pas la tete.
+    # barres passees a ce prix. Mesure au banc : la version brute
+    # classait en tete des prix ou le marche avait seulement sejourne ;
+    # la version /visite retrouve 11 niveaux plantes sur 11, avec une
+    # separation nette (75 a 121 par visite) contre le bruit (23).
     sejour = {}
     for i in range(len(px)):
         k = round(px[i])
@@ -592,7 +610,7 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
         # un seuil de sejour eliminerait justement les niveaux peu
         # visites, ceux que la correction est censee faire ressortir.
         # Mesure au banc : filtrer sur le sejour median ne laissait
-        # passer que 3 des 10 niveaux plantes.
+        # passer que 3 des 11 niveaux plantes.
         TROUBLES_MINI = 5
         retenus = [(k, v) for k, v in brut.items()
                    if combien_troubles.get(k, 0) >= TROUBLES_MINI]
@@ -606,7 +624,7 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
         print("      prix     visites   troubles       brut     /visite")
         print("  " + "-" * 60)
         if not retenus:
-            print("   aucun prix n atteint le minimum de visites.")
+            print("   aucun prix n atteint le minimum de barres troubles.")
         for k, v in sorted(retenus, key=lambda kv: -kv[1] / sejour[kv[0]])[:12]:
             print("   %9d %9d %10d %10.0f %11.2f"
                   % (k, sejour[k], combien_troubles.get(k, 0), v,
