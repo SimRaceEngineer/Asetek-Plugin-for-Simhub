@@ -75,6 +75,13 @@ MINI_BARRES = 30
 SEUIL_SIGMA = 3.0
 
 
+def quand(sec, gabarit="%Y-%m-%d %H:%M"):
+    """Heure UTC lisible. utcfromtimestamp est deprecie depuis 3.12 et
+    inondait la sortie d avertissements en plein milieu des tableaux."""
+    return datetime.datetime.fromtimestamp(
+        sec, datetime.timezone.utc).strftime(gabarit)
+
+
 def humain(n):
     for u in ("", "k", "M"):
         if abs(n) < 1000:
@@ -125,8 +132,16 @@ def pearson(x, y):
 
 
 # ---------------------------------------------------------------- lecture
-def lit_scid(chemin):
-    """(temps, prix, vol, bid, ask). Repris de scid_visites, inchange."""
+def lit_scid(chemin, derniers=None):
+    """(temps, prix, vol, bid, ask, mode, taille, total).
+
+    derniers : ne lire que les N derniers enregistrements. Les
+    enregistrements sont de taille fixe et chronologiques, donc on se
+    positionne directement -- inutile d analyser 31 millions de ticks
+    pour n en garder 400 000. Sur MESU26 (1167 Mo) cela evite environ
+    750 Mo de RAM sur une machine qui fait tourner la stack en meme
+    temps. None = tout lire, comportement d origine.
+    """
     if not os.path.isfile(chemin):
         return None, "fichier introuvable"
     taille = os.path.getsize(chemin)
@@ -165,8 +180,12 @@ def lit_scid(chemin):
         else:
             return None, "aucun encodage de date plausible"
 
+        total = (taille - te) // tr
+        depart = te
+        if derniers is not None and total > derniers:
+            depart = te + (total - derniers) * tr
         t, p, v, b, a = array("q"), array("f"), array("I"), array("I"), array("I")
-        f.seek(te)
+        f.seek(depart)
         paquet = 65536 * tr
         base = int((ORIGINE - datetime.datetime(1970, 1, 1)).total_seconds())
         while True:
@@ -187,7 +206,7 @@ def lit_scid(chemin):
                 a.append(m[8])
             if len(bloc) < paquet:
                 break
-        return (t, p, v, b, a, mode, taille), None
+        return (t, p, v, b, a, mode, taille, total), None
     finally:
         f.close()
 
@@ -398,7 +417,7 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
     idx = sorted(idx, key=lambda i: -abs(dd[i]))
     for i in idx[:combien]:
         j = i * n
-        h = datetime.datetime.utcfromtimestamp(t[j]).strftime("%Y-%m-%d %H:%M")
+        h = quand(t[j])
         print("   %-16s %10.2f %11.0f %6.2f %12d"
               % (h, px[i], dd[i], dp[i], dv[i]))
     print("  " + "-" * 66)
@@ -464,8 +483,8 @@ def main():
             if not len(t):
                 print("   %-28s  vide" % nom[:28])
                 continue
-            d0 = datetime.datetime.utcfromtimestamp(t[0]).strftime("%Y-%m-%d")
-            d1 = datetime.datetime.utcfromtimestamp(t[-1]).strftime("%Y-%m-%d")
+            d0 = quand(t[0], "%Y-%m-%d")
+            d1 = quand(t[-1], "%Y-%m-%d")
             print("   %-28s %9.0f Mo %12s  %s -> %s"
                   % (nom[:28], os.path.getsize(c) / 1048576.0,
                      humain(len(t)), d0, d1))
@@ -479,11 +498,11 @@ def main():
         print(SEP)
         print("FICHIER : %s" % os.path.basename(chemin))
         print(SEP)
-        d, err = lit_scid(chemin)
+        d, err = lit_scid(chemin, derniers=a.maxi)
         if d is None:
             print("  %s" % err)
             continue
-        t, p_, v, b, aa, mode, taille = d
+        t, p_, v, b, aa, mode, taille, total = d
         if not len(t):
             print("  fichier vide")
             continue
@@ -502,11 +521,12 @@ def main():
         tt = t[i0:]
         vv = v[i0:]
         print("")
-        print("  %s ticks au total, %s retenus (%d derniers jours, plafond %s)"
-              % (humain(len(t)), humain(len(pp)), a.jours, humain(a.maxi)))
+        print("  %s ticks dans le fichier, %s lus, %s retenus"
+              % (humain(total), humain(len(t)), humain(len(pp))))
+        print("  (%d derniers jours, plafond %s)"
+              % (a.jours, humain(a.maxi)))
         print("  du %s au %s"
-              % (datetime.datetime.utcfromtimestamp(tt[0]).strftime("%Y-%m-%d %H:%M"),
-                 datetime.datetime.utcfromtimestamp(tt[-1]).strftime("%Y-%m-%d %H:%M")))
+              % (quand(tt[0]), quand(tt[-1])))
         print("  volume total %s contrats" % humain(sum(v[i0:])))
         dd = deltas(bb, ab)
         bloc_balayage(pp, dd, ECHELLES, a.melanges, rng)
