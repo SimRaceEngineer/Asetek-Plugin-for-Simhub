@@ -265,8 +265,14 @@ def barres(p, d, vols, n, perm=None):
 def bloc_balayage(p, d, echelles, melanges, rng):
     print("")
     print(SEP)
-    print("BALAYAGE D ECHELLE -- le reel contre le melange")
+    print("BALAYAGE D ECHELLE -- delta et prix DE LA MEME BARRE")
     print(SEP)
+    print("")
+    print("  ATTENTION : ce tableau mesure une relation SIMULTANEE, donc")
+    print("  en grande partie mecanique -- un trade a l ask est un tick")
+    print("  haussier. Il sert a reponder  y a-t-il une echelle")
+    print("  privilegiee , pas  peut-on gagner de l argent . Pour ca,")
+    print("  voir le tableau suivant.")
     print("")
     print("  correlation entre le delta d une barre et sa variation de prix.")
     print("  temoin = les memes deltas dans un ordre melange, prix et")
@@ -334,16 +340,137 @@ def bloc_balayage(p, d, echelles, melanges, rng):
     return n
 
 
+def decile_par_rang(v, haut, part=0.10):
+    """Indices du decile par rang. N est utilise que la ou les ex aequo
+    ne dominent pas -- voir la note de compte_troubles."""
+    n = len(v)
+    combien = max(1, int(n * part))
+    ordre = sorted(range(n), key=lambda i: abs(v[i]), reverse=haut)
+    return set(ordre[:combien])
+
+
+def suit(dd, dp, top):
+    """Gain moyen en points si on suit le flux d une barre du decile.
+
+    On prend les barres du dernier decile de |delta|, on parie dans le
+    sens du delta, et on regarde la variation de la barre SUIVANTE.
+    C est la seule facon de transformer une correlation en points.
+    """
+    g = []
+    for i in top:
+        if i + 1 < len(dp):
+            sens = 1.0 if dd[i] > 0 else (-1.0 if dd[i] < 0 else 0.0)
+            g.append(sens * dp[i + 1])
+    return (sum(g) / len(g)) if g else 0.0
+
+
+def bloc_prediction(p, d, echelles, melanges, rng):
+    print("")
+    print(SEP)
+    print("LE FLUX ANNONCE-T-IL LA BARRE SUIVANTE ?")
+    print(SEP)
+    print("")
+    print("  Le tableau precedent comparait le delta d une barre a la")
+    print("  variation de CETTE MEME barre. C est une tautologie : un")
+    print("  trade execute a l ask EST un tick haussier. La correlation")
+    print("  ne pouvait pas etre nulle, et elle ne rapporte rien.")
+    print("")
+    print("  Ici on decale d une barre : delta de la barre t contre")
+    print("  variation de la barre t+1. C est la seule version de la")
+    print("  question qui se traduise en ordres.")
+    print("")
+    print("  pts = gain moyen en points si on suit le flux des barres du")
+    print("  dernier decile de |delta|. temoin = le meme calcul, deltas")
+    print("  remelanges. C est  pts  moins  pts temoin  qui se gagne.")
+    print("")
+    print("   ticks   barres    reel   temoin    ECART   sigma"
+          "      pts   pts tem")
+    print("  " + "-" * 76)
+    droit = list(range(len(p)))
+    lignes = []
+    for n in echelles:
+        if len(p) // n < MINI_BARRES:
+            continue
+        dp, dd, _px, _dv = barres(p, d, None, n)
+        if len(dp) < MINI_BARRES + 1:
+            continue
+        a = dd[:-1]
+        b = dp[1:]
+        r = pearson(a, b)
+        top = decile_par_rang(dd, True)
+        pts = suit(dd, dp, top)
+        temoins, tpts = [], []
+        for _k in range(melanges):
+            melange = droit[:]
+            rng.shuffle(melange)
+            mdp, mdd, _m, _w = barres(p, d, None, n, perm=melange)
+            temoins.append(pearson(mdd[:-1], mdp[1:]))
+            tpts.append(suit(mdd, mdp, decile_par_rang(mdd, True)))
+        tm = sum(temoins) / len(temoins)
+        sd = ecart_type(temoins)
+        ec = r - tm
+        sig = (ec / sd) if sd > 0 else 0.0
+        tp = sum(tpts) / len(tpts)
+        print("   %5d %8d %7.3f %8.3f %8.3f %7.1f %8.3f %9.3f"
+              % (n, len(dp), r, tm, ec, sig, pts, tp))
+        lignes.append((abs(sig), n, ec, sig, pts - tp))
+    print("  " + "-" * 76)
+    print("")
+    if not lignes:
+        print("  Pas assez de barres.")
+        return
+    lignes.sort(reverse=True)
+    _a, n, ec, sig, net = lignes[0]
+    if sig < SEUIL_SIGMA:
+        print("  AUCUNE ECHELLE N ANNONCE LA SUIVANTE. Le meilleur cas est")
+        print("  %d ticks (%+.3f, %.1f sigma) et ne passe pas le seuil."
+              % (n, ec, sig))
+        print("")
+        print("  Le flux et le prix bougent ensemble -- le tableau")
+        print("  precedent le montrait -- mais le flux ne PRECEDE pas le")
+        print("  prix. C est la difference entre un thermometre et une")
+        print("  prevision meteo.")
+        return
+    print("  MEILLEURE ECHELLE : %d ticks, ecart %+.3f, %.1f sigma."
+          % (n, ec, sig))
+    print("  Gain net apres temoin : %+.3f point(s) par barre suivie."
+          % net)
+    print("")
+    print("  Avant d en faire quoi que ce soit : compare ce gain au")
+    print("  spread et a la commission de l actif. Un ecart significatif")
+    print("  plus petit que le cout d aller-retour se perd a coup sur.")
+
+
 def compte_troubles(p, d, n, vols=None, perm=None):
-    """(indices troubles, ...) a l echelle n. perm = temoin."""
+    """(indices, dp, dd, px, dv, seuil_d, seuil_p, part_d, part_p).
+
+    Les seuils sont pris sur la VALEUR du quantile, ce qui inclut tous
+    les ex aequo. C est voulu, et c est le seul choix correct ici.
+
+    Decouper au RANG serait tentant -- cela garantirait pile 10 pour
+    cent -- mais quand la moitie des barres sont a egalite a zero, le
+    tri departage les ex aequo par ordre d apparition : on selectionne
+    alors le DEBUT DU FICHIER, pas les barres les plus plates. Mesure
+    au banc : la version par rang ne retrouvait que 3 des 11 niveaux
+    d absorption plantes, contre 11 sur 11 par valeur.
+
+    Le prix a payer est que les parts selectionnees ne valent plus 10
+    pour cent. Elles sont donc RENDUES a l appelant : quand la part de
+    |delta| approche 100 pour cent, le filtre ne filtre plus rien et le
+    rapport vaut 1,00 par construction -- ce n est pas  pas
+    d absorption , c est  le test n a pas pu regarder .
+    """
     dp, dd, px, dv = barres(p, d, vols, n, perm=perm)
     if len(dp) < MINI_BARRES:
         return None
     sd = quantile([abs(x) for x in dd], 0.90)
     sp = quantile([abs(x) for x in dp], 0.10)
-    idx = [i for i in range(len(dp))
-           if abs(dd[i]) >= sd and abs(dp[i]) <= sp]
-    return idx, dp, dd, px, dv, sd, sp
+    pas_d = [i for i in range(len(dd)) if abs(dd[i]) >= sd]
+    ens_p = set(i for i in range(len(dp)) if abs(dp[i]) <= sp)
+    idx = [i for i in pas_d if i in ens_p]
+    part_d = len(pas_d) / float(len(dd))
+    part_p = len(ens_p) / float(len(dp))
+    return idx, dp, dd, px, dv, sd, sp, part_d, part_p
 
 
 def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
@@ -361,8 +488,9 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
     print("  mesuree en remelangeant les seuls deltas. Seul l ecart")
     print("  compte, jamais le compte brut.")
     print("")
-    print("   ticks   barres  troubles  attendues   rapport   sigma")
-    print("  " + "-" * 62)
+    print("   ticks   barres  troubles  attendues   rapport   sigma"
+          "   part d  part v")
+    print("  " + "-" * 78)
     droit = list(range(len(p)))
     garde = []
     for n in echelles:
@@ -381,13 +509,27 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
         sd = ecart_type(faux)
         sig = ((len(idx) - att) / sd) if sd > 0 else 0.0
         rap = (len(idx) / att) if att > 0 else 0.0
-        print("   %5d %8d %9d %10.1f %9.2f %7.1f"
-              % (n, len(r[1]), len(idx), att, rap, sig))
-        garde.append((sig, n, idx, r, att))
-    print("  " + "-" * 62)
+        part_d, part_v = r[7], r[8]
+        vide = part_d > 0.30
+        print("   %5d %8d %9d %10.1f %9.2f %7.1f %7.0f%% %6.0f%%%s"
+              % (n, len(r[1]), len(idx), att, rap, sig,
+                 100 * part_d, 100 * part_v, "  <-- vide" if vide else ""))
+        if not vide:
+            garde.append((sig, n, idx, r, att))
+    print("  " + "-" * 78)
+    print("")
+    print("  part d / part v : ce que les seuils laissent reellement")
+    print("  passer. Un  dernier decile  qui laisse passer 47 pour cent")
+    print("  des barres ne filtre rien : le rapport vaut alors 1,00 par")
+    print("  construction. Ces lignes sont marquees  vide  et ecartees.")
     print("")
     if not garde:
-        print("  Pas assez de barres a aucune echelle.")
+        print("")
+        print("  AUCUNE ECHELLE EXPLOITABLE : partout le seuil de |delta|")
+        print("  laisse passer plus de 30 pour cent des barres, donc ne")
+        print("  filtre rien. C est le cas quand les deltas sont de tres")
+        print("  petits entiers avec beaucoup d ex aequo. Le test n a pas")
+        print("  pu regarder -- ce n est pas une absence d absorption.")
         return
     garde.sort(key=lambda g: -g[0])
     sig, n, idx, r, att = garde[0]
@@ -404,7 +546,7 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
         print("  niveau tenu reperable par delta contre variation, a")
         print("  aucune des echelles balayees.")
         return
-    _idx, dp, dd, px, dv, seuil_d, seuil_p = r
+    _idx, dp, dd, px, dv, seuil_d, seuil_p, _pd, _pv = r
     print("  ECHELLE RETENUE : %d ticks -- %d barres troubles contre %.1f"
           % (n, len(idx), att))
     print("  attendues, soit %.1f sigma au-dessus du hasard."
@@ -429,14 +571,47 @@ def bloc_absorption(t, p, d, v, echelles, melanges, rng, combien):
     print("  horaire ni la base future/CFD ne sont appliques ici --")
     print("  scid_visites.py les MESURE, il ne faut pas les supposer.")
 
-    seaux = {}
+    # Concentration CORRIGEE du temps passe. Classer par delta cumule
+    # brut revient a designer les prix ou le marche a sejourne : un
+    # niveau visite 10 000 fois accumule plus de delta qu un niveau
+    # reellement tenu visite 200 fois. On divise donc par le nombre de
+    # barres passees a ce prix, et on exige un minimum de visites pour
+    # qu un prix visite trois fois ne prenne pas la tete.
+    sejour = {}
+    for i in range(len(px)):
+        k = round(px[i])
+        sejour[k] = sejour.get(k, 0) + 1
+    brut = {}
+    combien_troubles = {}
     for i in idx:
-        seaux[round(px[i])] = seaux.get(round(px[i]), 0) + abs(dd[i])
-    if seaux:
+        k = round(px[i])
+        brut[k] = brut.get(k, 0.0) + abs(dd[i])
+        combien_troubles[k] = combien_troubles.get(k, 0) + 1
+    if brut:
+        # Filtrer sur le nombre de barres TROUBLES, pas sur le sejour :
+        # un seuil de sejour eliminerait justement les niveaux peu
+        # visites, ceux que la correction est censee faire ressortir.
+        # Mesure au banc : filtrer sur le sejour median ne laissait
+        # passer que 3 des 10 niveaux plantes.
+        TROUBLES_MINI = 5
+        retenus = [(k, v) for k, v in brut.items()
+                   if combien_troubles.get(k, 0) >= TROUBLES_MINI]
         print("")
-        print("  Ou ca se concentre, par prix entier :")
-        for prix, d in sorted(seaux.items(), key=lambda kv: -kv[1])[:12]:
-            print("    %10d   delta cumule %10.0f" % (prix, d))
+        print("  Ou ca se concentre. La colonne  brut  designe surtout")
+        print("  les prix ou le marche a sejourne ; la colonne  /visite")
+        print("  corrige ce sejour et c est la seule a comparer entre")
+        print("  niveaux. Minimum %d barres troubles pour figurer."
+              % TROUBLES_MINI)
+        print("")
+        print("      prix     visites   troubles       brut     /visite")
+        print("  " + "-" * 60)
+        if not retenus:
+            print("   aucun prix n atteint le minimum de visites.")
+        for k, v in sorted(retenus, key=lambda kv: -kv[1] / sejour[kv[0]])[:12]:
+            print("   %9d %9d %10d %10.0f %11.2f"
+                  % (k, sejour[k], combien_troubles.get(k, 0), v,
+                     v / sejour[k]))
+        print("  " + "-" * 60)
 
 
 def main():
@@ -530,6 +705,7 @@ def main():
         print("  volume total %s contrats" % humain(sum(v[i0:])))
         dd = deltas(bb, ab)
         bloc_balayage(pp, dd, ECHELLES, a.melanges, rng)
+        bloc_prediction(pp, dd, ECHELLES, a.melanges, rng)
         bloc_absorption(tt, pp, dd, vv, ECHELLES, a.melanges, rng,
                         a.combien)
 
