@@ -85,6 +85,8 @@ def ecart_median(v):
 # ------------------------------------------------------------------ .scid
 def lit_scid(chemin):
     """Rend (temps, prix, vol, bid, ask) en tableaux paralleles."""
+    if not os.path.isfile(chemin):
+        return None, "fichier introuvable"
     taille = os.path.getsize(chemin)
     f = open(chemin, "rb")
     try:
@@ -97,6 +99,8 @@ def lit_scid(chemin):
 
         f.seek(te)
         b8 = f.read(tr)[:8]
+        if len(b8) < 8:
+            return None, "fichier sans aucun tick (en-tete seul)"
         (vi,) = struct.unpack("<q", b8)
         (vd,) = struct.unpack("<d", b8)
         def _mi(v):
