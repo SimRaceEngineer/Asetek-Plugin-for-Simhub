@@ -273,25 +273,8 @@ class Scid(object):
                 bas = mil
         return bas
 
-    def fenetre(self, i_fin, n):
-        """Les n enregistrements qui se terminent a i_fin inclus."""
-        i0 = max(0, i_fin - n + 1)
-        combien = i_fin - i0 + 1
-        if combien <= 0:
-            return None
-        self.f.seek(self.te + i0 * self.tr)
-        brut = self.f.read(combien * self.tr)
-        util = brut[:len(brut) - len(brut) % self.tr]
-        pr, vo, bi, ak = [], [], [], []
-        for m in struct.iter_unpack(FMT, util):
-            pr.append(m[4])
-            vo.append(m[6])
-            bi.append(m[7])
-            ak.append(m[8])
-        return pr, vo, bi, ak
-
     def entre(self, t0, t1, plafond=20000):
-        """(temps, prix) des ticks dont la date est dans [t0, t1).
+        """(temps, prix, volume, bid, ask) des ticks dans [t0, t1).
 
         Sert a refaire une barre M1 exactement comme Ninja la decoupe,
         par le TEMPS et non par un nombre de ticks : une minute calme et
@@ -493,53 +476,6 @@ def bloc_calage(S, ech, nom):
 
 
 # ---------------------------------------------------------------- sortie
-def bloc_tableau(titre, lignes, mini, tirages, rng):
-    print("")
-    print("  %s" % titre)
-    print("     case              trades      total     par trade")
-    print("     " + "-" * 54)
-    t = par_case(lignes)
-    if not t:
-        print("     aucun trade.")
-        return
-    for c in CASES:
-        if c not in t:
-            continue
-        n, s, m = t[c]
-        marque = "" if n >= mini else "   (moins de %d, ne conclut pas)" % mini
-        print("     %-16s %7d %10.2f %12.2f%s" % (c, n, s, m, marque))
-    print("     " + "-" * 54)
-    tot = sum(s for _n, s, _m in t.values())
-    nb = sum(_n for _n, s, _m in t.values())
-    print("     %-16s %7d %10.2f %12.2f" % ("ensemble", nb, tot,
-                                            tot / nb if nb else 0.0))
-    vrai, aussi, sur = permutation(lignes, mini, tirages, rng)
-    print("")
-    if vrai is None:
-        print("     Moins de deux cases atteignent %d trades : le test de"
-              % mini)
-        print("     permutation n a rien a comparer. On ne conclut pas.")
-        return
-    part = 100.0 * aussi / sur
-    print("     ecart meilleure - pire : %.2f par trade" % vrai)
-    print("     le hasard fait aussi bien %d fois sur %d, soit %.1f %%"
-          % (aussi, sur, part))
-    if part > 5.0:
-        print("     -> NON CONCLUANT. Un ecart de cette taille sort tout")
-        print("        seul du decoupage en cases. Filtrer la-dessus")
-        print("        reviendrait a suivre du bruit.")
-    else:
-        print("     -> l ecart depasse ce que le hasard produit (%.1f %%)."
-              % part)
-        pire = min(((m, c) for c, (n, s, m) in par_case(lignes).items()
-                    if n >= mini))
-        gain = -sum(r for c, r in lignes if c == pire[1])
-        print("        Case la plus faible : %s." % pire[1])
-        print("        L ecarter aurait change le total de %+.2f." % gain)
-        print("        A comparer au cout d execution avant d en faire")
-        print("        une regle.")
-
-
 def bloc_contreflux(lignes, mini, rng, tirages):
     """Entrer CONTRE le flux dominant : cela coute-t-il vraiment ?"""
     print("")
@@ -566,26 +502,27 @@ def bloc_contreflux(lignes, mini, rng, tirages):
 
 
 def bloc_mou(lignes_mou, tirages, rng):
-    """AVEC et SANS les entrees molles -- la question posee directement.
+    """AVEC et SANS la bande MOU -- la question posee directement.
 
-    Coupure binaire, plus puissante que le tableau a quatre cases : tout
-    l effectif sert a un seul contraste au lieu d etre divise en quatre.
+    Coupure binaire, plus puissante que le tableau a quatre bandes :
+    tout l effectif sert a un seul contraste au lieu d etre divise en
+    quatre. C est la forme la plus favorable que puisse prendre ce
+    test ; s il ne passe pas ici, il ne passera nulle part.
     """
     print("")
     print(SEP)
-    print("AVEC ET SANS LES ENTREES MOLLES")
+    print("AVEC ET SANS LA BANDE MOU")
     print(SEP)
     print("")
-    print("  MOU est defini ICI comme : flux d intensite ET de nettete")
-    print("  toutes deux sous leur mediane, sur la fenetre qui PRECEDE")
-    print("  l entree. Le marche ne pousse ni dans un sens ni dans")
-    print("  l autre, et pas fort.")
+    print("  MOU = Efficiency Ratio entre 0,20 et 0,40, bornes de")
+    print("  orderflow_join.py. Meme definition que le panneau 8097.")
     print("")
-    print("  Ce n est PAS l etiquette MOU du panneau 8097. Celle-la vient")
-    print("  de la barre Ninja qui CONTIENT l entree, laquelle se ferme")
-    print("  APRES -- elle n etait pas lisible au moment de decider, et")
-    print("  filtrer dessus serait de la voyance. Ici tout est mesure")
-    print("  avant l entree, donc reellement applicable.")
+    print("  Une seule difference, et elle est decisive : la barre est")
+    print("  celle qui se termine A l entree, pas celle qui la CONTIENT.")
+    print("  Celle qui contient l entree se ferme apres, son ER n existe")
+    print("  pas encore au moment de decider -- c est le defaut releve")
+    print("  le 13/08. Ici tout est lisible avant d entrer, donc ce qui")
+    print("  suit est reellement applicable.")
     print("")
     mous = [r for c, r in lignes_mou if c == "MOU"]
     reste = [r for c, r in lignes_mou if c != "MOU"]
@@ -628,8 +565,8 @@ def bloc_mou(lignes_mou, tirages, rng):
     if part > 5.0:
         print("  -> NON CONCLUANT. Rebattre les etiquettes au hasard")
         print("     produit un ecart de cette taille %.1f %% du temps." % part)
-        print("     Sur ces donnees, un filtre anti-MOU construit sur le")
-        print("     flux d avant l entree n aurait rien apporte de sur.")
+        print("     Sur ces donnees, un filtre anti-MOU lisible AVANT")
+        print("     l entree n aurait rien apporte de sur.")
     else:
         print("  -> l ecart depasse le hasard (%.1f %%)." % part)
         print("     Reste a le comparer au cout d execution : un filtre")
