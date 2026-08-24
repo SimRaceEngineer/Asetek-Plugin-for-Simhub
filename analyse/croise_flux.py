@@ -98,6 +98,15 @@ MIROIR_HAUT = 250000
 MINI_CASE = 30
 BAR_SEC = 60
 
+# A gauche le fichier .scid, a droite les noms d actifs tels qu ils sont
+# ecrits DANS LE JSONL -- qui ne sont pas ceux du courtier. Le compte dit
+# SPX500, le jsonl dit US500 : c est ce decalage qui avait fait rendre
+# zero ticket a la verification.
+ACTIFS_JSONL = {
+    "ym": ("US30", "DOW", "YM"),
+    "mes": ("US500", "SPX500", "SPX", "ES", "MES"),
+}
+
 # Recopie a l identique de orderflow_join.py, lignes 43 a 52. Ces bornes
 # ne sont pas negociables ici : c est la classification du panneau 8097,
 # et en changer une seule rendrait tout incomparable avec le gel V9.
@@ -577,9 +586,12 @@ def bloc_mou(lignes_mou, tirages, rng):
 def chemins_tickets(force):
     if force:
         return [force]
-    return [os.path.join("docs", "rails_trades", "tickets_rails.jsonl"),
-            os.path.join("docs", "churn_trades", "tickets_churn.jsonl"),
-            os.path.join("docs", "tickets_rails.jsonl")]
+    d = "docs"
+    return [os.path.join(d, "rails_trades", "tickets_rails.jsonl"),
+            os.path.join(d, "churn_trades", "tickets_churn.jsonl"),
+            os.path.join(d, "churn_trades", "tickets.jsonl"),
+            os.path.join(d, "tickets_rails.jsonl"),
+            os.path.join(d, "tickets.jsonl")]
 
 
 def associe(symbole, chemins):
@@ -590,14 +602,25 @@ def associe(symbole, chemins):
     return None
 
 
-def lit_tickets(chemins, actif=None, plafond=40000):
-    """Les tickets qui portent un _er enregistre. Aucun defaut invente :
-    un champ absent fait sauter le ticket, il n est pas remplace."""
+def lit_tickets(chemins, actifs=None, plafond=40000):
+    """Les tickets qui portent un _er enregistre.
+
+    Rend aussi un DIAGNOSTIC : quand il n y a rien, il faut savoir si
+    c est le fichier qui manque, le champ _er qui manque, ou le nom
+    d actif qui ne correspond pas. Un zero sans explication ferait
+    conclure  pas de donnees  alors que c est peut-etre  mauvais nom .
+
+    actifs : les noms tels qu ils sont ECRITS DANS LE JSONL, qui ne
+    sont pas ceux du courtier -- le compte dit SPX500, le jsonl dit
+    US500. C est ce decalage qui a fait rendre zero au premier essai.
+    """
     out = []
+    diag = {"fichiers": [], "lignes": 0, "avec_er": 0, "actifs_vus": {}}
     for c in chemins:
         for cc in (c, c + ".gz"):
             if not os.path.isfile(cc):
                 continue
+            diag["fichiers"].append(cc)
             try:
                 if cc.endswith(".gz"):
                     import gzip
@@ -618,9 +641,15 @@ def lit_tickets(chemins, actif=None, plafond=40000):
                         continue
                     if not isinstance(o, dict):
                         continue
-                    if actif and o.get("asset") != actif:
-                        continue
+                    diag["lignes"] += 1
+                    act = o.get("asset")
+                    diag["actifs_vus"][act] = \
+                        diag["actifs_vus"].get(act, 0) + 1
                     er = o.get("_er")
+                    if er is not None:
+                        diag["avec_er"] += 1
+                    if actifs and act not in actifs:
+                        continue
                     ts = o.get("entry_ts")
                     if er is None or not isinstance(ts, str) or len(ts) < 19:
                         continue
@@ -631,14 +660,13 @@ def lit_tickets(chemins, actif=None, plafond=40000):
                                   .total_seconds())
                     except (ValueError, TypeError):
                         continue
-                    out.append((sec, float(er), o.get("_er_band"),
-                                o.get("asset")))
+                    out.append((sec, float(er), o.get("_er_band"), act))
                     if len(out) >= plafond:
-                        return out
-    return out
+                        return out, diag
+    return out, diag
 
 
-def bloc_calibrage(S, tickets, decalage, duree, pas_essais):
+def bloc_calibrage(S, tickets, diag, decalage, duree, pas_essais):
     """Mon ER est-il LE MEME que celui qui a ete enregistre ?
 
     Sans cette verification, mes bandes pourraient etre decalees d un
@@ -653,10 +681,33 @@ def bloc_calibrage(S, tickets, decalage, duree, pas_essais):
     print("")
     print("  MON ER CONTRE L ER ENREGISTRE -- verification")
     if not tickets:
-        print("    aucun ticket avec un _er enregistre pour cet actif.")
-        print("    Ma reconstruction ne peut pas etre verifiee ici. Les")
-        print("    bandes qui suivent restent une RECONSTRUCTION, a")
-        print("    prendre comme telle.")
+        print("    aucun ticket utilisable. POURQUOI :")
+        if not diag or not diag["fichiers"]:
+            print("      aucun fichier trouve. Cherches :")
+            for c in (diag or {}).get("essayes", []):
+                print("        %s" % c)
+            print("      -> donne le bon chemin avec --tickets")
+        else:
+            print("      fichier(s) lu(s) : %s"
+                  % ", ".join(diag["fichiers"]))
+            print("      %d ligne(s), dont %d avec un champ _er"
+                  % (diag["lignes"], diag["avec_er"]))
+            if diag["avec_er"] == 0:
+                print("      -> le champ _er n existe pas dans ces")
+                print("         tickets. Rien a verifier ici.")
+            else:
+                vus = sorted(diag["actifs_vus"].items(),
+                             key=lambda kv: -kv[1])[:8]
+                print("      actifs presents : %s"
+                      % ", ".join("%s (%d)" % (a, n) for a, n in vus))
+                print("      -> aucun ne correspond a ceux attendus pour")
+                print("         ce fichier .scid.")
+        print("")
+        print("    Les bandes qui suivent restent une RECONSTRUCTION non")
+        print("    verifiee. Sur US500 en particulier, le pas de cotation")
+        print("    plus fin et la densite de ticks poussent l ER vers le")
+        print("    bas : la repartition observee (beaucoup de CARNAGE,")
+        print("    presque pas de PROPRE) en porte la trace.")
         return None
     print("    %d ticket(s) portant un _er" % len(tickets))
     print("")
@@ -699,6 +750,119 @@ def bloc_calibrage(S, tickets, decalage, duree, pas_essais):
     else:
         print("    -> reconstruction validee : relance avec --pas %d." % pas)
     return pas
+
+
+def bloc_hors_echantillon(nom, trois, tirages, rng):
+    """La regle apprise sur une moitie, appliquee telle quelle sur l autre.
+
+    C EST LE SEUL TEST QUI DISTINGUE UNE REGLE D UNE COINCIDENCE.
+
+    Tous les tableaux precedents cherchent la meilleure decoupe DANS les
+    donnees puis la jugent SUR les memes donnees. Avec quatre bandes et
+    quelques centaines de trades, on trouve toujours quelque chose. Le
+    test de permutation limite les degats mais ne les annule pas : il
+    dit si l ecart est gros, pas s il se reproduira.
+
+    Ici on coupe la periode en deux. Sur la premiere moitie on regarde
+    quelles bandes perdent -- c est TOUT ce qu on a le droit de
+    regarder. Puis on ecarte ces bandes-la sur la seconde moitie, sans
+    rien reajuster, et on compte. Si le gain disparait, la regle etait
+    un ajustement au passe.
+
+    On fait ensuite l inverse (apprendre sur la seconde, appliquer sur
+    la premiere) : une regle qui tient dans un sens et pas dans l autre
+    n en est pas une.
+
+    Le temoin : on tire au hasard un ensemble de bandes de meme taille
+    et on regarde combien de fois il fait aussi bien. Ecarter des
+    trades au hasard change deja le total ; c est ce changement-la
+    qu il faut battre, pas zero.
+    """
+    print("")
+    print(SEP)
+    print("HORS ECHANTILLON -- %s" % nom)
+    print(SEP)
+    if len(trois) < 60:
+        print("")
+        print("  %d trades : trop peu pour couper en deux moities" % len(trois))
+        print("  qui veuillent dire quelque chose. On ne conclut pas.")
+        return
+    ordre = sorted(trois, key=lambda x: x[2])
+    coupe = len(ordre) // 2
+    moities = (("premiere -> seconde", ordre[:coupe], ordre[coupe:]),
+               ("seconde -> premiere", ordre[coupe:], ordre[:coupe]))
+    print("")
+    print("  %d trades, coupes en %d et %d."
+          % (len(ordre), coupe, len(ordre) - coupe))
+    print("  Bornes : %s | %s | %s"
+          % (quand_jour(ordre[0][2]), quand_jour(ordre[coupe][2]),
+             quand_jour(ordre[-1][2])))
+    for titre, apprend, applique in moities:
+        print("")
+        print("  --- %s ---" % titre)
+        t = par_case([(b, r) for b, r, _s in apprend])
+        perdantes = sorted(b for b, (n, sv, m) in t.items()
+                           if m < 0 and n >= 10)
+        if not perdantes:
+            print("      aucune bande ne perd sur la moitie d apprentissage.")
+            print("      Il n y a donc rien a ecarter, et rien a tester.")
+            continue
+        print("      bandes perdantes apprises : %s" % ", ".join(perdantes))
+        for b in perdantes:
+            n, sv, m = t[b]
+            print("        %-10s %4d trades, %+8.2f par trade" % (b, n, m))
+        tot = sum(r for _b, r, _s in applique)
+        garde = [r for b, r, _s in applique if b not in perdantes]
+        ecartes = len(applique) - len(garde)
+        if not garde:
+            print("      la regle ecarte TOUT sur l autre moitie.")
+            continue
+        neuf = sum(garde)
+        gain = neuf - tot
+        print("")
+        print("      applique a l autre moitie (%d trades) :" % len(applique))
+        print("        sans regle       %+9.2f" % tot)
+        print("        avec la regle    %+9.2f   (%d ecartes, %.0f %%)"
+              % (neuf, ecartes, 100.0 * ecartes / len(applique)))
+        print("        gain             %+9.2f" % gain)
+        # PREMIERE condition, et elle passe avant toute statistique :
+        # la regle doit battre le fait de NE RIEN FILTRER. Sans ce
+        # garde-fou, une regle qui ecarte 52 trades sur 60 laisse une
+        # poignee de survivants dont la somme est difficile a egaler au
+        # hasard -- et le test la declare bonne alors qu elle a fait
+        # PERDRE. Le banc a produit exactement ce cas.
+        if gain <= 0:
+            print("        -> NE TIENT PAS : la regle fait PERDRE")
+            print("           %+.2f par rapport a ne rien filtrer." % gain)
+            continue
+        if ecartes > 0.6 * len(applique):
+            print("        ATTENTION : elle ecarte %.0f %% des trades."
+                  % (100.0 * ecartes / len(applique)))
+            print("        Ce n est plus un filtre, c est une abstention.")
+        # SECONDE condition : battre un ecartement au hasard de meme
+        # taille. Retirer des trades change deja le total ; c est ce
+        # changement-la qu il faut depasser, pas zero.
+        res = [r for _b, r, _s in applique]
+        mieux = 0
+        for _k in range(tirages):
+            ech = res[:]
+            rng.shuffle(ech)
+            if sum(ech[ecartes:]) >= neuf:
+                mieux += 1
+        part = 100.0 * mieux / tirages
+        print("        ecarter %d trades AU HASARD fait aussi bien"
+              % ecartes)
+        print("        %d fois sur %d, soit %.1f %%" % (mieux, tirages, part))
+        if part > 5.0:
+            print("        -> NE TIENT PAS hors echantillon.")
+        else:
+            print("        -> TIENT hors echantillon.")
+
+
+def quand_jour(sec):
+    """utcfromtimestamp est deprecie depuis 3.12 et inonde la sortie."""
+    return datetime.datetime.fromtimestamp(
+        sec, datetime.timezone.utc).strftime("%d/%m")
 
 
 def bloc_persistance(nom, trades, S, decalage, duree, pas, retards):
@@ -776,7 +940,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
     retard decale la fenetre live vers le passe, pour chiffrer ce que
     coute un flux qui traine.
     """
-    lignes, ninja, flux = [], [], []
+    lignes, ninja, flux, trois = [], [], [], []
     ers = []
     manques = 0
     for (magic, sym, sec, prix, sens, res) in trades:
@@ -786,6 +950,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
             manques += 1
             continue
         lignes.append((m["bande"], res))
+        trois.append((m["bande"], res, sec))
         ers.append(m["er"])
         # la barre M1 close avant celle qui contient l entree
         debut_barre = ((sec + decalage) // duree) * duree
@@ -802,7 +967,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
         print("")
         print("  %s : aucune entree exploitable." % nom)
         print("  Le fichier ne couvre probablement pas ces dates.")
-        return None
+        return None, None
     print("")
     print("  %s : %d entree(s) sur %d" % (nom, len(lignes), len(trades)))
     if manques:
@@ -818,7 +983,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
         bloc_bandes("%s -- barre M1 PRECEDENTE (ce qu on sait deja faire)"
                     % nom, ninja, tirages, rng)
     bloc_contreflux(flux, MINI_CASE, rng, tirages)
-    return lignes
+    return lignes, trois
 
 
 def bloc_bandes(titre, lignes, tirages, rng):
@@ -864,7 +1029,7 @@ def bloc_bandes(titre, lignes, tirages, rng):
         print("     -> l ecart depasse le hasard (%.1f %%)." % part)
         print("        Attention tout de meme : plusieurs tableaux sont")
         print("        produits ici, et sur une dizaine d essais il en")
-        print("        sort un sous 5 %% par pur hasard. Le seuil honnete")
+        print("        sort un sous 5 % par pur hasard. Le seuil honnete")
         print("        est 0,05 divise par le nombre d essais.")
 
 
@@ -949,6 +1114,7 @@ def main():
     print("  symboles miroirs : %s" % ", ".join(symboles))
 
     tous_mou = []
+    tous_trois = []
     for ch in sorted(set(chemins.values())):
         S = Scid(ch)
         if S.err:
@@ -972,24 +1138,31 @@ def main():
         if decalage is None:
             S.ferme()
             continue
-        actifs = sorted(set(t[1] for t in concernes))
-        tick = []
-        for act in actifs:
-            tick.extend(lit_tickets(chemins_tickets(a.tickets), act))
-        bloc_calibrage(S, tick, decalage, a.barre, (0, 1, 2, 5, 10))
+        noms = ACTIFS_JSONL["ym"] if ch == a.ym else ACTIFS_JSONL["mes"]
+        tick, diag = lit_tickets(chemins_tickets(a.tickets), noms)
+        diag["essayes"] = chemins_tickets(a.tickets)
+        bloc_calibrage(S, tick, diag, decalage, a.barre, (0, 1, 2, 5, 10))
         bloc_persistance(S.nom, concernes, S, decalage, a.barre, a.pas,
                          (60, 120, 300, 600, 900, 1800))
         if par:
-            etudie("PARENTS", par, S, decalage, a.tirages, rng,
-                   retard=a.retard, duree=a.barre, pas=a.pas)
-        m = etudie("MIROIRS 220/230/240", mir, S, decalage, a.tirages, rng,
-                   retard=a.retard, duree=a.barre, pas=a.pas)
+            _l, tp = etudie("PARENTS", par, S, decalage, a.tirages, rng,
+                            retard=a.retard, duree=a.barre, pas=a.pas)
+            if tp:
+                bloc_hors_echantillon("PARENTS %s" % S.nom, tp,
+                                      a.tirages, rng)
+        m, tm = etudie("MIROIRS 220/230/240", mir, S, decalage, a.tirages,
+                       rng, retard=a.retard, duree=a.barre, pas=a.pas)
         if m:
             tous_mou.extend(m)
+        if tm:
+            tous_trois.extend(tm)
         S.ferme()
 
     if tous_mou:
         bloc_mou(tous_mou, a.tirages, rng)
+    if tous_trois:
+        bloc_hors_echantillon("MIROIRS 220/230/240, les deux actifs",
+                              tous_trois, a.tirages, rng)
     print("")
     print(SEP)
     print(" Lecture seule. Aucun ordre envoye, aucun fichier ecrit.")
@@ -1106,8 +1279,10 @@ def banc(a, rng):
     print(SEP)
     bloc_persistance("BANC", trades, S, decalage, a.barre, a.pas,
                      (60, 120, 300, 600, 900, 1800))
-    m = etudie("BANC", trades, S, decalage, a.tirages, rng,
-               retard=a.retard, duree=a.barre, pas=a.pas)
+    m, trois = etudie("BANC", trades, S, decalage, a.tirages, rng,
+                      retard=a.retard, duree=a.barre, pas=a.pas)
+    if trois:
+        bloc_hors_echantillon("BANC", trois, a.tirages, rng)
     if m:
         bloc_mou(m, a.tirages, rng)
         print("")
