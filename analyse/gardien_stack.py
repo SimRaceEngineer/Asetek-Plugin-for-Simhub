@@ -23,14 +23,15 @@ LA FENETRE
 
     En dehors, il ne lance rien : marches fermes, une relance ne produit
     que du bruit et de l electricite. --weekend arrete la stack et, si on
-    le lui demande, met la machine en veille prolongee.
+    le lui demande, met la machine en veille S3 -- l hibernation etant
+    interdite ici par le service Guardian.
 
 MODES
 
     (rien)        etat des lieux. Ne lance rien, n arrete rien.
     --agir        lance ce qui manque, si on est dans la fenetre.
     --weekend     arrete la stack (hors fenetre uniquement).
-    --avec-veille  avec --weekend : met la machine en veille prolongee.
+    --avec-veille  avec --weekend : met la machine en veille S3.
     --miroir-inerte  lance le miroir en --tourner au lieu de --armer.
     --hors-fenetre   force l action meme hors fenetre. A la main seulement.
 
@@ -280,9 +281,16 @@ def main():
         else:
             journalise(racine, "WEEK-END : rien ne tournait.")
         if veille:
-            journalise(racine, "WEEK-END : mise en veille prolongee.")
+            # Veille S3 et non hibernation : sur cette machine le service
+            # Guardian (securite par virtualisation) desactive la mise en
+            # veille prolongee, et on ne desarme pas une protection
+            # systeme pour economiser du courant. SetSuspendState bascule
+            # en S3 des lors que l hibernation est indisponible, et les
+            # minuteurs de reveil fonctionnent depuis S3.
+            journalise(racine, "WEEK-END : mise en veille S3.")
             try:
-                subprocess.run(["shutdown", "/h"], timeout=30)
+                subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState",
+                                "0,1,0"], timeout=60)
             except (OSError, subprocess.SubprocessError) as e:
                 journalise(racine, "veille impossible : %s" % e)
         return 0
