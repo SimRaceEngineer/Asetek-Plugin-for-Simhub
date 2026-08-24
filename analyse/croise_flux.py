@@ -944,7 +944,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
     retard decale la fenetre live vers le passe, pour chiffrer ce que
     coute un flux qui traine.
     """
-    lignes, ninja, flux, trois = [], [], [], []
+    lignes, ninja, flux, trois, trois_n = [], [], [], [], []
     ers = []
     manques = 0
     for (magic, sym, sec, prix, sens, res) in trades:
@@ -961,6 +961,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
         mn = mesure(S, debut_barre, duree, pas)
         if mn is not None:
             ninja.append((mn["bande"], res))
+            trois_n.append((mn["bande"], res, sec))
         if m["sens"] == 0:
             flux.append(("SANS FLUX", res))
         elif m["sens"] == sens:
@@ -971,7 +972,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
         print("")
         print("  %s : aucune entree exploitable." % nom)
         print("  Le fichier ne couvre probablement pas ces dates.")
-        return None, None
+        return None, None, None
     print("")
     print("  %s : %d entree(s) sur %d" % (nom, len(lignes), len(trades)))
     if manques:
@@ -987,7 +988,7 @@ def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
         bloc_bandes("%s -- barre M1 PRECEDENTE (ce qu on sait deja faire)"
                     % nom, ninja, tirages, rng)
     bloc_contreflux(flux, MINI_CASE, rng, tirages)
-    return lignes, trois
+    return lignes, trois, trois_n
 
 
 def bloc_bandes(titre, lignes, tirages, rng):
@@ -1119,6 +1120,7 @@ def main():
 
     tous_mou = []
     tous_trois = []
+    tous_ninja = []
     for ch in sorted(set(chemins.values())):
         S = Scid(ch)
         if S.err:
@@ -1149,24 +1151,34 @@ def main():
         bloc_persistance(S.nom, concernes, S, decalage, a.barre, a.pas,
                          (60, 120, 300, 600, 900, 1800))
         if par:
-            _l, tp = etudie("PARENTS", par, S, decalage, a.tirages, rng,
-                            retard=a.retard, duree=a.barre, pas=a.pas)
+            _l, tp, tpn = etudie("PARENTS", par, S, decalage, a.tirages,
+                                 rng, retard=a.retard, duree=a.barre,
+                                 pas=a.pas)
             if tp:
-                bloc_hors_echantillon("PARENTS %s" % S.nom, tp,
+                bloc_hors_echantillon("PARENTS %s, flux LIVE" % S.nom, tp,
                                       a.tirages, rng)
-        m, tm = etudie("MIROIRS 220/230/240", mir, S, decalage, a.tirages,
-                       rng, retard=a.retard, duree=a.barre, pas=a.pas)
+            if tpn:
+                bloc_hors_echantillon("PARENTS %s, barre M1 PRECEDENTE"
+                                      % S.nom, tpn, a.tirages, rng)
+        m, tm, tmn = etudie("MIROIRS 220/230/240", mir, S, decalage,
+                            a.tirages, rng, retard=a.retard, duree=a.barre,
+                            pas=a.pas)
         if m:
             tous_mou.extend(m)
         if tm:
             tous_trois.extend(tm)
+        if tmn:
+            tous_ninja.extend(tmn)
         S.ferme()
 
     if tous_mou:
         bloc_mou(tous_mou, a.tirages, rng)
     if tous_trois:
-        bloc_hors_echantillon("MIROIRS 220/230/240, les deux actifs",
+        bloc_hors_echantillon("MIROIRS 220/230/240, flux LIVE",
                               tous_trois, a.tirages, rng)
+    if tous_ninja:
+        bloc_hors_echantillon("MIROIRS 220/230/240, barre M1 PRECEDENTE",
+                              tous_ninja, a.tirages, rng)
     print("")
     print(SEP)
     print(" Lecture seule. Aucun ordre envoye, aucun fichier ecrit.")
@@ -1283,8 +1295,8 @@ def banc(a, rng):
     print(SEP)
     bloc_persistance("BANC", trades, S, decalage, a.barre, a.pas,
                      (60, 120, 300, 600, 900, 1800))
-    m, trois = etudie("BANC", trades, S, decalage, a.tirages, rng,
-                      retard=a.retard, duree=a.barre, pas=a.pas)
+    m, trois, _tn = etudie("BANC", trades, S, decalage, a.tirages, rng,
+                           retard=a.retard, duree=a.barre, pas=a.pas)
     if trois:
         bloc_hors_echantillon("BANC", trois, a.tirages, rng)
     if m:
