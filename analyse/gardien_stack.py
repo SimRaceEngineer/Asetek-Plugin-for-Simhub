@@ -151,23 +151,52 @@ def age_journal(racine):
         return None
 
 
-def demarre(racine, py, args, cache=True):
-    """Lance un python detache. Renvoie le PID, ou None."""
+def demarre(racine, py, args):
+    """Lance un python detache, sa sortie redirigee vers un fichier.
+
+    DETACHED_PROCESS ne cree AUCUNE console. Un module qui ecrit sur la
+    sortie standard ecrit alors dans un descripteur invalide et meurt
+    aussitot -- c est ce qui a tue le miroir le 24/08 a 18:08, sans
+    laisser la moindre trace puisqu il n avait nulle part ou l ecrire.
+
+    Rediriger vers logs\<nom>_gardien.log resout les deux problemes a la
+    fois : plus de plantage, et un journal a lire la fois suivante.
+    """
     cmd = [py] + list(args)
-    kw = {"cwd": racine, "close_fds": True}
+
+    nom = "processus"
+    for a in args:
+        if a.endswith(".py"):
+            nom = os.path.basename(a)[:-3]
+            break
+
+    sortie = subprocess.DEVNULL
+    dlogs = os.path.join(racine, "logs")
+    try:
+        if not os.path.isdir(dlogs):
+            os.makedirs(dlogs)
+        sortie = open(os.path.join(dlogs, "%s_gardien.log" % nom), "ab")
+    except OSError:
+        pass
+
+    kw = {"cwd": racine, "close_fds": True,
+          "stdin": subprocess.DEVNULL,
+          "stdout": sortie, "stderr": subprocess.STDOUT}
     if os.name == "nt":
         kw["creationflags"] = (getattr(subprocess, "DETACHED_PROCESS", 0) |
                                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
-        if cache:
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = 0          # SW_HIDE
-            kw["startupinfo"] = si
     try:
         p = subprocess.Popen(cmd, **kw)
         return p.pid
     except (OSError, ValueError) as e:
         return "erreur : %s" % e
+    finally:
+        # L enfant a herite son propre descripteur ; le notre ne sert plus.
+        if sortie is not subprocess.DEVNULL:
+            try:
+                sortie.close()
+            except OSError:
+                pass
 
 
 def arrete(pids):
