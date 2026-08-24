@@ -320,29 +320,6 @@ def lit_positions(jours):
         mt5.shutdown()
 
 
-def positions_banc(graine, n, lien):
-    """Trades fabriques pour le banc.
-
-    lien = 0   : resultat INDEPENDANT du flux. Le script doit conclure
-                 que rien ne separe les cases.
-    lien = 1   : les entrees prises quand le flux est VIF/NET gagnent
-                 vraiment. Le script doit le trouver.
-
-    Les dates sont calees sur le .scid de banc, sans decalage ni base,
-    pour que le calage soit verifiable : il doit retrouver 0.
-    """
-    rng = random.Random(graine)
-    t0 = int((datetime.datetime(2026, 8, 17, 15, 0, 0)
-              - datetime.datetime(1970, 1, 1)).total_seconds())
-    out = []
-    for i in range(n):
-        sec = t0 + 60 + i * 97
-        magic = 220000 + (i % 7)
-        sens = 1 if rng.random() < 0.5 else -1
-        out.append([magic, "BANC", sec, 0.0, sens, 0.0, i])
-    return out
-
-
 # ---------------------------------------------------------------- calage
 def calage(S, ech, pas=1800, demi_bas=-24, demi_haut=29):
     """Decalage horaire et base future/CFD, ESSAYES et non supposes.
@@ -619,11 +596,11 @@ def bloc_persistance(nom, trades, S, decalage, fenetre, retards):
 def etudie(nom, trades, S, decalage, fenetre, tirages, rng, retard=0):
     """Un groupe de trades contre un fichier. Rend les lignes.
 
-    retard : le flux n arrive pas instantanement. La fenetre se termine
-    donc  retard  secondes AVANT l entree, pas a l entree. Le flux
-    Sierra n a jamais ete live -- environ 10 minutes de retard -- et
-    lire jusqu a l instant de l entree mesurerait un filtre qui n a
-    jamais pu exister.
+    retard : 0 par defaut, ce qui simule le flux LIVE dont il s agit de
+    decider l achat -- la fenetre se termine a l instant de l entree, et
+    jamais une seconde apres. Une valeur non nulle simule un flux qui
+    arrive en retard, comme celui de Sierra ; l ecart entre les deux
+    chiffre ce que vaut la fraicheur.
     """
     q4, qmou, qflux = [], [], []
     tr = []
