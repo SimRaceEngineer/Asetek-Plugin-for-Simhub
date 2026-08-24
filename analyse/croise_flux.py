@@ -26,30 +26,42 @@ LA QUESTION, POSEE PRECISEMENT
     et le tableau de persistance dit quelle latence maximale le
     fournisseur devra tenir.
 
-CE QUE CE SCRIPT NE FAIT PAS, ET POURQUOI
+LA CLASSIFICATION EST LA VOTRE, PAS UNE INVENTION
 
-    Il ne reproduit pas les etiquettes CARNAGE / MOU / CORRECT / PROPRE
-    du panneau 8097. Elles viennent de la classification Ninja, pas des
-    .scid, et je n ai pas leur definition exacte. Les inventer puis leur
-    donner les memes noms produirait un tableau qui a l air de repliquer
-    le panel alors qu il mesure autre chose.
+    Les bandes sont recopiees a l identique de orderflow_join.py
+    (lignes 43-52), avec leurs bornes d origine :
 
-    Les cases ici sont donc NOMMEES AUTREMENT et definies en clair :
-    deux axes mesures sur la fenetre avant l entree, coupes a leur
-    mediane propre.
+        CARNAGE  0,00 - 0,20      CORRECT  0,40 - 0,60
+        MOU      0,20 - 0,40      PROPRE   0,60 - 1,01
 
-        intensite : volume de la fenetre / volume median des fenetres
-        nettete   : |delta| / volume  --  0 = equilibre, 1 = un seul sens
+    L Efficiency Ratio se recalcule depuis les ticks : deplacement NET
+    divise par chemin PARCOURU sur la barre M1. Mais le chemin depend
+    de la resolution -- compte tick par tick il est plus long qu a la
+    seconde, et l ER sort plus bas.
 
-    VIF+NET est ce qui ressemble le plus a un flux qui pousse ; CALME +
-    BROUILLON a un marche qui pietine. Le rapprochement avec les mots du
-    panel est une LECTURE, pas une equivalence.
+    Le script ne suppose donc pas qu il calcule le meme ER que vous :
+    il le VERIFIE. Il relit les _er reellement enregistres dans les
+    tickets, recalcule l ER sur la meme barre a plusieurs pas
+    d echantillonnage, et affiche l ecart median et le pourcentage de
+    bandes identiques. Si rien ne colle, il l ecrit noir sur blanc au
+    lieu de continuer comme si de rien n etait.
+
+DEUX LECTURES COTE A COTE
+
+    live    la barre M1 se termine a l instant de l entree. C est ce
+            qu un flux orderflow LIVE donnerait -- le cas a evaluer.
+
+    ninja   la barre M1 close AVANT celle qui contient l entree, soit
+            exactement _er_band_prec. C est ce que la chaine actuelle
+            sait deja produire.
+
+    L ecart entre les deux chiffre ce que la fraicheur apporte.
 
 LE PIEGE PRINCIPAL, ET LE TEST QUI LE DESAMORCE
 
-    185 trades ranges en 4 cases font 46 par case. L ecart entre la
-    meilleure et la pire case sera GROS par hasard seul -- c est
-    arithmetique, pas de la malchance. Chercher la meilleure case dans
+    185 trades ranges en 4 bandes font 46 par bande. L ecart entre la
+    meilleure et la pire sera GROS par hasard seul -- c est
+    arithmetique, pas de la malchance. Chercher la meilleure bande dans
     un tableau et la declarer regle est la facon la plus courante de
     fabriquer une regle qui ne survit pas au mois suivant.
 
@@ -60,12 +72,17 @@ LE PIEGE PRINCIPAL, ET LE TEST QUI LE DESAMORCE
     jamais le tableau seul.
 
     Il applique aussi la regle que le panel s impose a lui-meme : sous
-    30 trades, une case ne conclut pas.
+    30 trades, une bande ne conclut pas. Et la colonne  sans elle
+    donne, pour chaque bande, ce que le total serait devenu si on
+    l avait ecartee -- le decompte demande, sans avoir a le refaire
+    a la main.
 
     Lecture seule. Aucun ordre, aucune ecriture.
 """
 import argparse
 import datetime
+import io
+import json
 import os
 import random
 import struct
@@ -79,7 +96,71 @@ FMT = "<q4f4I"
 MIROIR_BAS = 220000
 MIROIR_HAUT = 250000
 MINI_CASE = 30
-CASES = ("CALME/BROUILLON", "CALME/NET", "VIF/BROUILLON", "VIF/NET")
+BAR_SEC = 60
+
+# Recopie a l identique de orderflow_join.py, lignes 43 a 52. Ces bornes
+# ne sont pas negociables ici : c est la classification du panneau 8097,
+# et en changer une seule rendrait tout incomparable avec le gel V9.
+ER_BANDS = (
+    ("CARNAGE",   0.00, 0.20),
+    ("MOU",       0.20, 0.40),
+    ("CORRECT",   0.40, 0.60),
+    ("PROPRE",    0.60, 1.01),
+)
+CASES = tuple(b[0] for b in ER_BANDS)
+
+
+def er_band(er):
+    """Identique a orderflow_join.er_band."""
+    if er is None:
+        return "?"
+    for name, lo, hi in ER_BANDS:
+        if lo <= er < hi:
+            return name
+    return "?"
+
+
+def efficiency(prix):
+    """Efficiency Ratio : deplacement NET sur chemin PARCOURU.
+
+    1 = le prix est alle droit au but ; 0 = il a fait le meme chemin
+    pour revenir au point de depart.
+
+    Le chemin depend de la resolution a laquelle on le mesure : compte
+    tick par tick, il est plus long qu echantillonne a la seconde, donc
+    l ER sort plus bas. C est pourquoi --pas existe et pourquoi le
+    script VERIFIE sa reconstruction contre les _er reellement
+    enregistres au lieu de la supposer juste.
+    """
+    if len(prix) < 2:
+        return None
+    net = abs(prix[-1] - prix[0])
+    chemin = 0.0
+    for i in range(1, len(prix)):
+        chemin += abs(prix[i] - prix[i - 1])
+    if chemin <= 0:
+        return None
+    return net / chemin
+
+
+def sous_echantillon(temps, prix, pas):
+    """Dernier prix de chaque tranche de  pas  secondes."""
+    if pas <= 0:
+        return list(prix)
+    out = []
+    courant = None
+    dernier = None
+    for t, p in zip(temps, prix):
+        tranche = t // pas
+        if courant is None:
+            courant = tranche
+        elif tranche != courant:
+            out.append(dernier)
+            courant = tranche
+        dernier = p
+    if dernier is not None:
+        out.append(dernier)
+    return out
 
 
 def mediane(v):
@@ -209,6 +290,43 @@ class Scid(object):
             ak.append(m[8])
         return pr, vo, bi, ak
 
+    def entre(self, t0, t1, plafond=20000):
+        """(temps, prix) des ticks dont la date est dans [t0, t1).
+
+        Sert a refaire une barre M1 exactement comme Ninja la decoupe,
+        par le TEMPS et non par un nombre de ticks : une minute calme et
+        une minute de panique n ont pas le meme nombre de ticks, et
+        decouper au compte melangerait les deux.
+        """
+        if t1 <= t0:
+            return None
+        i1 = self.cherche(t1 - 1)
+        if i1 is None:
+            return None
+        i0 = self.cherche(t0 - 1)
+        i0 = 0 if i0 is None else i0 + 1
+        combien = i1 - i0 + 1
+        if combien <= 0:
+            return None
+        if combien > plafond:
+            i0 = i1 - plafond + 1
+            combien = plafond
+        self.f.seek(self.te + i0 * self.tr)
+        brut = self.f.read(combien * self.tr)
+        util = brut[:len(brut) - len(brut) % self.tr]
+        tt, pr, vo, bi, ak = [], [], [], [], []
+        for m in struct.iter_unpack(FMT, util):
+            if self.mode == "micro":
+                tt.append(self.base + m[0] // 1000000)
+            else:
+                (j,) = struct.unpack("<d", struct.pack("<q", m[0]))
+                tt.append(self.base + int(j * 86400))
+            pr.append(m[4])
+            vo.append(m[6])
+            bi.append(m[7])
+            ak.append(m[8])
+        return tt, pr, vo, bi, ak
+
     def prix_a(self, sec, tolerance=120):
         i = self.cherche(sec)
         if i is None:
@@ -226,25 +344,28 @@ class Scid(object):
             self.f = None
 
 
-# ------------------------------------------------------------ les traits
-def traits(fen):
-    """Ce que dit la fenetre qui PRECEDE l entree."""
-    pr, vo, bi, ak = fen
+# ------------------------------------------------------------ la mesure
+def mesure(S, t_fin, duree, pas):
+    """ER et delta de la fenetre [t_fin - duree, t_fin)."""
+    d = S.entre(t_fin - duree, t_fin)
+    if d is None:
+        return None
+    tt, pr, vo, bi, ak = d
+    if len(pr) < 3:
+        return None
+    er = efficiency(sous_echantillon(tt, pr, pas))
+    if er is None:
+        return None
     v = float(sum(vo))
-    d = float(sum(ak) - sum(bi))
+    dd = float(sum(ak) - sum(bi))
     return {
+        "er": er,
+        "bande": er_band(er),
         "volume": v,
-        "delta": d,
-        "nettete": (abs(d) / v) if v > 0 else 0.0,
-        "etendue": (max(pr) - min(pr)) if pr else 0.0,
-        "sens": 1 if d > 0 else (-1 if d < 0 else 0),
+        "delta": dd,
+        "sens": 1 if dd > 0 else (-1 if dd < 0 else 0),
+        "ticks": len(pr),
     }
-
-
-def range_case(t, med_vol, med_net):
-    vif = "VIF" if t["volume"] > med_vol else "CALME"
-    net = "NET" if t["nettete"] > med_net else "BROUILLON"
-    return "%s/%s" % (vif, net)
 
 
 # ------------------------------------------------------------ statistique
@@ -516,6 +637,14 @@ def bloc_mou(lignes_mou, tirages, rng):
 
 
 # ---------------------------------------------------------------- main
+def chemins_tickets(force):
+    if force:
+        return [force]
+    return [os.path.join("docs", "rails_trades", "tickets_rails.jsonl"),
+            os.path.join("docs", "churn_trades", "tickets_churn.jsonl"),
+            os.path.join("docs", "tickets_rails.jsonl")]
+
+
 def associe(symbole, chemins):
     s = symbole.upper()
     for clef, ch in chemins.items():
@@ -524,129 +653,282 @@ def associe(symbole, chemins):
     return None
 
 
-def bloc_persistance(nom, trades, S, decalage, fenetre, retards):
-    """Combien de temps l etat du flux reste-t-il valable ?
+def lit_tickets(chemins, actif=None, plafond=40000):
+    """Les tickets qui portent un _er enregistre. Aucun defaut invente :
+    un champ absent fait sauter le ticket, il n est pas remplace."""
+    out = []
+    for c in chemins:
+        for cc in (c, c + ".gz"):
+            if not os.path.isfile(cc):
+                continue
+            try:
+                if cc.endswith(".gz"):
+                    import gzip
+                    f = io.TextIOWrapper(gzip.open(cc, "rb"),
+                                         encoding="utf-8", errors="replace")
+                else:
+                    f = io.open(cc, encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            with f:
+                for l in f:
+                    l = l.strip()
+                    if not l:
+                        continue
+                    try:
+                        o = json.loads(l)
+                    except ValueError:
+                        continue
+                    if not isinstance(o, dict):
+                        continue
+                    if actif and o.get("asset") != actif:
+                        continue
+                    er = o.get("_er")
+                    ts = o.get("entry_ts")
+                    if er is None or not isinstance(ts, str) or len(ts) < 19:
+                        continue
+                    try:
+                        d = datetime.datetime.strptime(ts[:19],
+                                                       "%Y-%m-%d %H:%M:%S")
+                        sec = int((d - datetime.datetime(1970, 1, 1))
+                                  .total_seconds())
+                    except (ValueError, TypeError):
+                        continue
+                    out.append((sec, float(er), o.get("_er_band"),
+                                o.get("asset")))
+                    if len(out) >= plafond:
+                        return out
+    return out
 
-    CE TABLEAU DECIDE DU CAHIER DES CHARGES DU FLUX A ACHETER. Il dit
-    a quel point l etat mesure il y a N secondes vaut encore
-    maintenant. Si l accord tient a 60 s mais tombe au hasard a 300 s,
-    alors un flux dont la latence depasse la minute ne sert a rien, et
-    ce chiffre-la se negocie avec le fournisseur avant de signer.
 
-    Si l accord est deja au niveau du hasard des les premieres
-    secondes, aucun flux, si rapide soit-il, ne peut trier quoi que ce
-    soit : l etat ne dure pas assez pour etre utilise.
+def bloc_calibrage(S, tickets, decalage, duree, pas_essais):
+    """Mon ER est-il LE MEME que celui qui a ete enregistre ?
 
-    Un accord nettement SOUS le hasard est une alerte : a ce retard-la
-    le flux ne dit pas rien, il dit le CONTRAIRE.
+    Sans cette verification, mes bandes pourraient etre decalees d un
+    cran sans que rien ne le signale, et tout le decompte serait faux
+    en silence. On recalcule l ER sur la MEME barre -- celle qui
+    contient l entree, comme orderflow_join -- et on compare.
+
+    Le chemin parcouru depend de la resolution : on essaie plusieurs
+    pas d echantillonnage et on retient celui qui colle. Si aucun ne
+    colle, le script le DIT au lieu de continuer.
     """
     print("")
-    print("  COMBIEN DE TEMPS L ETAT DU FLUX RESTE VALABLE -- %s" % nom)
-    print("    Ce tableau dit quelle FRAICHEUR le flux doit avoir pour")
-    print("    servir a quelque chose. C est le cahier des charges.")
+    print("  MON ER CONTRE L ER ENREGISTRE -- verification")
+    if not tickets:
+        print("    aucun ticket avec un _er enregistre pour cet actif.")
+        print("    Ma reconstruction ne peut pas etre verifiee ici. Les")
+        print("    bandes qui suivent restent une RECONSTRUCTION, a")
+        print("    prendre comme telle.")
+        return None
+    print("    %d ticket(s) portant un _er" % len(tickets))
+    print("")
+    print("       pas    compares   ecart median   meme bande")
+    print("       " + "-" * 50)
+    meilleur = None
+    for pas in pas_essais:
+        ecarts, memes, n = [], 0, 0
+        for sec, er_vrai, band_vrai, _a in tickets:
+            debut = ((sec + decalage) // duree) * duree
+            m = mesure(S, debut + duree, duree, pas)
+            if m is None:
+                continue
+            n += 1
+            ecarts.append(abs(m["er"] - er_vrai))
+            if band_vrai and m["bande"] == band_vrai:
+                memes += 1
+        if n < 20:
+            print("       %4d s %10d    trop peu" % (pas, n))
+            continue
+        med = mediane(ecarts)
+        acc = 100.0 * memes / n
+        print("       %4d s %10d %14.3f %10.1f %%" % (pas, n, med, acc))
+        if meilleur is None or med < meilleur[1]:
+            meilleur = (pas, med, acc, n)
+    print("       " + "-" * 50)
+    if meilleur is None:
+        print("    aucun pas ne donne assez de comparaisons.")
+        return None
+    pas, med, acc, n = meilleur
+    print("    meilleur pas : %d s, ecart median %.3f, %.1f %% de bandes"
+          % (pas, med, acc))
+    print("    identiques sur %d tickets." % n)
+    if med > 0.10 or acc < 60.0:
+        print("")
+        print("    ATTENTION : la reconstruction ne colle PAS. L ER que")
+        print("    je calcule depuis les ticks n est pas celui qui a ete")
+        print("    enregistre -- formule ou source differente. Le")
+        print("    decompte qui suit porte sur MON ER, pas sur le votre.")
+    else:
+        print("    -> reconstruction validee : relance avec --pas %d." % pas)
+    return pas
+
+
+def bloc_persistance(nom, trades, S, decalage, duree, pas, retards):
+    """Combien de temps la bande ER reste-t-elle la meme ?
+
+    CE TABLEAU EST LE CAHIER DES CHARGES DU FLUX A ACHETER. Il dit si
+    la bande mesuree il y a N secondes vaut encore a l instant ou l on
+    decide. Si l accord rejoint le hasard des 60 s, aucun fournisseur,
+    si rapide soit-il, ne vend quelque chose d utilisable.
+
+    Le  hasard  n est pas 25 pour cent : les quatre bandes ne sont pas
+    egalement peuplees. Il vaut la somme des carres de leurs parts,
+    c est-a-dire la chance de tomber deux fois sur la meme bande en
+    tirant au sort.
+    """
+    print("")
+    print("  COMBIEN DE TEMPS LA BANDE ER RESTE LA MEME -- %s" % nom)
+    print("    C est la fraicheur minimale a exiger du flux.")
     print("")
     ref = []
     for (magic, sym, sec, prix, sens, res) in trades:
-        i = S.cherche(sec + decalage)
-        if i is None or i < fenetre:
-            continue
-        f = S.fenetre(i - 1, fenetre)
-        if f is None:
-            continue
-        ref.append((sec, traits(f)))
+        m = mesure(S, sec + decalage, duree, pas)
+        if m is not None:
+            ref.append((sec, m["bande"]))
     if len(ref) < 20:
         print("    moins de 20 entrees exploitables : rien a dire.")
         return
-    med_vol = mediane([t["volume"] for _s, t in ref])
-    med_net = mediane([t["nettete"] for _s, t in ref])
-
-    def mou(t):
-        return t["volume"] <= med_vol and t["nettete"] <= med_net
-
-    base = sum(1 for _s, t in ref if mou(t)) / float(len(ref))
-    # Accord attendu si les deux etats sont independants.
-    hasard = 100.0 * (base * base + (1 - base) * (1 - base))
+    comptes = {}
+    for _s, b in ref:
+        comptes[b] = comptes.get(b, 0) + 1
+    n = float(len(ref))
+    hasard = 100.0 * sum((c / n) ** 2 for c in comptes.values())
+    print("    repartition : %s"
+          % "  ".join("%s %.0f%%" % (b, 100.0 * comptes[b] / n)
+                      for b in list(CASES) + [k for k in sorted(comptes)
+                                              if k not in CASES]
+                      if b in comptes))
+    print("")
     print("     retard    compares    accord    hasard")
     print("     " + "-" * 44)
     for r in retards:
         justes = total = 0
-        for sec, t0 in ref:
-            j = S.cherche(sec + decalage - r)
-            if j is None or j < fenetre:
-                continue
-            g = S.fenetre(j - 1, fenetre)
-            if g is None:
+        for sec, b0 in ref:
+            m = mesure(S, sec + decalage - r, duree, pas)
+            if m is None:
                 continue
             total += 1
-            if mou(traits(g)) == mou(t0):
+            if m["bande"] == b0:
                 justes += 1
         if total < 20:
             print("     %6d s   %8d    trop peu" % (r, total))
             continue
-        acc = 100.0 * justes / total
-        print("     %6d s   %8d %8.1f %% %8.1f %%" % (r, total, acc, hasard))
+        print("     %6d s   %8d %8.1f %% %8.1f %%"
+              % (r, total, 100.0 * justes / total, hasard))
     print("     " + "-" * 44)
-    print("    Lire la premiere ligne ou  accord  rejoint  hasard  :")
-    print("    au-dela de ce retard, le flux ne sait plus rien de")
-    print("    l instant present. C est la latence maximale acceptable")
-    print("    pour le flux qu on achete. Un accord NETTEMENT sous le")
-    print("    hasard veut dire qu a ce retard il dit l inverse.")
+    print("    La premiere ligne ou  accord  rejoint  hasard  donne la")
+    print("    latence maximale acceptable. Un accord NETTEMENT sous le")
+    print("    hasard veut dire qu a ce retard la bande dit l inverse.")
 
 
-def etudie(nom, trades, S, decalage, fenetre, tirages, rng, retard=0):
-    """Un groupe de trades contre un fichier. Rend les lignes.
+def etudie(nom, trades, S, decalage, tirages, rng, retard=0,
+           duree=BAR_SEC, pas=1):
+    """Les entrees rangees par BANDE ER, et le decompte.
 
-    retard : 0 par defaut, ce qui simule le flux LIVE dont il s agit de
-    decider l achat -- la fenetre se termine a l instant de l entree, et
-    jamais une seconde apres. Une valeur non nulle simule un flux qui
-    arrive en retard, comme celui de Sierra ; l ecart entre les deux
-    chiffre ce que vaut la fraicheur.
+    Deux lectures cote a cote :
+
+      live   la fenetre se termine a l instant de l entree. C est ce
+             qu un flux orderflow reellement live donnerait, et c est
+             le cas a evaluer.
+
+      ninja  la barre M1 close AVANT celle qui contient l entree --
+             exactement _er_band_prec de orderflow_join. C est ce que
+             la chaine actuelle sait produire.
+
+    retard decale la fenetre live vers le passe, pour chiffrer ce que
+    coute un flux qui traine.
     """
-    q4, qmou, qflux = [], [], []
-    tr = []
-    gardes = []
-    for rang, (magic, sym, sec, prix, sens, res) in enumerate(trades):
-        i = S.cherche(sec + decalage - retard)
-        if i is None or i < fenetre:
+    lignes, ninja, flux = [], [], []
+    ers = []
+    manques = 0
+    for (magic, sym, sec, prix, sens, res) in trades:
+        t = sec + decalage - retard
+        m = mesure(S, t, duree, pas)
+        if m is None:
+            manques += 1
             continue
-        f = S.fenetre(i - 1, fenetre)      # i-1 : rien de l instant meme
-        if f is None:
-            continue
-        tr.append((traits(f), sens, res))
-        gardes.append(rang)
-    if not tr:
-        print("")
-        print("  %s : aucune entree n a de fenetre exploitable." % nom)
-        print("  Le fichier ne couvre probablement pas ces dates.")
-        return None, []
-    med_vol = mediane([t["volume"] for t, _s, _r in tr])
-    med_net = mediane([t["nettete"] for t, _s, _r in tr])
-    print("")
-    print("  %s : %d entree(s) appariees a une fenetre de %d ticks"
-          % (nom, len(tr), fenetre))
-    if retard:
-        print("    fenetre arretee %d s avant l entree (flux retarde)"
-              % retard)
-    else:
-        print("    fenetre arretee A l instant de l entree (flux live)")
-    print("    medianes de coupure -- volume %.0f, nettete %.3f"
-          % (med_vol, med_net))
-    for t, sens, res in tr:
-        q4.append((range_case(t, med_vol, med_net), res))
-        mou = (t["volume"] <= med_vol and t["nettete"] <= med_net)
-        qmou.append(("MOU" if mou else "AUTRE", res))
-        if t["sens"] == 0:
-            qflux.append(("SANS FLUX", res))
-        elif t["sens"] == sens:
-            qflux.append(("AVEC", res))
+        lignes.append((m["bande"], res))
+        ers.append(m["er"])
+        # la barre M1 close avant celle qui contient l entree
+        debut_barre = ((sec + decalage) // duree) * duree
+        mn = mesure(S, debut_barre, duree, pas)
+        if mn is not None:
+            ninja.append((mn["bande"], res))
+        if m["sens"] == 0:
+            flux.append(("SANS FLUX", res))
+        elif m["sens"] == sens:
+            flux.append(("AVEC", res))
         else:
-            qflux.append(("CONTRE", res))
-    if len(tr) < len(trades):
-        print("    %d entree(s) ecartee(s) : pas assez de ticks avant."
-              % (len(trades) - len(tr)))
-    bloc_tableau("LES QUATRE CASES -- %s" % nom, q4, MINI_CASE, tirages, rng)
-    bloc_contreflux(qflux, MINI_CASE, rng, tirages)
-    return qmou, gardes
+            flux.append(("CONTRE", res))
+    if not lignes:
+        print("")
+        print("  %s : aucune entree exploitable." % nom)
+        print("  Le fichier ne couvre probablement pas ces dates.")
+        return None
+    print("")
+    print("  %s : %d entree(s) sur %d" % (nom, len(lignes), len(trades)))
+    if manques:
+        print("    %d ecartee(s), pas de ticks dans la fenetre" % manques)
+    if retard:
+        print("    fenetre M1 arretee %d s avant l entree" % retard)
+    else:
+        print("    fenetre M1 arretee A l instant de l entree (flux live)")
+    print("    ER median %.3f, echantillonne au pas de %d s"
+          % (mediane(ers), pas))
+    bloc_bandes("%s -- flux LIVE a l entree" % nom, lignes, tirages, rng)
+    if ninja:
+        bloc_bandes("%s -- barre M1 PRECEDENTE (ce qu on sait deja faire)"
+                    % nom, ninja, tirages, rng)
+    bloc_contreflux(flux, MINI_CASE, rng, tirages)
+    return lignes
+
+
+def bloc_bandes(titre, lignes, tirages, rng):
+    """Le decompte par bande, puis le contrefactuel bande par bande."""
+    print("")
+    print("  %s" % titre)
+    t = par_case(lignes)
+    if not t:
+        print("     aucune entree classee.")
+        return
+    total_n = sum(n for n, _s, _m in t.values())
+    total_s = sum(sv for _n, sv, _m in t.values())
+    print("     bande       trades    part      total    par trade"
+          "   sans elle")
+    print("     " + "-" * 66)
+    for c in list(CASES) + [k for k in sorted(t) if k not in CASES]:
+        if c not in t:
+            continue
+        n, sv, m = t[c]
+        part = 100.0 * n / total_n
+        marque = "" if n >= MINI_CASE else "  (moins de %d)" % MINI_CASE
+        print("     %-11s %6d %6.1f%% %10.2f %11.2f %11.2f%s"
+              % (c, n, part, sv, m, total_s - sv, marque))
+    print("     " + "-" * 66)
+    print("     %-11s %6d %6.1f%% %10.2f %11.2f"
+          % ("ensemble", total_n, 100.0, total_s,
+             total_s / total_n if total_n else 0.0))
+    vrai, aussi, sur = permutation(lignes, MINI_CASE, tirages, rng)
+    print("")
+    if vrai is None:
+        print("     Moins de deux bandes atteignent %d trades : le test de"
+              % MINI_CASE)
+        print("     permutation n a rien a comparer. On ne conclut pas.")
+        return
+    part = 100.0 * aussi / sur
+    print("     ecart meilleure - pire : %.2f par trade" % vrai)
+    print("     le hasard fait aussi bien %d fois sur %d, soit %.1f %%"
+          % (aussi, sur, part))
+    if part > 5.0:
+        print("     -> NON CONCLUANT. La colonne  sans elle  montre des")
+        print("        gains qui sortent tout seuls du decoupage.")
+    else:
+        print("     -> l ecart depasse le hasard (%.1f %%)." % part)
+        print("        Attention tout de meme : plusieurs tableaux sont")
+        print("        produits ici, et sur une dizaine d essais il en")
+        print("        sort un sous 5 %% par pur hasard. Le seuil honnete")
+        print("        est 0,05 divise par le nombre d essais.")
 
 
 def main():
@@ -654,16 +936,24 @@ def main():
     p.add_argument("--ym", default=r"C:\SierraChart\Data\YMU26-CBOT.scid")
     p.add_argument("--mes", default=r"C:\SierraChart\Data\MESU26-CME.scid")
     p.add_argument("--jours", type=int, default=10)
-    p.add_argument("--fenetre", type=int, default=300,
-                   help="ticks lus AVANT chaque entree ; trop large, elle "
-                        "chevauche plusieurs regimes et les melange -- au "
-                        "banc, 5000 ticks font tomber l accord de 100 a 75 "
-                        "pour cent")
+    p.add_argument("--barre", type=int, default=BAR_SEC,
+                   help="duree en secondes de la barre sur laquelle l ER "
+                        "est calcule. 60 = le M1 de orderflow_join.")
+    p.add_argument("--pas", type=int, default=1,
+                   help="pas d echantillonnage du chemin parcouru, en "
+                        "secondes. Le chemin compte tick par tick est "
+                        "plus long qu a la seconde, donc l ER sort plus "
+                        "bas : ce reglage sert a retomber sur les _er "
+                        "reellement enregistres.")
     p.add_argument("--retard", type=int, default=0,
                    help="secondes de retard du flux. 0 = le flux LIVE "
                         "qu on envisage d acheter, c est le cas a "
                         "evaluer. 600 = le flux Sierra tel qu on l a eu, "
                         "utile seulement pour la comparaison.")
+    p.add_argument("--tickets", default="",
+                   help="jsonl portant les _er enregistres, pour verifier "
+                        "la reconstruction. Par defaut, les emplacements "
+                        "habituels sont essayes.")
     p.add_argument("--tirages", type=int, default=400)
     p.add_argument("--graine", type=int, default=11)
     p.add_argument("--banc", action="store_true")
@@ -745,13 +1035,18 @@ def main():
         if decalage is None:
             S.ferme()
             continue
-        bloc_persistance(S.nom, concernes, S, decalage, a.fenetre,
+        actifs = sorted(set(t[1] for t in concernes))
+        tick = []
+        for act in actifs:
+            tick.extend(lit_tickets(chemins_tickets(a.tickets), act))
+        bloc_calibrage(S, tick, decalage, a.barre, (0, 1, 2, 5, 10))
+        bloc_persistance(S.nom, concernes, S, decalage, a.barre, a.pas,
                          (60, 120, 300, 600, 900, 1800))
         if par:
-            etudie("PARENTS", par, S, decalage, a.fenetre, a.tirages, rng,
-                   retard=a.retard)
-        m, _g = etudie("MIROIRS 220/230/240", mir, S, decalage, a.fenetre,
-                       a.tirages, rng, retard=a.retard)
+            etudie("PARENTS", par, S, decalage, a.tirages, rng,
+                   retard=a.retard, duree=a.barre, pas=a.pas)
+        m = etudie("MIROIRS 220/230/240", mir, S, decalage, a.tirages, rng,
+                   retard=a.retard, duree=a.barre, pas=a.pas)
         if m:
             tous_mou.extend(m)
         S.ferme()
@@ -872,24 +1167,28 @@ def banc(a, rng):
     print(SEP)
     print("BANC -- LES TABLEAUX")
     print(SEP)
-    bloc_persistance("BANC", trades, S, decalage, a.fenetre,
+    bloc_persistance("BANC", trades, S, decalage, a.barre, a.pas,
                      (60, 120, 300, 600, 900, 1800))
-    m, gardes = etudie("BANC", trades, S, decalage, a.fenetre, a.tirages,
-                       rng, retard=a.retard)
+    m = etudie("BANC", trades, S, decalage, a.tirages, rng,
+               retard=a.retard, duree=a.barre, pas=a.pas)
     if m:
         bloc_mou(m, a.tirages, rng)
         print("")
-        print("  Cases MOU reperees par le script : %d sur %d trades"
-              % (sum(1 for c, _r in m if c == "MOU"), len(m)))
-        print("  Regimes mous reellement plantes  : %d"
-              % sum(1 for x in verite if x))
-        justes = sum(1 for (c, _r), rang in zip(m, gardes)
-                     if (c == "MOU") == verite[rang])
-        print("  Accord case/regime : %d sur %d  (%.0f %%)"
-              % (justes, len(gardes), 100.0 * justes / len(gardes)))
-        if justes < 0.8 * len(gardes):
-            print("  ATTENTION : moins de 80 pour cent d accord. La")
-            print("  definition de MOU ne retrouve pas le regime plante.")
+        print("  Bandes trouvees : %s"
+              % ", ".join("%s %d" % (b, sum(1 for c, _r in m if c == b))
+                          for b in CASES))
+        # Le banc plante des blocs haches (ER bas) et des blocs qui
+        # poussent (ER haut). Une bande basse sur un bloc hache est
+        # juste ; une bande haute sur un bloc qui pousse aussi.
+        if len(m) == len(verite):
+            bas = ("CARNAGE", "MOU")
+            justes = sum(1 for (c, _r), hache in zip(m, verite)
+                         if (c in bas) == hache)
+            print("  Accord bande/regime : %d sur %d  (%.0f %%)"
+                  % (justes, len(verite), 100.0 * justes / len(verite)))
+            if justes < 0.8 * len(verite):
+                print("  ATTENTION : moins de 80 pour cent d accord. L ER")
+                print("  calcule ne retrouve pas le regime plante.")
     S.ferme()
     return 0
 
