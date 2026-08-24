@@ -77,6 +77,10 @@ LE PIEGE PRINCIPAL, ET LE TEST QUI LE DESAMORCE
     l avait ecartee -- le decompte demande, sans avoir a le refaire
     a la main.
 
+    Enfin, et c est le seul test qui tranche vraiment : la regle est
+    apprise sur une moitie de la periode et appliquee TELLE QUELLE sur
+    l autre, dans les deux sens.
+
     Lecture seule. Aucun ordre, aucune ecriture.
 """
 import argparse
