@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-croise_flux.py -- les entrees 220/230/240 auraient-elles ete meilleures
-                  avec l orderflow en direct ?
+croise_flux.py -- faut-il acheter un flux orderflow LIVE ?
+                  Ce qu il aurait trie sur les entrees 220/230/240.
 
   python croise_flux.py --banc
   python croise_flux.py --ym C:\\SierraChart\\Data\\YMU26-CBOT.scid
@@ -10,10 +10,21 @@ croise_flux.py -- les entrees 220/230/240 auraient-elles ete meilleures
 
 LA QUESTION, POSEE PRECISEMENT
 
-    Pour chaque entree reellement passee, on regarde l etat du flux
-    dans la fenetre qui PRECEDE l entree -- jamais celle qui la suit,
-    qui contiendrait la reponse. On range les entrees par etat de flux,
-    on compare les resultats, et on demande si un filtre aurait aide.
+    Le flux Sierra dont on disposait arrivait avec dix minutes de
+    retard. Il servait a JOURNALISER apres coup, pas a decider : c est
+    le dispositif qui a ete choisi, pas un defaut.
+
+    La question d aujourd hui est autre : si l on achetait un flux
+    reellement live, pourrait-on classer les ordres EN AMONT et ne
+    prendre que les bons ? On simule donc exactement ce qu un tel flux
+    donnerait -- l etat du marche a l instant de l entree, jamais une
+    seconde apres -- et on regarde s il separe les entrees gagnantes
+    des perdantes.
+
+    Le --retard permet de refaire le meme calcul avec un flux en
+    retard. L ecart entre les deux chiffre ce que vaut la fraicheur,
+    et le tableau de persistance dit quelle latence maximale le
+    fournisseur devra tenir.
 
 CE QUE CE SCRIPT NE FAIT PAS, ET POURQUOI
 
@@ -54,7 +65,6 @@ LE PIEGE PRINCIPAL, ET LE TEST QUI LE DESAMORCE
     Lecture seule. Aucun ordre, aucune ecriture.
 """
 import argparse
-import bisect
 import datetime
 import os
 import random
@@ -537,13 +547,89 @@ def associe(symbole, chemins):
     return None
 
 
-def etudie(nom, trades, S, decalage, fenetre, tirages, rng):
-    """Un groupe de trades contre un fichier. Rend les lignes."""
+def bloc_persistance(nom, trades, S, decalage, fenetre, retards):
+    """Combien de temps l etat du flux reste-t-il valable ?
+
+    CE TABLEAU DECIDE DU CAHIER DES CHARGES DU FLUX A ACHETER. Il dit
+    a quel point l etat mesure il y a N secondes vaut encore
+    maintenant. Si l accord tient a 60 s mais tombe au hasard a 300 s,
+    alors un flux dont la latence depasse la minute ne sert a rien, et
+    ce chiffre-la se negocie avec le fournisseur avant de signer.
+
+    Si l accord est deja au niveau du hasard des les premieres
+    secondes, aucun flux, si rapide soit-il, ne peut trier quoi que ce
+    soit : l etat ne dure pas assez pour etre utilise.
+
+    Un accord nettement SOUS le hasard est une alerte : a ce retard-la
+    le flux ne dit pas rien, il dit le CONTRAIRE.
+    """
+    print("")
+    print("  COMBIEN DE TEMPS L ETAT DU FLUX RESTE VALABLE -- %s" % nom)
+    print("    Ce tableau dit quelle FRAICHEUR le flux doit avoir pour")
+    print("    servir a quelque chose. C est le cahier des charges.")
+    print("")
+    ref = []
+    for (magic, sym, sec, prix, sens, res) in trades:
+        i = S.cherche(sec + decalage)
+        if i is None or i < fenetre:
+            continue
+        f = S.fenetre(i - 1, fenetre)
+        if f is None:
+            continue
+        ref.append((sec, traits(f)))
+    if len(ref) < 20:
+        print("    moins de 20 entrees exploitables : rien a dire.")
+        return
+    med_vol = mediane([t["volume"] for _s, t in ref])
+    med_net = mediane([t["nettete"] for _s, t in ref])
+
+    def mou(t):
+        return t["volume"] <= med_vol and t["nettete"] <= med_net
+
+    base = sum(1 for _s, t in ref if mou(t)) / float(len(ref))
+    # Accord attendu si les deux etats sont independants.
+    hasard = 100.0 * (base * base + (1 - base) * (1 - base))
+    print("     retard    compares    accord    hasard")
+    print("     " + "-" * 44)
+    for r in retards:
+        justes = total = 0
+        for sec, t0 in ref:
+            j = S.cherche(sec + decalage - r)
+            if j is None or j < fenetre:
+                continue
+            g = S.fenetre(j - 1, fenetre)
+            if g is None:
+                continue
+            total += 1
+            if mou(traits(g)) == mou(t0):
+                justes += 1
+        if total < 20:
+            print("     %6d s   %8d    trop peu" % (r, total))
+            continue
+        acc = 100.0 * justes / total
+        print("     %6d s   %8d %8.1f %% %8.1f %%" % (r, total, acc, hasard))
+    print("     " + "-" * 44)
+    print("    Lire la premiere ligne ou  accord  rejoint  hasard  :")
+    print("    au-dela de ce retard, le flux ne sait plus rien de")
+    print("    l instant present. C est la latence maximale acceptable")
+    print("    pour le flux qu on achete. Un accord NETTEMENT sous le")
+    print("    hasard veut dire qu a ce retard il dit l inverse.")
+
+
+def etudie(nom, trades, S, decalage, fenetre, tirages, rng, retard=0):
+    """Un groupe de trades contre un fichier. Rend les lignes.
+
+    retard : le flux n arrive pas instantanement. La fenetre se termine
+    donc  retard  secondes AVANT l entree, pas a l entree. Le flux
+    Sierra n a jamais ete live -- environ 10 minutes de retard -- et
+    lire jusqu a l instant de l entree mesurerait un filtre qui n a
+    jamais pu exister.
+    """
     q4, qmou, qflux = [], [], []
     tr = []
     gardes = []
     for rang, (magic, sym, sec, prix, sens, res) in enumerate(trades):
-        i = S.cherche(sec + decalage)
+        i = S.cherche(sec + decalage - retard)
         if i is None or i < fenetre:
             continue
         f = S.fenetre(i - 1, fenetre)      # i-1 : rien de l instant meme
@@ -561,6 +647,11 @@ def etudie(nom, trades, S, decalage, fenetre, tirages, rng):
     print("")
     print("  %s : %d entree(s) appariees a une fenetre de %d ticks"
           % (nom, len(tr), fenetre))
+    if retard:
+        print("    fenetre arretee %d s avant l entree (flux retarde)"
+              % retard)
+    else:
+        print("    fenetre arretee A l instant de l entree (flux live)")
     print("    medianes de coupure -- volume %.0f, nettete %.3f"
           % (med_vol, med_net))
     for t, sens, res in tr:
@@ -591,6 +682,11 @@ def main():
                         "chevauche plusieurs regimes et les melange -- au "
                         "banc, 5000 ticks font tomber l accord de 100 a 75 "
                         "pour cent")
+    p.add_argument("--retard", type=int, default=0,
+                   help="secondes de retard du flux. 0 = le flux LIVE "
+                        "qu on envisage d acheter, c est le cas a "
+                        "evaluer. 600 = le flux Sierra tel qu on l a eu, "
+                        "utile seulement pour la comparaison.")
     p.add_argument("--tirages", type=int, default=400)
     p.add_argument("--graine", type=int, default=11)
     p.add_argument("--banc", action="store_true")
@@ -605,7 +701,18 @@ def main():
     print(SEP)
     print("")
     print("  Lecture seule. Aucun ordre, aucune ecriture.")
-    print("  Tout ce qui est lu du .scid est ANTERIEUR a l entree.")
+    print("")
+    if a.retard <= 0:
+        print("  RETARD 0 : on simule le flux LIVE qu il s agit d acheter.")
+        print("  La fenetre se termine a l instant de l entree, jamais")
+        print("  apres -- un flux live donne l etat du moment, pas celui")
+        print("  d apres. La question est donc : ce flux-la, achete,")
+        print("  aurait-il trie les entrees 220/230/240 ?")
+    else:
+        print("  RETARD %d s : on simule un flux qui arrive en retard," % a.retard)
+        print("  comme celui de Sierra. A comparer au meme calcul avec")
+        print("  --retard 0 : l ecart entre les deux EST la valeur de la")
+        print("  fraicheur du flux.")
 
     if a.banc:
         return banc(a, rng)
@@ -661,10 +768,13 @@ def main():
         if decalage is None:
             S.ferme()
             continue
+        bloc_persistance(S.nom, concernes, S, decalage, a.fenetre,
+                         (60, 120, 300, 600, 900, 1800))
         if par:
-            etudie("PARENTS", par, S, decalage, a.fenetre, a.tirages, rng)
+            etudie("PARENTS", par, S, decalage, a.fenetre, a.tirages, rng,
+                   retard=a.retard)
         m, _g = etudie("MIROIRS 220/230/240", mir, S, decalage, a.fenetre,
-                       a.tirages, rng)
+                       a.tirages, rng, retard=a.retard)
         if m:
             tous_mou.extend(m)
         S.ferme()
@@ -785,8 +895,10 @@ def banc(a, rng):
     print(SEP)
     print("BANC -- LES TABLEAUX")
     print(SEP)
+    bloc_persistance("BANC", trades, S, decalage, a.fenetre,
+                     (60, 120, 300, 600, 900, 1800))
     m, gardes = etudie("BANC", trades, S, decalage, a.fenetre, a.tirages,
-                       rng)
+                       rng, retard=a.retard)
     if m:
         bloc_mou(m, a.tirages, rng)
         print("")
