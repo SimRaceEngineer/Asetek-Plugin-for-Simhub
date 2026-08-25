@@ -268,6 +268,44 @@ def lecteur(args):
 # ====================================================================
 # ENVOYEUR
 # ====================================================================
+BALANCE_PAR_LOT = 20000.0
+LOT_MINI = 0.10
+
+
+def notre_lot(sym):
+    """La regle des papers -- balance / 20000, plancher 0.10 -- mais
+    appliquee a la balance du compte DEDIE, relue avant chaque prise.
+
+    C est tout l interet d un compte neuf : la taille suit sa propre
+    equite. Copier le volume du miroir revenait a dimensionner sur la
+    balance du compte du moteur, qui n a rien a voir -- d ou les 0,75
+    observes le 25/08 alors que 25 000 / 20 000 fait 1,25.
+    """
+    try:
+        bal = float(mt5.account_info().balance)
+    except Exception:
+        bal = BALANCE_PAR_LOT
+    brut = max(LOT_MINI, bal / BALANCE_PAR_LOT)
+    try:
+        si = mt5.symbol_info(sym)
+        pas = float(si.volume_step) or 0.01
+        v = max(float(si.volume_min) or LOT_MINI,
+                round(round(brut / pas) * pas, 2))
+        return min(v, float(si.volume_max) or 100.0)
+    except Exception:
+        return round(brut, 2)
+
+
+def _tk(lien):
+    """Le lien etait un simple ticket avant le 25/08 15h ; il porte
+    maintenant aussi le rapport de taille. On lit les deux formes."""
+    return int(lien["ticket"]) if isinstance(lien, dict) else int(lien)
+
+
+def _k(lien):
+    return float(lien.get("k", 1.0)) if isinstance(lien, dict) else 1.0
+
+
 def prix(sym, achat):
     t = mt5.symbol_info_tick(sym)
     if t is None:
@@ -335,9 +373,10 @@ def ouvrir(src, reel):
     if p is None:
         dire("envoyeur", "  pas de prix sur %s" % src["sym"])
         return None
+    vol = notre_lot(src["sym"])
     req = {
         "action": mt5.TRADE_ACTION_DEAL, "symbol": src["sym"],
-        "volume": src["volume"],
+        "volume": vol,
         "type": mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL,
         "price": p, "sl": src["sl"], "tp": src["tp"],
         "magic": src["magic"], "comment": "PONT%s" % src["ticket"],
@@ -345,24 +384,29 @@ def ouvrir(src, reel):
     }
     if not reel:
         dire("envoyeur", "  [SIMULATION] ouvrir %s %s %.2f @ %.2f sl=%.2f"
-             % (src["sym"], "BUY" if achat else "SELL", src["volume"], p,
-                src["sl"]))
+             % (src["sym"], "BUY" if achat else "SELL", vol, p, src["sl"]))
         return None
     r = envoyer(req, src["sym"])
     if r is None or r.retcode != mt5.TRADE_RETCODE_DONE:
         dire("envoyeur", "  OUVERTURE REFUSEE rc=%s %s"
              % (getattr(r, "retcode", "?"), getattr(r, "comment", mt5.last_error())))
         return None
-    dire("envoyeur", "  ouvert : ticket %s @ %.2f" % (r.order, r.price))
-    return int(r.order)
+    dire("envoyeur", "  ouvert : ticket %s  %.2f lot @ %.2f  (miroir %.2f)"
+         % (r.order, vol, r.price, src["volume"]))
+    return int(r.order), vol
 
 
 def fermer(ticket, sym, sens_src, volume, reel):
+    """volume None = tout ce qui reste. Sur une sortie totale c est plus
+    sur que de recalculer : la position peut avoir ete entamee."""
     if reel:
         pos = mt5.positions_get(ticket=ticket)
         if not pos:
             return True
-        volume = min(volume, float(pos[0].volume))
+        reste = float(pos[0].volume)
+        volume = reste if volume is None else min(volume, reste)
+    elif volume is None:
+        volume = 0.0
     volume = round(volume, 2)
     if volume <= 0:
         return True
@@ -482,22 +526,31 @@ def envoyeur(args):
                 lien = liens.get(tk)
                 if n is None:
                     if lien:
-                        dire("envoyeur", "SORTIE M%s %s %.2f"
+                        dire("envoyeur", "SORTIE M%s %s (miroir %.2f)"
                              % (a["magic"], a["sym"], a["volume"]))
-                        if fermer(lien, a["sym"], a["sens"], a["volume"], args.reel):
+                        # None = tout ce qui reste. La position a pu etre
+                        # entamee par un partiel ; recalculer un volume
+                        # exposerait a en laisser un residu ouvert.
+                        if fermer(_tk(lien), a["sym"], a["sens"], None,
+                                  args.reel):
                             liens.pop(tk, None)
                             ecrire_atomique(LIENS, liens)
                     continue
                 if n["volume"] < a["volume"] - EPS and lien:
                     delta = round(a["volume"] - n["volume"], 2)
-                    dire("envoyeur", "REDUCTION M%s %s %.2f"
-                         % (a["magic"], a["sym"], delta))
-                    fermer(lien, a["sym"], a["sens"], delta, args.reel)
+                    # On ferme la meme PROPORTION, pas le meme volume :
+                    # nos tailles different de k, et fermer 0,52 quand le
+                    # miroir en ferme 0,52 ferait diverger les deux
+                    # positions des le premier partiel.
+                    notre = round(delta * _k(lien), 2)
+                    dire("envoyeur", "REDUCTION M%s %s %.2f  (miroir %.2f)"
+                         % (a["magic"], a["sym"], notre, delta))
+                    fermer(_tk(lien), a["sym"], a["sens"], notre, args.reel)
                 if lien and (abs(n["sl"] - a["sl"]) > EPS
                              or abs(n["tp"] - a["tp"]) > EPS):
                     dire("envoyeur", "STOPS M%s %s sl %.2f -> %.2f"
                          % (a["magic"], a["sym"], a["sl"], n["sl"]))
-                    regler_stops(lien, n["sl"], n["tp"], args.reel)
+                    regler_stops(_tk(lien), n["sl"], n["tp"], args.reel)
 
             # -- apparitions
             for tk, n in courant.items():
@@ -506,9 +559,12 @@ def envoyeur(args):
                 dire("envoyeur", "ENTREE M%s %s %s %.2f"
                      % (n["magic"], n["sym"],
                         "BUY" if n["sens"] == 0 else "SELL", n["volume"]))
-                t = ouvrir(n, args.reel)
-                if t:
-                    liens[tk] = t
+                res = ouvrir(n, args.reel)
+                if res:
+                    ticket_nous, vol_nous = res
+                    src = float(n["volume"]) or 1.0
+                    liens[tk] = {"ticket": ticket_nous,
+                                 "k": round(vol_nous / src, 6)}
                     ecrire_atomique(LIENS, liens)
 
             precedent = courant
