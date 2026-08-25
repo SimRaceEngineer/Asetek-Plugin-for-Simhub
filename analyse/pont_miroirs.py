@@ -80,7 +80,9 @@ JOURNAL = os.path.join(RACINE, "logs", "pont_miroirs.log")
 PLAGES = ((220000, 249999), (4220000, 4249999))
 
 PERIODE = 0.05          # 20 regards par seconde
+BATTEMENT = 1.0         # s ; on reecrit au moins a cette cadence
 RASSIS = 5.0            # s ; au-dela, le lecteur est considere mort
+ATTENTE_LECTEUR = 45.0  # s ; delai laisse au lecteur pour joindre MT5
 EPS = 1e-9
 
 try:
@@ -116,13 +118,37 @@ def est_miroir(magic):
 
 
 def ecrire_atomique(chemin, obj):
-    os.makedirs(os.path.dirname(chemin), exist_ok=True)
-    tmp = chemin + ".tmp"
-    with io.open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(obj, ensure_ascii=False))
-    if os.path.exists(chemin):
-        os.remove(chemin)
-    os.rename(tmp, chemin)
+    """Ecrit par fichier temporaire puis os.replace.
+
+    os.replace remplace en une operation, sans passer par un instant ou
+    le fichier n existe pas -- contrairement a remove puis rename, qui
+    ouvrait une fenetre pendant laquelle un lecteur voyait un fichier
+    absent, et qui echouait par PermissionError des que les deux
+    processus se croisaient. C est ce qui a tue le lecteur le 25/08 a
+    13:15:37, quinze secondes apres son demarrage.
+
+    Une ecriture qui echoue ne doit jamais tuer la boucle : on reessaie,
+    puis on renonce a ce tour-la. Rendre False, pas lever.
+    """
+    try:
+        os.makedirs(os.path.dirname(chemin), exist_ok=True)
+    except Exception:
+        pass
+    tmp = "%s.%d.tmp" % (chemin, os.getpid())
+    for _ in range(3):
+        try:
+            with io.open(tmp, "w", encoding="utf-8") as f:
+                f.write(json.dumps(obj, ensure_ascii=False))
+            os.replace(tmp, chemin)
+            return True
+        except Exception:
+            time.sleep(0.02)
+    try:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    except Exception:
+        pass
+    return False
 
 
 def lire_json(chemin, essais=8):
@@ -159,9 +185,16 @@ def lecteur(args):
         dire("lecteur", "instantane : %s" % INSTANTANE)
 
         derniere_signature = None
-        dernier_battement = time.time()
+        derniere_ecriture = 0.0
+        dernier_dit = time.time()
+        echecs = 0
         while True:
-            positions = mt5.positions_get() or []
+            try:
+                positions = mt5.positions_get() or []
+            except Exception as e:
+                dire("lecteur", "positions_get a leve : %s" % e)
+                time.sleep(0.5)
+                continue
             etat = {}
             for p in positions:
                 if not est_miroir(p.magic):
@@ -173,17 +206,29 @@ def lecteur(args):
                     "sl": round(float(p.sl), 2), "tp": round(float(p.tp), 2),
                     "ouvert": int(p.time),
                 }
-            paquet = {"ts": time.time(), "positions": etat}
             signature = json.dumps(etat, sort_keys=True)
-            # On reecrit a chaque tour : l horodatage sert de battement
-            # a l envoyeur, qui doit pouvoir distinguer "rien n a bouge"
-            # de "le lecteur est mort".
-            ecrire_atomique(INSTANTANE, paquet)
-            if signature != derniere_signature:
+            change = (signature != derniere_signature)
+            # On n ecrit que si l etat change, plus un battement par
+            # seconde : l horodatage doit rester frais pour que
+            # l envoyeur distingue "rien n a bouge" de "le lecteur est
+            # mort", mais reecrire vingt fois par seconde ne servait
+            # qu a se cogner contre le lecteur d en face.
+            maintenant = time.time()
+            if change or (maintenant - derniere_ecriture) >= BATTEMENT:
+                if ecrire_atomique(INSTANTANE, {"ts": maintenant,
+                                                "positions": etat}):
+                    derniere_ecriture = maintenant
+                    echecs = 0
+                else:
+                    echecs += 1
+                    if echecs in (1, 20, 100):
+                        dire("lecteur", "ecriture impossible (%d fois) -- je"
+                             " continue" % echecs)
+            if change:
                 dire("lecteur", "%d position(s) miroir" % len(etat))
                 derniere_signature = signature
-            if time.time() - dernier_battement >= 300:
-                dernier_battement = time.time()
+            if maintenant - dernier_dit >= 300:
+                dernier_dit = maintenant
                 dire("lecteur", "battement : %d position(s)" % len(etat))
             time.sleep(PERIODE)
     except KeyboardInterrupt:
@@ -304,9 +349,24 @@ def envoyeur(args):
                 "REEL" if args.reel else "SIMULATION"))
 
         liens = lire_json(LIENS) or {}
-        paquet = lire_json(INSTANTANE)
+
+        # Le lanceur demarre les deux processus l un apres l autre. Le
+        # lecteur peut mettre quelques secondes a joindre son terminal :
+        # abandonner ici laisserait la copie a moitie ouverte, ce qui est
+        # exactement l oubli qu on cherche a rendre impossible.
+        paquet = None
+        limite = time.time() + ATTENTE_LECTEUR
+        annonce = False
+        while paquet is None and time.time() < limite:
+            paquet = lire_json(INSTANTANE, essais=1)
+            if paquet is None:
+                if not annonce:
+                    dire("envoyeur", "j attends le premier instantane du lecteur")
+                    annonce = True
+                time.sleep(0.5)
         if paquet is None:
-            dire("envoyeur", "instantane absent : lancer le lecteur d abord.")
+            dire("envoyeur", "aucun instantane apres %.0f s." % ATTENTE_LECTEUR)
+            dire("envoyeur", "Le lecteur n a pas demarre. Rien n a ete envoye.")
             return 1
         precedent = paquet["positions"]
         if args.reprendre:
