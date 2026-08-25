@@ -271,6 +271,32 @@ def lecteur(args):
 BALANCE_PAR_LOT = 20000.0
 LOT_MINI = 0.10
 
+# Plancher de NIVEAU de marge, verifie sur la position PROJETEE. C est
+# la regle du miroir lui-meme (NIVEAU_MINI = 300.0, ligne 71 de
+# miroir_papers.py), et son commentaire dit pourquoi elle existe :
+# "soixante miroirs au lot du parent, c est le niveau de marge qui
+# s effondre vers 130 %, pas la marge libre qui manque".
+# Le pont ouvre PLUS GROS que le miroir sur un compte PLUS PETIT. Avoir
+# repris sa taille sans reprendre sa protection etait une faute.
+NIVEAU_MINI = 300.0     # en %, 0 pour desactiver
+
+
+def niveau_projete(sym, type_ordre, vol, p):
+    """Niveau de marge apres cet ordre, en %. None si incalculable --
+    et dans ce cas on laisse passer : refuser sur une mesure absente
+    reviendrait a bloquer la copie a la premiere anomalie de l API."""
+    try:
+        m = mt5.order_calc_margin(type_ordre, sym, vol, p)
+        ai = mt5.account_info()
+        if m is None or ai is None:
+            return None
+        total = float(ai.margin) + float(m)
+        if total <= 0:
+            return float("inf")
+        return 100.0 * float(ai.equity) / total
+    except Exception:
+        return None
+
 
 def notre_lot(sym):
     """La regle des papers -- balance / 20000, plancher 0.10 -- mais
@@ -374,10 +400,17 @@ def ouvrir(src, reel):
         dire("envoyeur", "  pas de prix sur %s" % src["sym"])
         return None
     vol = notre_lot(src["sym"])
+    type_ordre = mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL
+    if NIVEAU_MINI > 0:
+        niv = niveau_projete(src["sym"], type_ordre, vol, p)
+        if niv is not None and niv < NIVEAU_MINI:
+            dire("envoyeur", "  REFUS MARGE %s %.2f : niveau projete %.0f %%"
+                 " < %.0f %%" % (src["sym"], vol, niv, NIVEAU_MINI))
+            return None
     req = {
         "action": mt5.TRADE_ACTION_DEAL, "symbol": src["sym"],
         "volume": vol,
-        "type": mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL,
+        "type": type_ordre,
         "price": p, "sl": src["sl"], "tp": src["tp"],
         "magic": src["magic"], "comment": "PONT%s" % src["ticket"],
         "type_time": mt5.ORDER_TIME_GTC,
@@ -432,15 +465,31 @@ def fermer(ticket, sym, sens_src, volume, reel):
     return True
 
 
-def regler_stops(ticket, sl, tp, reel):
+def regler_stops(ticket, sl, tp, reel, etiquette=""):
+    """N envoie QUE si notre stop differe deja de la cible.
+
+    Comparer l etat precedent de la source a son etat courant ne suffit
+    pas : si une modification echoue on ne la reessaie jamais, et si la
+    source oscillait on la suivrait indefiniment. Le seul test qui tienne
+    est celui de notre propre position.
+    """
     if not reel:
-        dire("envoyeur", "  [SIMULATION] sl=%.2f tp=%.2f sur %s" % (sl, tp, ticket))
+        dire("envoyeur", "  [SIMULATION] %s #%s sl=%.2f tp=%.2f"
+             % (etiquette, ticket, sl, tp))
         return True
+    pos = mt5.positions_get(ticket=ticket)
+    if not pos:
+        return True
+    if abs(float(pos[0].sl) - sl) <= EPS and abs(float(pos[0].tp) - tp) <= EPS:
+        return True                      # deja a la bonne valeur
     r = mt5.order_send({"action": mt5.TRADE_ACTION_SLTP,
                         "position": int(ticket), "sl": sl, "tp": tp})
     if r is None or r.retcode != mt5.TRADE_RETCODE_DONE:
-        dire("envoyeur", "  SL/TP REFUSE rc=%s" % getattr(r, "retcode", "?"))
+        dire("envoyeur", "  SL/TP REFUSE #%s rc=%s"
+             % (ticket, getattr(r, "retcode", "?")))
         return False
+    dire("envoyeur", "  STOPS %s #%s  %.2f -> %.2f"
+         % (etiquette, ticket, float(pos[0].sl), sl))
     return True
 
 
@@ -526,8 +575,8 @@ def envoyeur(args):
                 lien = liens.get(tk)
                 if n is None:
                     if lien:
-                        dire("envoyeur", "SORTIE M%s %s (miroir %.2f)"
-                             % (a["magic"], a["sym"], a["volume"]))
+                        dire("envoyeur", "SORTIE M%s %s #%s (miroir %.2f)"
+                             % (a["magic"], a["sym"], _tk(lien), a["volume"]))
                         # None = tout ce qui reste. La position a pu etre
                         # entamee par un partiel ; recalculer un volume
                         # exposerait a en laisser un residu ouvert.
@@ -543,14 +592,15 @@ def envoyeur(args):
                     # miroir en ferme 0,52 ferait diverger les deux
                     # positions des le premier partiel.
                     notre = round(delta * _k(lien), 2)
-                    dire("envoyeur", "REDUCTION M%s %s %.2f  (miroir %.2f)"
-                         % (a["magic"], a["sym"], notre, delta))
+                    dire("envoyeur", "REDUCTION M%s %s #%s %.2f (miroir %.2f)"
+                         % (a["magic"], a["sym"], _tk(lien), notre, delta))
                     fermer(_tk(lien), a["sym"], a["sens"], notre, args.reel)
                 if lien and (abs(n["sl"] - a["sl"]) > EPS
                              or abs(n["tp"] - a["tp"]) > EPS):
-                    dire("envoyeur", "STOPS M%s %s sl %.2f -> %.2f"
-                         % (a["magic"], a["sym"], a["sl"], n["sl"]))
-                    regler_stops(_tk(lien), n["sl"], n["tp"], args.reel)
+                    # regler_stops journalise lui-meme, et seulement s il
+                    # a reellement envoye quelque chose.
+                    regler_stops(_tk(lien), n["sl"], n["tp"], args.reel,
+                                 "M%s %s" % (a["magic"], a["sym"]))
 
             # -- apparitions
             for tk, n in courant.items():
