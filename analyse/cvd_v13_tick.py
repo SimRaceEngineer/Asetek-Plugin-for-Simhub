@@ -81,6 +81,12 @@ except Exception as _e:                    # noqa
 BAR = 60
 EMA_N = 14
 
+# copy_ticks_range et copy_rates ne rendent pas leurs horodatages dans
+# la meme base : le 25/08, les ticks d une barre revenaient 7200 s avant
+# elle. Ce nombre depend du courtier ET de l heure d ete ; on le
+# RECALIBRE au demarrage au lieu de le figer. Balayage de -4 h a +4 h.
+DECALAGES = [d * 900 for d in range(-16, 17)]
+
 
 def ankit(o, h, l, c, vol):
     """Le delta d une bougie, forme fermee. Identique a cvd_v13."""
@@ -123,6 +129,50 @@ def ohlcv(ticks, jusqu_a=None, reel=False):
         return None
     return (px[0], max(px), min(px), px[-1],
             vol if reel and vol > 0 else float(len(px)))
+
+
+def cale_decalage(sym, minimum=2):
+    """Le decalage qui fait coincider ticks et barres, MESURE.
+
+    Pour trois barres recentes dont on connait open, high, low et close,
+    on demande les ticks de [m+decalage, +60) et on garde le decalage
+    qui reproduit les QUATRE prix. Quatre prix qui coincident par
+    hasard, ca n arrive pas -- et on exige qu il tienne sur au moins
+    deux barres, sinon c est une coincidence et pas une regle.
+    """
+    info = mt5.symbol_info(sym)
+    tol = max(float(getattr(info, "point", 0.01) or 0.01) * 2, 0.05)
+    r = mt5.copy_rates_from_pos(sym, mt5.TIMEFRAME_M1, 2, 3)
+    if r is None or len(r) == 0:
+        return None, "aucune barre recente"
+    compte = {}
+    for row in r:
+        m = int(row["time"])
+        o, h, l, c = (float(row["open"]), float(row["high"]),
+                      float(row["low"]), float(row["close"]))
+        for dec in DECALAGES:
+            try:
+                tk = mt5.copy_ticks_range(
+                    sym, datetime.datetime.utcfromtimestamp(m + dec),
+                    datetime.datetime.utcfromtimestamp(m + dec + BAR),
+                    mt5.COPY_TICKS_ALL)
+            except Exception:
+                tk = None
+            if tk is None or len(tk) < 2:
+                continue
+            x = ohlcv(tk, None, False)
+            if x is None:
+                continue
+            if (abs(x[0] - o) <= tol and abs(x[1] - h) <= tol
+                    and abs(x[2] - l) <= tol and abs(x[3] - c) <= tol):
+                compte[dec] = compte.get(dec, 0) + 1
+    if not compte:
+        return None, "aucun decalage ne reproduit les barres"
+    dec, n = max(compte.items(), key=lambda kv: kv[1])
+    if n < minimum:
+        return None, ("le meilleur decalage (%+d s) ne tient que sur %d"
+                      " barre(s)" % (dec, n))
+    return dec, "%+d s, verifie sur %d barre(s) sur %d" % (dec, n, len(r))
 
 
 def main():
@@ -184,6 +234,15 @@ def main():
         arrondi = int(round(dec / 60.0)) * 60
         print("  decalage serveur : %+d s, lu sur %s" % (arrondi, ref))
 
+        dtick, pourquoi = cale_decalage(sorted(sym.values())[0])
+        if dtick is None:
+            print("")
+            print("REFUS : %s." % pourquoi)
+            print("Les ticks et les barres ne se rejoignent pas sur ce")
+            print("terminal. Toute bougie reconstruite serait inventee.")
+            return 1
+        print("  decalage ticks/barres : %s" % pourquoi)
+
         t0 = min(t["t"] for t in tickets) + arrondi - 3 * 86400
         t1 = max(t["t"] for t in tickets) + arrondi + 86400
         series, reel = {}, {}
@@ -212,8 +271,8 @@ def main():
                 continue
             m = ((t["t"] + arrondi) // BAR) * BAR
             tk = mt5.copy_ticks_range(
-                s, datetime.datetime.utcfromtimestamp(m),
-                datetime.datetime.utcfromtimestamp(m + BAR),
+                s, datetime.datetime.utcfromtimestamp(m + dtick),
+                datetime.datetime.utcfromtimestamp(m + dtick + BAR),
                 mt5.COPY_TICKS_ALL)
             att = series[t["actif"]].get(m)
             if tk is None or len(tk) == 0 or att is None:
@@ -273,8 +332,8 @@ def main():
                 base.ajoute(sans, t["pnl"])
                 continue
             tk = mt5.copy_ticks_range(
-                s, datetime.datetime.utcfromtimestamp(m),
-                datetime.datetime.utcfromtimestamp(ts_serveur + 1),
+                s, datetime.datetime.utcfromtimestamp(m + dtick),
+                datetime.datetime.utcfromtimestamp(ts_serveur + 1 + dtick),
                 mt5.COPY_TICKS_ALL)
             if tk is None or len(tk) == 0:
                 base.ajoute(sans, t["pnl"])
