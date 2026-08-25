@@ -245,16 +245,151 @@ dans le code : `allows_entry` ne consulte que `EXEMPT_MAGICS_BASE`, en
 dur. Toute famille ajoutee au watchdog depuis mai est bloquee sans que
 personne l ait decide.
 
+## Ce que les 30 934 blocages etaient reellement
+
+Comptes par magic, ils se repartissent ainsi :
+
+| Blocages | Magic |
+|---:|---|
+| **30 562** | **0** |
+| 86 | 207202 |
+| 86 | 206202 |
+| 80 | 206205 |
+| 76 | 207205 |
+| 24 | 207210 |
+| 20 | 207310 |
+| 18 | 207110 |
+| 14 | 207101 |
+| 10 | 207230 |
+| 10 | 152100 |
+| 8 | 207120 |
+
+**98,8 % portent le magic 0**, qui n est pas un setup mais la valeur de
+repli de la ligne 1191 quand la requete ne porte pas de magic.
+
+Les lignes brutes, toutes identiques, trois par horodatage, toutes les
+deux secondes a partir de 18:07:22 :
+
+    18:07:22 | ENGINE | [DOW_CAP_GATE BLOCK] M0 US30 BUY:
+              US_SESSION:US30_AUTONOMOUS_FLOOR_BROKEN_DN_block_BUY
+
+Et le journal dit qui se faisait refuser :
+
+    18:07:59 | [MFE_TRAIL] MODIFY FAILED #172584267 rc=10020
+      (DOW_CAP_US_SESSION:US30_AUTONOMOUS_FLOOR_BROKEN_DN_block_BUY)
+      sl_try=53498.86 cur_sl=49448.60 peak=71.8
+    18:07:59 | [MFE_TRAIL] MODIFY FAILED #172586547 rc=10020 (...)
+      sl_try=53477.50 cur_sl=49434.60 peak=85.8
+    18:07:59 | [MFE_TRAIL] MODIFY FAILED #172587368 rc=10020 (...)
+      sl_try=53495.26 cur_sl=49436.60 peak=83.8
+
+## Le defaut : un arbitre d entrees qui intercepte tout
+
+`mt5.order_send` sert a ouvrir, a **modifier un stop**
+(`TRADE_ACTION_SLTP`), a **fermer** (un DEAL portant le ticket de la
+position visee) et a annuler un pending. `dow_cap_gate.py` remplace
+cette fonction et ne lit **jamais** `request["action"]` -- le mot
+n apparait pas une fois dans ses 1361 lignes.
+
+Une modification de stop ne porte ni `magic` ni `type`. Le gate en
+deduit donc `magic = 0` -- jamais dans sa liste blanche -- et
+`atype = 0`, que la ligne 1200 traduit en `direction = "BUY"`. La
+modification est examinee comme une entree a l achat, et refusee des que
+la ligne Dow interdit le BUY, avec un faux `rc=10020`.
+
+Consequence : **le trailing ne peut plus remonter aucun stop.** Les
+positions restent sur leur stop initial, a plus de 4 000 points, avec
+80 points de gain au pic. `sl_try` montre que le module savait
+exactement ou le poser.
+
+Les fermetures subissent la meme chose : fermer un BUY est un deal
+SELL, refuse des que la ligne interdit le SELL. Seul
+`exit_tp_manager` y echappe, exempte a la main le 22/05 sur son
+commentaire `ETP`, sous ce motif (ligne ~1180) :
+
+    "capital protection > Dow Cap conviction"
+
+La regle etait juste. Elle n avait ete accordee qu a un module.
+
+`fbt_protect` (4 380 echecs) et `[R6] TRAIL: 0 positions / 13 total`
+indiquent que deux autres mecanismes de protection etaient dans le meme
+etat.
+
+## Correctif applique le 25/08
+
+`analyse/corrige_dow_cap_modifs.py` insere une garde en tete de
+`_wrapped_order_send` : seules les ouvertures et les pending sont
+examinees ; modifications, fermetures et annulations traversent sans
+examen. **Aucune regle d entree n est modifiee.**
+
+Applique sur msitrident2 le 25/08 a 09:45. Sauvegarde
+`dow_cap_gate.py.bak_modifs`. Relu, compile. 1362 -> 1416 lignes.
+
+Verifie avant application sur une copie du fichier reel : six formes de
+requete classees conformement (entree marche, pending, SLTP, fermeture,
+REMOVE, requete sans champ `action`), idempotent.
+
+**Prend effet au prochain demarrage de la stack** -- le module est
+charge en memoire dans le processus du moteur.
+
+## Le defaut n est pas une habitude de la maison
+
+Balayage des voisins, le 25/08 : **50 modules remplacent
+`mt5.order_send`, 48 lisent `action`.** Deux ne le lisent pas --
+`dow_cap_gate.py` et `eqv3_ma2050_gate.py`.
+
+La docstring de `dow_cap_gate` revendique pourtant *"same pattern as
+cooldown_gate, buddha_clause_gate, ibre_direction_gate"*. Ces trois-la
+lisent `action`. C est donc un oubli isole, dans le fichier qui fait
+68 % des blocages.
+
+`eqv3_ma2050_gate.py` porte le meme defaut mais n a bloque que 54 fois,
+sous une etiquette `OBSERVE` -- a verifier, il journalise
+vraisemblablement sans refuser.
+
+## Le vrai classement des refus d entree
+
+Une fois les 30 562 modifications retirees, les gates qui ont
+reellement refuse des entrees le 24/08 :
+
+| Refus | Etiquette |
+|---:|---|
+| 7 919 | `C14 BLOCK` |
+| 4 400 | `M17-OBS` |
+| 2 715 | `BBFV` |
+| 1 558 | `DOC` |
+| 1 375 | `HARD_CAP_1850` |
+| 372 | `DOW_CAP_GATE` |
+| 362 | `Z_LOC_BLOCK` |
+| 350 | `IZONE BLOCK` |
+| 302 | `LAGGARD_WALL` |
+
+(`fbt_protect FAIL`, 4 380, n est pas un gate mais une protection qui
+echouait -- meme cause que `MFE_TRAIL`.)
+
+`C14` et `M17-OBS` ne correspondent a aucun nom de fichier. A localiser.
+
+## Les bras 206/207 face aux gates
+
+372 refus sur la journee, repartis sur onze magics, dont
+`206202`/`207202` et `206205`/`207205` qui en concentrent 328. Reel,
+mais sans commune mesure avec ce qui avait ete suppose : ce n est pas ce
+qui a eteint la stack.
+
+Ils ne figurent dans aucune des quatre sorties de secours du gate.
+Question ouverte : faut-il les ajouter a `EXEMPT_MAGICS_BASE`, ou
+d abord regarder ce que `C14` leur coute.
+
 ## A faire
 
-- Compter les blocages `DOW_CAP_GATE` par magic, pour chiffrer ce que le
-  gate a coute aux bras 206/207 le 24/08. **Commande envoyee, en
-  attente.**
+- Au prochain demarrage : verifier que `bypass_non_entree` s incremente
+  et qu aucun `MFE_TRAIL MODIFY FAILED rc=10020` ne reapparait.
+- Localiser `C14` (7 919) et `M17-OBS` (4 400).
+- Verifier si `eqv3_ma2050_gate.py` refuse ou se contente d observer.
 - Identifier ce qui emet `Z_LOC_BLOCK`, `POC`, `APPUI`, `JANIRA_SR`,
-  `BLOCKED`, `REJECT` -- ces etiquettes ne correspondent a aucun nom de
-  fichier evident.
-- Lire `c14_gate` (7 919), `M17-OBS` (4 400) et `fbt_protect` (4 380),
-  les trois suivants.
+  `BLOCKED`, `REJECT`.
 - Trancher les trois doublons.
 - Retirer `am_dow_gate.py`, deprecated depuis le 30/04.
 - Documenter ou supprimer `janira_m5_gate.py`.
+- Nettoyer : `corrige_dow_cap_modifs.py` apparait dans sa propre liste
+  de suspects, il contient les deux motifs cherches.
