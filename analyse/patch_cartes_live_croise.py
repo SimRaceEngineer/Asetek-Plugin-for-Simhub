@@ -296,7 +296,12 @@ def main():
     print("ecrit : %s" % a.cible)
 
     relu = lire(a.cible)
-    manques = [x for x in (MARQUEUR, "_cpt_actif", "MIROIR 5",
+    # Les marques doivent exister dans le SOURCE. "MIROIR 5" n en est
+    # pas une : l en-tete est fabrique a l execution par une boucle, la
+    # chaine n apparait nulle part dans le fichier. Le 25/08 ce controle
+    # a crie RESTAURER sur un patch pourtant correct -- une fausse alerte
+    # de ce genre est plus dangereuse qu un echec franc.
+    manques = [x for x in (MARQUEUR, "_cpt_actif", "entree filtree CVD",
                            "def _nombres(", "def _sous(v, fond=")
                if x not in relu]
     if manques:
