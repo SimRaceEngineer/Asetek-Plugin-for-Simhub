@@ -136,28 +136,125 @@ Comptage des etiquettes entre crochets sur les lignes contenant BLOCK.
 `US30` (193), `US500` (129) et `US100` (28) sont des etiquettes d actif,
 pas des gates.
 
-**Ce comptage est INCOMPLET.** Le motif utilise exigeait des majuscules
-sans espace ; toute etiquette contenant un espace en est absente --
-`[DOW_CAP_GATE BLOCK]` la premiere, alors que c est celle qui a refuse
-les achats SPX500 le 24/08 au soir. A refaire avec `\[([^\]]+)\]`.
+**Comptage corrige le 25/08.** Le premier motif exigeait des majuscules
+sans espace et laissait de cote toute etiquette en contenant un. Refait
+avec `\[([^\]]+)\]`, il donne un classement completement different :
 
-## Ce que la mesure dit deja
+| Blocages | Etiquette |
+|---:|---|
+| **30 934** | `DOW_CAP_GATE BLOCK` |
+| 7 919 | `C14 BLOCK` |
+| 4 400 | `M17-OBS` |
+| 4 380 | `fbt_protect FAIL` |
+| 2 715 | `BBFV` |
+| 1 558 | `DOC` |
+| 1 375 | `HARD_CAP_1850` |
+| 362 | `Z_LOC_BLOCK` |
+| 350 | `IZONE BLOCK` |
+| 302 | `LAGGARD_WALL` |
+| 279 | `M154` |
+| 248 | `POC` |
+| 201 | `JANIRA_SR` |
+| 175 | `BLOCKED` |
+| 134 | `APPUI` |
+| 86 | `RSI_M10_GATE` |
+| 54 | `EQV3_2050 OBSERVE` |
+| 47 | `CONVICTION` |
+| 46 | `REJECT` |
+| 20 | `ANTIC BLOCK` |
+| 6 | `bounce_entry_detector` |
+| 1 | `LEADPUSH`, `VIXGATE`, `AMGATE`, `EVENT_WEEK_BLOCK`, `FRG`, `ANTIC`, `RCGATE`, `OK` |
 
-Trois etiquettes -- `BBFV`, `DOC`, `HARD_CAP_1850` -- font **5 606 des
-6 300 blocages** hors `MFE_TRAIL`, soit 89 %. Les cinquante autres gates
-se partagent le reste, et sept d entre eux n ont bloque qu **une seule
-fois** dans la journee.
+`DOW_CAP_GATE` fait a lui seul **68 % de tous les blocages de la
+journee** -- quatre fois le deuxieme. Les trois etiquettes que j avais
+mises en tete (`BBFV`, `DOC`, `HARD_CAP_1850`) ne pesent ensemble que
+11 %. Ma conclusion precedente etait fausse par construction : elle
+portait sur le residu.
 
-Un gate qui bloque une fois par jour ne protege de rien : il ajoute une
-condition a verifier, un fichier a maintenir, et un motif de plus dans
-les journaux. C est le premier endroit ou chercher a desserrer.
+## dow_cap_gate.py -- ce qu il refuse exactement
+
+1361 lignes, 60 Ko, `OBSERVE_ONLY = False` depuis le 12/05 (ligne 49 :
+*"user spec LIVE from day 1"*). Il ne calcule aucun signal : il
+monkey-patche `mt5.order_send` et intercepte **tous** les envois
+d ordre de la stack.
+
+La decision est prise par `allows_entry(asset, direction, magic)`,
+ligne 1059. Deux regimes selon l heure de Paris (`_is_us_session_active`,
+ligne 851 : 15:30 <= h < 22:00).
+
+**Avant 15:30 -- SPX arbitre strict.**
+
+| Actif | Condition | Verdict |
+|---|---|---|
+| US500, US100 | SPX a une ligne Dow M3 BEAR ou BULL active | **bloque dans les deux sens** |
+| US500, US100 | cassure SPX < 15 min, sens DOWN | BUY bloque |
+| US500, US100 | cassure SPX < 15 min, sens UP | SELL bloque |
+| US30 | sa propre ligne M3 est opposee a celle de SPX | **bloque** |
+| US30 | accord ou pas de ligne | passe |
+
+C est la ligne 1109 -- `PRE_US:SPX_M3_CAP_{type}_ACTIVE@{level}_block_all`
+-- qui interdit les deux sens a la fois. Un seul trace sur SPX suffit a
+fermer US500 et US100 jusqu a l ouverture cash.
+
+**Apres 15:30 -- chaque indice sur sa propre ligne.**
+
+`_asset_dow_verdict` (ligne 972) rend un verdict parmi cinq, et
+`_verdict_allows` (ligne 1126) n en autorise qu un seul sens :
+
+| Verdict | Sens autorise |
+|---|---|
+| `CAP_BROKEN_UP` (ligne BEAR, prix au-dessus) | BUY seulement |
+| `FLOOR_HOLDING` (ligne BULL, prix au-dessus) | BUY seulement |
+| `CAP_HOLDING` (ligne BEAR, prix en dessous) | SELL seulement |
+| `FLOOR_BROKEN_DN` (ligne BULL, prix en dessous) | SELL seulement |
+| `NO_LINE` | aucune contrainte |
+
+Une ligne n existe que si elle a au moins `PIVOTS_MIN = 3` pivots et une
+pente au-dela de `+/- 0.05 pts/bar` (lignes 105-107). En dessous, le
+verdict retombe sur `NO_LINE` et le gate laisse passer.
+
+**Donc, en seance, ce gate est un filtre directionnel permanent :** des
+qu une ligne Dow M3 tient sur un indice, un des deux sens est ferme sur
+cet indice pour toute la stack.
+
+## Les trois sorties de secours qui existent deja
+
+Elles sont dans le code, testees avant tout calcul :
+
+1. **`ai_master_exempt`** (ligne 1170) -- M154 et M50002 passent sans
+   examen.
+2. **Commentaire `ETP`** (ligne 1180) -- les fermetures de
+   `exit_tp_manager` passent : *"capital protection > Dow Cap
+   conviction"*.
+3. **`polarity_gate`** (ligne 1204) -- si la polarite de l actif est
+   `BULL` et l ordre un BUY (ou `BEAR` et SELL), l ordre passe sans
+   consulter Dow.
+4. **`EXEMPT_MAGICS_BASE`** (ligne 54) -- une liste blanche de ~90
+   magics dits *autonomous structural setups*.
+
+**Les bras 206 et 207 ne sont dans aucune des quatre.** La liste blanche
+contient les familles 63/73/83, 92 a 120, 130 a 134, 53215, 53711 --
+pas un seul 206xxx ni 207xxx. Les setups dont vous voulez voir le
+travail en live sont donc soumis, ordre par ordre, a un filtre que les
+papers n ont jamais eu.
+
+**Defaut au passage :** le commentaire ligne 53 annonce *"resolve at
+install time + refresh dynamically each call"* depuis
+`daily_watchdog.AUTONOMOUS_MAGICS`. Ce rafraichissement n existe pas
+dans le code : `allows_entry` ne consulte que `EXEMPT_MAGICS_BASE`, en
+dur. Toute famille ajoutee au watchdog depuis mai est bloquee sans que
+personne l ait decide.
 
 ## A faire
 
-- Refaire le comptage avec le motif corrige, pour placer `DOW_CAP`.
+- Compter les blocages `DOW_CAP_GATE` par magic, pour chiffrer ce que le
+  gate a coute aux bras 206/207 le 24/08. **Commande envoyee, en
+  attente.**
 - Identifier ce qui emet `Z_LOC_BLOCK`, `POC`, `APPUI`, `JANIRA_SR`,
   `BLOCKED`, `REJECT` -- ces etiquettes ne correspondent a aucun nom de
   fichier evident.
+- Lire `c14_gate` (7 919), `M17-OBS` (4 400) et `fbt_protect` (4 380),
+  les trois suivants.
 - Trancher les trois doublons.
 - Retirer `am_dow_gate.py`, deprecated depuis le 30/04.
 - Documenter ou supprimer `janira_m5_gate.py`.
