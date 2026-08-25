@@ -380,16 +380,92 @@ Ils ne figurent dans aucune des quatre sorties de secours du gate.
 Question ouverte : faut-il les ajouter a `EXEMPT_MAGICS_BASE`, ou
 d abord regarder ce que `C14` leur coute.
 
+## Le miroir n est filtre par aucun gate
+
+Question posee le 25/08 : les gates empechent-ils le miroir de se
+comporter comme ses parents ?
+
+Un gate ne vaut que dans le processus qui l a installe -- ce sont des
+monkey-patches sur `mt5.order_send`, poses en memoire, pas sur le
+disque. Le moteur les installe chez lui ; le miroir tourne dans un
+processus separe, lance par le gardien.
+
+`verif_gates_miroir.py` remonte tout l arbre des imports depuis
+`miroir_papers.py`, par lecture `ast`, sans executer un seul module.
+Resultat du 25/08 :
+
+- **22 modules de la stack atteints.**
+- **Un seul capable de remplacer `mt5.order_send`** : `cooldown_gate`,
+  par la chaine
+  `miroir_papers -> churn_trade_logger -> rsi_rails_cycle_trader -> cooldown_gate`.
+- Trois autres portent un nom de gate sans toucher a `order_send` :
+  `anti_fomo_gate`, `gate_block_logger`, `rails_continuation_gate`.
+- **Aucun appel a `install()` au chargement.**
+
+Le dernier fil -- `cooldown_gate` etant importable, quelqu un pouvait
+l installer depuis une fonction -- est ferme : dans
+`rsi_rails_cycle_trader.py`, il est importe quatre fois sous l alias
+`_cg`, et les trois seuls usages sont des lectures.
+
+    164 : ok, _ = _cg.allows_entry()
+    175 : ok, _ = _cg.allows_exit(int(ticket))
+    184 : _cg.register_entry(int(ticket))
+
+Consulte comme une bibliotheque, jamais installe comme patch.
+
+**Conclusion : le miroir envoie ses ordres a MT5 sans qu aucun gate les
+examine.** Il est deja le reflet fidele des papers.
+
+## Trois objets portent les memes magics, et ne subissent pas les memes regles
+
+| Objet | Gates subis |
+|---|---|
+| Papers (`papier_tf.py`) | aucun -- ils n appellent jamais le broker |
+| Miroir (`miroir_papers.py`) | aucun -- processus separe, rien ne s installe |
+| Live moteur (206xxx/207xxx) | **tous** -- 372 refus `DOW_CAP` le 24/08 |
+
+L ecart que l on cherchait n est pas entre le parent et son miroir. Il
+est entre le papier et le live du moteur.
+
+## Compte demo dedie au miroir -- l idee tient, pour d autres raisons
+
+Proposition de l utilisateur le 25/08 : ouvrir une demo exclusivement
+pour le miroir, afin qu il tourne sans les gates.
+
+Elle ne change rien aux gates -- le miroir n en subit deja aucun. Mais
+elle regle trois problemes reels, tous certains :
+
+1. Les positions du miroir sont aujourd hui dans le compte 178780,
+   melangees a celles de la stack live. Elles apparaissent dans le
+   `/ 13 total` du trailing.
+2. Elles peuvent etre reprises par les gestionnaires de sortie du
+   moteur, qui ne savent pas qu elles ne sont pas les leurs.
+3. Elles partagent la marge. La limite que le miroir s impose -- 25 %
+   de la marge libre -- est calculee sur une marge que la stack live
+   consomme en meme temps.
+
+Faisable : le miroir etant un processus separe, il peut s initialiser
+sur un terminal different de celui du moteur, et `Terminal02` /
+`Terminal03` sont inoccupes. Reste a voir si le chemin du terminal est
+un parametre ou s il est en dur.
+
 ## A faire
 
+- Verifier le fonctionnement courant du miroir (journal, activite du
+  jour). **En cours.**
+- Voir si le chemin du terminal MT5 est parametrable dans
+  `miroir_papers.py`, pour le compte dedie.
 - Au prochain demarrage : verifier que `bypass_non_entree` s incremente
   et qu aucun `MFE_TRAIL MODIFY FAILED rc=10020` ne reapparait.
-- Localiser `C14` (7 919) et `M17-OBS` (4 400).
+- Chiffrer ce que `C14` (`buddha_clause_gate`, 7 919 refus) coute aux
+  bras 206/207.
 - Verifier si `eqv3_ma2050_gate.py` refuse ou se contente d observer.
 - Identifier ce qui emet `Z_LOC_BLOCK`, `POC`, `APPUI`, `JANIRA_SR`,
   `BLOCKED`, `REJECT`.
 - Trancher les trois doublons.
 - Retirer `am_dow_gate.py`, deprecated depuis le 30/04.
 - Documenter ou supprimer `janira_m5_gate.py`.
+- Cosmetique : `daily_guard.py` lignes 32 et 472, `SyntaxWarning:
+  invalid escape sequence '\F'`.
 - Nettoyer : `corrige_dow_cap_modifs.py` apparait dans sa propre liste
   de suspects, il contient les deux motifs cherches.
