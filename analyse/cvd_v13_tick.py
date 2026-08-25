@@ -5,7 +5,7 @@ r"""cvd_v13_tick.py -- la regle telle qu elle se jouerait VRAIMENT :
 
   python cvd_v13_tick.py --controle
   python cvd_v13_tick.py
-  python cvd_v13_tick.py --pas 1
+  python cvd_v13_tick.py --balayage 0,1,2,5,10
 
 POURQUOI CE TROISIEME CADRAGE
 -----------------------------
@@ -47,6 +47,20 @@ LE CONTROLE VIENT AVANT LA MESURE
 
     C est la lecon du 18/08 : la verification avant la mesure, et si la
     verification echoue, le reste n est pas imprime.
+
+LE BALAYAGE, ET POURQUOI IL EST DANS LE SCRIPT
+    Les ticks ne sont relus QU UNE FOIS : on garde les grandeurs brutes
+    et le seuil ne s applique qu ensuite. Balayer dix pas ne coute alors
+    rien de plus que d en mesurer un. Fait depuis le terminal, le meme
+    balayage rouvrait MT5 et relisait tout a chaque pas.
+
+L ARTEFACT D HORLOGE, SEPARE
+    La repartition des secondes ecoulees est donnee separement pour les
+    autorisees et pour les refusees. Une bougie en cours a plus de temps
+    pour depasser la precedente a la 55e seconde qu a la 5e : si les
+    autorisees se tassaient en fin de minute, la regle mesurerait
+    l horloge et non le flux. Deux repartitions semblables ecartent le
+    soupcon ; deux repartitions differentes le confirment.
 
 L EMA EN COURS
     L indicateur recalcule sa derniere barre a chaque tick :
