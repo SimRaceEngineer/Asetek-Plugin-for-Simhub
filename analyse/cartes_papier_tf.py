@@ -91,21 +91,48 @@ def lis(chemin, depuis=None):
     return T, lus, casse
 
 
+def fusionne(recs):
+    """Un bras peut solder une entree en DEUX FOIS. papier_tf.py le dit
+    ligne 432 : "une sortie, totale ou partielle. Le 207 en produit
+    deux". C est ce qui explique 740 enregistrements cote 207 pour 504
+    cote 206 -- pas deux fois plus de trades, des trades coupes en deux.
+
+    Les morceaux appartiennent a la MEME entree : on somme leurs
+    resultats et on garde le motif du DERNIER, celui qui solde.
+
+    N en garder qu un, comme le faisait la premiere version de ce
+    fichier, amputait le bras qui fractionne de la moitie de chaque
+    trade -- et l A/B mesurait le DECOUPAGE au lieu de la SORTIE. Le
+    25/08 ce defaut donnait "-5.98 par trade en faveur du 206" sur des
+    chiffres qui ne voulaient rien dire."""
+    recs = sorted(recs, key=lambda o: str(o.get("ts", "")))
+    d = dict(recs[-1])
+    d["eur"] = sum(float(o.get("eur", 0.0)) for o in recs)
+    d["points"] = sum(float(o.get("points", 0.0)) for o in recs)
+    d["parts"] = len(recs)
+    return d
+
+
 def apparie(T):
-    """(paires, orphelins_par_bras). La cle est (actif, horizon,
-    instant d ouverture) : c est ce que "memes entrees" veut dire."""
+    """(paires, orphelins, fractionnees). La cle est (actif, horizon,
+    instant d ouverture) : c est ce que "memes entrees" veut dire. Tous
+    les enregistrements d une meme cle et d un meme bras sont fusionnes
+    -- voir fusionne()."""
     par = {}
     for o in T:
         b = str(o.get("bras", ""))
         if b not in BRAS:
             continue
         cle = (o.get("actif"), o.get("mn"), o.get("ouvert"))
-        par.setdefault(cle, {})[b] = o
+        par.setdefault(cle, {}).setdefault(b, []).append(o)
+    par = {k: {b: fusionne(r) for b, r in v.items()} for k, v in par.items()}
     paires = [(k, v[BRAS[0]], v[BRAS[1]])
               for k, v in par.items() if len(v) == 2]
     orph = {b: sum(1 for v in par.values() if len(v) == 1 and b in v)
             for b in BRAS}
-    return paires, orph
+    frac = {b: sum(1 for v in par.values()
+                   if b in v and v[b].get("parts", 1) > 1) for b in BRAS}
+    return paires, orph, frac
 
 
 # ----------------------------------------------------------------------
@@ -155,7 +182,7 @@ def bloc_texte(titre, lignes, lib):
     return [""] + ["=" * LARGE, titre, "=" * LARGE] + L
 
 
-def rendu(paires, orph, lus, casse, depuis):
+def rendu(paires, orph, frac, lus, casse, depuis):
     L = ["=" * LARGE,
          "PAPIER TF -- A/B DE SORTIE, LE BRAS 206 CONTRE LE 207",
          "=" * LARGE,
@@ -179,6 +206,10 @@ def rendu(paires, orph, lus, casse, depuis):
           "  orphelins: 206 %d, 207 %d -- exclus de la comparaison, et"
           % (orph.get("206", 0), orph.get("207", 0)),
           "             comptes ici plutot que jetes en silence.",
+          "  fractionnees : 206 %d, 207 %d entrees soldees en DEUX FOIS,"
+          % (frac.get("206", 0), frac.get("207", 0)),
+          "             leurs morceaux sommes. N en garder qu un",
+          "             amputerait ce bras de la moitie de son resultat.",
           "",
           "  L APPARIEMENT N EST PAS UN DETAIL. Les deux bras n ont pas",
           "  le meme effectif brut : une entree peut sortir d un cote et",
@@ -286,7 +317,7 @@ def table_html(lignes, lib):
     return "".join(o) + '</tbody></table>'
 
 
-def page_html(paires, orph, lus, casse, depuis, txt):
+def page_html(paires, orph, frac, lus, casse, depuis, txt):
     if not paires:
         return (CSS + '<div id="pt"><h1>Papier TF &mdash; A/B de sortie</h1>'
                 '<div class="avis">Aucune paire sur la fenetre demandee :'
@@ -298,6 +329,8 @@ def page_html(paires, orph, lus, casse, depuis, txt):
               ("paires", "%d" % tot["n"]),
               ("orphelins 206", "%d" % orph.get("206", 0)),
               ("orphelins 207", "%d" % orph.get("207", 0)),
+              ("fractionnees 206", "%d" % frac.get("206", 0)),
+              ("fractionnees 207", "%d" % frac.get("207", 0)),
               ("PnL 206", "%+.2f" % tot["a"]),
               ("PnL 207", "%+.2f" % tot["b"]),
               ("ecart", "%+.2f" % d)]
@@ -318,8 +351,15 @@ def page_html(paires, orph, lus, casse, depuis, txt):
          ' <b>nombre</b>. Seules les %d entrees sorties DES DEUX cotes'
          ' sont comparees ici, appariees sur (actif, horizon, instant'
          ' d ouverture). Les %d orphelins sont exclus &mdash; et comptes'
-         ' ci-dessus plutot que jetes en silence.</div>'
-         % (tot["n"], orph.get("206", 0) + orph.get("207", 0))]
+         ' ci-dessus plutot que jetes en silence.<br><br>'
+         '<b>Une entree peut etre soldee en deux fois</b> &mdash;'
+         ' papier_tf produit alors deux enregistrements pour la meme'
+         ' entree. Leurs resultats sont <b>sommes</b> (%d cas cote 206,'
+         ' %d cote 207). N en garder qu un amputerait ce bras de la'
+         ' moitie de chaque trade coupe, et l A/B mesurerait le'
+         ' <b>decoupage</b> au lieu de la <b>sortie</b>.</div>'
+         % (tot["n"], orph.get("206", 0) + orph.get("207", 0),
+            frac.get("206", 0), frac.get("207", 0))]
     o.append('<h3>Par actif</h3>')
     o.append(table_html(rangs(cumule(paires, lambda k, a, b: k[0])), "actif"))
     o.append('<h3>Par horizon</h3>')
@@ -370,8 +410,8 @@ def main():
         print("page.")
         return 2
 
-    paires, orph = apparie(T)
-    txt = rendu(paires, orph, lus, casse, depuis)
+    paires, orph, frac = apparie(T)
+    txt = rendu(paires, orph, frac, lus, casse, depuis)
     if not a.html_seul:
         print(txt)
 
@@ -381,7 +421,7 @@ def main():
     h = os.path.join(a.sortie, "papier_tf_ab.html")
     io.open(t, "w", encoding="utf-8", newline="").write(txt + "\n")
     io.open(h, "w", encoding="utf-8", newline="").write(
-        page_html(paires, orph, lus, casse, depuis, txt))
+        page_html(paires, orph, frac, lus, casse, depuis, txt))
     print("")
     print("  ecrit : %s" % t)
     print("  ecrit : %s" % h)
