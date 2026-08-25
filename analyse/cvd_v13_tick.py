@@ -413,6 +413,42 @@ def main():
                 "%02d-%02ds %3d (%2.0f%%)"
                 % (i * 15, i * 15 + 14, c, 100.0 * c / n)
                 for i, c in enumerate(q))))
+        # -- LA QUESTION QUI PRIME : le flux, ou juste l horloge ?
+        # Les refusees sont massivement en debut de minute. Si les
+        # entrees precoces perdaient et les tardives gagnaient, une
+        # simple regle d horloge -- ne pas entrer avant la 30e seconde
+        # -- capterait l essentiel du gain, et le CVD n ajouterait rien.
+        # On compare donc les deux filtres SUR LES MEMES entrees.
+        print("")
+        print("-" * 74)
+        print("LE FLUX, OU JUSTE L HORLOGE ?")
+        print("-" * 74)
+        qn = [base.tas() for _ in range(4)]
+        for x in mesures:
+            base.ajoute(qn[min(3, int(x["s"]) // 15)], x["pnl"])
+        print("  PnL par quart de minute, TOUTES entrees, sans aucun filtre :")
+        for i, t in enumerate(qn):
+            print("     %02d-%02ds  n %3d   PnL %+9.2f   %+6.2f / trade"
+                  % (i * 15, i * 15 + 14, t["n"], t["pnl"],
+                     t["pnl"] / t["n"] if t["n"] else 0.0))
+        for seuil in (15, 30, 45):
+            hp, hr = base.tas(), base.tas()
+            for x in mesures:
+                base.ajoute(hp if x["s"] >= seuil else hr, x["pnl"])
+            print("")
+            print("  HORLOGE SEULE, entrer a partir de la %de seconde :"
+                  % seuil)
+            print("     gardees %3d  PnL %+9.2f  %+6.2f/tr    refusees %3d"
+                  "  PnL %+9.2f" % (hp["n"], hp["pnl"],
+                                    hp["pnl"] / hp["n"] if hp["n"] else 0.0,
+                                    hr["n"], hr["pnl"]))
+            print("     la regle d horloge rapporterait %+.2f" % (-hr["pnl"]))
+        print("")
+        print("  Si l horloge seule rapporte autant que le CVD, le CVD")
+        print("  n apporte rien qu une montre ne donne. Si elle rapporte")
+        print("  nettement moins, le flux porte quelque chose que le temps")
+        print("  ecoule n explique pas.")
+
         print("")
         print("  Si les autorisees se tassaient dans le dernier quart, la")
         print("  regle mesurerait l horloge : une bougie en cours a plus de")
