@@ -58,6 +58,14 @@ plus bas.
 - **Un panneau = une route + un bouton.** L'un sans l'autre vaut zéro.
 - **Sur une interface qui existe, on recopie ; on ne conçoit pas.**
   Extraire la convention du fichier, la rendre à l'identique.
+- **Un prompt = UNE commande.** Ce que l'utilisateur colle dans un
+  terminal doit être une instruction et une seule. Enchaîner, c'est
+  perdre la ligne qui a échoué au milieu de celles qui ont réussi —
+  et corriger ensuite coûte plus cher que le temps qu'on croyait
+  gagner. Aller vite, c'est ne pas avoir à revenir en arrière.
+- **Une ancre ne suppose jamais son voisinage.** Elle se pose sur le
+  motif qu'elle vise, pas sur la ligne qui le précède : un fichier
+  déployé diverge toujours un peu de la copie de référence.
 - **Une limite d'affichage n'est pas un résultat.** Pour prouver une
   absence : compter d'abord, afficher ensuite. Jamais `-First N`.
 - **Un verdict se lit dans la colonne qu'il commente.** S'il est
@@ -1939,3 +1947,41 @@ pas le mien. Supprimer pour désambiguïser a produit l'ambiguïté.
 **Ce que ça a coûté.** Un aller-retour, sur une correction qui, elle,
 était justement destinée à éviter que l'utilisateur regarde 40 bougies
 dont une partie venait de séances fantômes.
+
+
+---
+
+## 25/08/2026 — six commandes dans un seul prompt
+
+**Ce que j'ai fait.** L'utilisateur m'avait dit, et répété, un seul
+ordre par prompt. Il m'a ensuite demandé d'aller vite : « fais le reste
+en un prompt pour gagner du temps ». J'ai livré six blocs numérotés à
+coller à la suite — arrêt des ponts, copie depuis le Drive, simulation,
+application, contrôle des orphelines, panneau.
+
+**Le raisonnement faux.** J'ai lu « en un prompt » comme « toutes les
+commandes dans un prompt ». Il demandait un seul aller-retour de
+RÉFLEXION — ne pas redécouper l'analyse en six échanges — pas un seul
+aller-retour d'EXÉCUTION. Les deux consignes ne se contredisaient pas :
+la rapidité qu'il voulait était celle du raisonnement, pas celle de la
+frappe.
+
+**La conséquence réelle.** La copie depuis le Drive a échoué — le
+chemin était `G:\Mon Drive`, pas `G:\My Drive`, le client est en
+français — mais les commandes suivantes sont parties quand même. Le
+correctif a été lancé sans ses fichiers, le pont arrêté puis relancé
+deux fois, le contrôle des orphelines a lu un `compte.json` inexistant
+et affiché « 0 ouverte(s) » — un zéro qui ressemblait à une mesure et
+n'en était pas. Trois échanges perdus à démêler quelle ligne avait
+réellement échoué.
+
+> **Un prompt = UNE commande.** Toujours. Quand l'utilisateur demande
+> d'aller vite, c'est l'analyse qu'on condense, jamais l'exécution.
+> Une commande qui échoue doit arrêter la séquence ; elle ne le peut
+> pas si la séquence est déjà dans le presse-papier.
+
+**Deux choses apprises le même jour.** Le Drive local s'appelle
+`G:\Mon Drive\ScalpEA` sur cette machine. Et le `pont_miroirs.py`
+déployé porte une ligne `plainte = 0.0` absente de ma copie : une ancre
+qui exigeait `dernier_battement = time.time()` et `while True:` collés
+a refusé de s'appliquer. Réancré sur le début de boucle lui-même.

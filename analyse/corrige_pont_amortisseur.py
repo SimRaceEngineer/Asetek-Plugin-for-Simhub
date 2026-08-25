@@ -309,12 +309,19 @@ R.append(('''                        if fermer(_tk(lien), a["sym"], a["sens"], N
                             ecrire_atomique(LIENS, liens)''', 1))
 
 # -- l instantane dans la boucle
-R.append(('''        dernier_battement = time.time()
-        while True:''',
-          '''        dernier_battement = time.time()
-        dernier_instantane = 0.0
+# L ancre se pose sur le DEBUT DE BOUCLE, pas sur la ligne qui la
+# precede. Le 25/08 ce motif exigeait `dernier_battement = time.time()`
+# et `while True:` colles ; le fichier deploye porte une ligne
+# `plainte = 0.0` entre les deux, et le correctif a refuse. Une ancre
+# qui suppose son voisinage est une ancre qui casse.
+R.append(('''        while True:
+            time.sleep(PERIODE)
+            paquet = lire_json(INSTANTANE)''',
+          '''        dernier_instantane = 0.0
         ecrire_compte()
-        while True:''', 1))
+        while True:
+            time.sleep(PERIODE)
+            paquet = lire_json(INSTANTANE)''', 1))
 
 R.append(('''            precedent = courant
             if time.time() - dernier_battement >= 300:''',

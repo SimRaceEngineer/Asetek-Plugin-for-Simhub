@@ -230,6 +230,28 @@ pas se fusionner avec la suivante.
 
 ---
 
+## Comment on donne une commande ici
+
+**Un prompt = UNE commande.** Un seul bloc, une seule instruction, à
+coller telle quelle. Jamais deux, jamais six numérotées à la suite.
+
+La raison n'est pas la propreté. Une commande qui échoue doit ARRÊTER
+la séquence, et elle ne le peut pas si la séquence entière est déjà
+dans le presse-papier de l'utilisateur. Le 25/08, une copie depuis le
+Drive a échoué sur un chemin faux ; les cinq commandes suivantes sont
+parties quand même, dont un contrôle qui a lu un fichier inexistant et
+affiché un zéro qui ressemblait à une mesure.
+
+Et quand l'utilisateur demande d'aller vite, c'est l'ANALYSE qu'on
+condense — ne pas étaler un raisonnement sur six échanges — jamais
+l'exécution. Aller vite, c'est ne pas avoir à revenir en arrière.
+
+Le bloc clôturé est réservé à ce qui doit être tapé. Tout ce qui
+illustre du code se cite en indentation simple : le 24/08 un extrait
+Python présenté dans un bloc a été collé dans PowerShell.
+
+---
+
 ## Comment on modifie un fichier ici
 
 Jamais d'édition directe d'un fichier de production. Un **script de
