@@ -275,6 +275,60 @@ def prix(sym, achat):
     return t.ask if achat else t.bid
 
 
+# Le mode de remplissage ne s invente pas. Le 25/08 a 14:00, chaque
+# ordre est reparti en rc=10030 "Unsupported filling mode" parce que
+# IOC etait code en dur : ce courtier veut autre chose sur ces symboles.
+# On lit donc le masque du symbole, on essaie dans l ordre, et on retient
+# celui qui a marche.
+_REMPLISSAGE = {}
+NOM_REMPLISSAGE = {0: "FOK", 1: "IOC", 2: "RETURN"}
+
+
+def modes_possibles(sym):
+    try:
+        masque = int(getattr(mt5.symbol_info(sym), "filling_mode", 0) or 0)
+    except Exception:
+        masque = 0
+    ordre = []
+    if masque & 1:                       # SYMBOL_FILLING_FOK
+        ordre.append(getattr(mt5, "ORDER_FILLING_FOK", 0))
+    if masque & 2:                       # SYMBOL_FILLING_IOC
+        ordre.append(getattr(mt5, "ORDER_FILLING_IOC", 1))
+    for m in (getattr(mt5, "ORDER_FILLING_FOK", 0),
+              getattr(mt5, "ORDER_FILLING_IOC", 1),
+              getattr(mt5, "ORDER_FILLING_RETURN", 2)):
+        if m not in ordre:
+            ordre.append(m)
+    return ordre
+
+
+def envoyer(req, sym):
+    """order_send, en essayant les modes de remplissage jusqu au bon.
+
+    Un refus autre que 10030 est un vrai refus : on le rend tel quel
+    plutot que de reessayer, sinon on enverrait quatre fois un ordre
+    refuse pour une raison qui n a rien a voir avec le remplissage.
+    """
+    connu = _REMPLISSAGE.get(sym)
+    ordre = ([connu] if connu is not None else []) \
+        + [m for m in modes_possibles(sym) if m != connu]
+    dernier = None
+    for m in ordre:
+        req["type_filling"] = m
+        dernier = mt5.order_send(req)
+        if dernier is None:
+            continue
+        if dernier.retcode == mt5.TRADE_RETCODE_DONE:
+            if _REMPLISSAGE.get(sym) != m:
+                _REMPLISSAGE[sym] = m
+                dire("envoyeur", "  remplissage retenu pour %s : %s"
+                     % (sym, NOM_REMPLISSAGE.get(m, m)))
+            return dernier
+        if dernier.retcode != 10030:
+            return dernier
+    return dernier
+
+
 def ouvrir(src, reel):
     achat = (src["sens"] == 0)
     p = prix(src["sym"], achat)
@@ -288,14 +342,13 @@ def ouvrir(src, reel):
         "price": p, "sl": src["sl"], "tp": src["tp"],
         "magic": src["magic"], "comment": "PONT%s" % src["ticket"],
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
     }
     if not reel:
         dire("envoyeur", "  [SIMULATION] ouvrir %s %s %.2f @ %.2f sl=%.2f"
              % (src["sym"], "BUY" if achat else "SELL", src["volume"], p,
                 src["sl"]))
         return None
-    r = mt5.order_send(req)
+    r = envoyer(req, src["sym"])
     if r is None or r.retcode != mt5.TRADE_RETCODE_DONE:
         dire("envoyeur", "  OUVERTURE REFUSEE rc=%s %s"
              % (getattr(r, "retcode", "?"), getattr(r, "comment", mt5.last_error())))
@@ -322,12 +375,11 @@ def fermer(ticket, sym, sens_src, volume, reel):
         "type": mt5.ORDER_TYPE_BUY if achat else mt5.ORDER_TYPE_SELL,
         "position": int(ticket), "price": p,
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
     }
     if not reel:
         dire("envoyeur", "  [SIMULATION] fermer %.2f sur %s" % (volume, ticket))
         return True
-    r = mt5.order_send(req)
+    r = envoyer(req, sym)
     if r is None or r.retcode != mt5.TRADE_RETCODE_DONE:
         dire("envoyeur", "  FERMETURE REFUSEE rc=%s %s"
              % (getattr(r, "retcode", "?"), getattr(r, "comment", mt5.last_error())))
