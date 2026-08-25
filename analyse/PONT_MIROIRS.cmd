@@ -55,7 +55,7 @@ if defined MODE (
 )
 
 echo   1/2  lecteur   -- terminal du moteur, LECTURE SEULE
-start "PONT lecteur" cmd /k "cd /d "%PROJ%" && python pont_miroirs.py --lecteur"
+start "PONT lecteur" /MIN cmd /k "cd /d "%PROJ%" && python pont_miroirs.py --lecteur"
 
 REM Laisser au lecteur le temps de joindre son terminal. L envoyeur
 REM sait attendre le premier instantane, ce delai n est qu une
@@ -63,11 +63,13 @@ REM politesse pour que les deux fenetres s ouvrent dans l ordre.
 timeout /t 3 /nobreak >nul
 
 echo   2/2  envoyeur  -- compte dedie %COMPTE%
-start "PONT envoyeur" cmd /k "cd /d "%PROJ%" && python pont_miroirs.py --envoyeur --compte %COMPTE% %MODE%"
+start "PONT envoyeur" /MIN cmd /k "cd /d "%PROJ%" && python pont_miroirs.py --envoyeur --compte %COMPTE% %MODE%"
 
 echo.
-echo   Deux fenetres ouvertes. Les laisser ouvertes.
-echo   Pour arreter le pont : fermer les deux, ou Ctrl+C dans chacune.
+echo   Deux fenetres MINIMISEES dans la barre des taches.
+echo   Les laisser ouvertes. Elles restent lisibles et arretables.
+echo   Journal complet : logs\pont_miroirs.log
+echo   Pour arreter : fermer les deux, ou Ctrl+C dans chacune.
 echo.
 timeout /t 6 /nobreak >nul
 endlocal

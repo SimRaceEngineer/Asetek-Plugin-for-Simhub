@@ -92,14 +92,40 @@ except ImportError:
 
 
 def dire(role, message):
+    """Ecrit dans la console SI elle existe, et toujours dans le journal.
+
+    Lance sans console -- pythonw, une tache planifiee, un DETACHED
+    PROCESS -- `sys.stdout` peut etre None ou pointer un descripteur
+    invalide. Un print qui leve tuerait la boucle sans laisser de trace :
+    c est ce qui a tue le miroir le 24/08 a 18:08. Le journal, lui, ne
+    depend d aucune console.
+    """
     ligne = "%s  [%s] %s" % (
         datetime.now().strftime("%H:%M:%S.%f")[:-3], role, message)
-    print(ligne)
-    sys.stdout.flush()
+    try:
+        if sys.stdout is not None:
+            sys.stdout.write(ligne + "\n")
+            sys.stdout.flush()
+    except Exception:
+        pass
     try:
         os.makedirs(os.path.dirname(JOURNAL), exist_ok=True)
         with io.open(JOURNAL, "a", encoding="utf-8") as f:
             f.write("%s %s\n" % (datetime.now().strftime("%Y-%m-%d"), ligne))
+    except Exception:
+        pass
+
+
+def noter_pid(role):
+    """Depose le PID pour qu on puisse arreter CE processus-la, et lui
+    seul. On n arrete jamais les python par leur nom."""
+    try:
+        chemin = os.path.join(os.path.dirname(JOURNAL), "pont_miroirs_pids.txt")
+        os.makedirs(os.path.dirname(chemin), exist_ok=True)
+        with io.open(chemin, "a", encoding="utf-8") as f:
+            f.write("%s  %-9s pid %d\n"
+                    % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                       role, os.getpid()))
     except Exception:
         pass
 
@@ -178,6 +204,7 @@ def lecteur(args):
         if ai is None:
             dire("lecteur", "compte illisible.")
             return 1
+        noter_pid("lecteur")
         dire("lecteur", "compte %s  %s  -- LECTURE SEULE, aucun ordre"
              % (masque(ai.login), ai.server))
         dire("lecteur", "plages copiees : %s"
@@ -344,6 +371,7 @@ def envoyeur(args):
             dire("envoyeur", "AutoTrading eteint : chaque ordre serait refuse")
             dire("envoyeur", "en rc=10027. Cliquer sur 'Trading Algo'.")
             return 1
+        noter_pid("envoyeur")
         dire("envoyeur", "compte %s  %s  solde %.2f %s  -- %s"
              % (masque(ai.login), ai.server, ai.balance, ai.currency,
                 "REEL" if args.reel else "SIMULATION"))
