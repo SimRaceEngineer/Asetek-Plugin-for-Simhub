@@ -180,6 +180,9 @@ def main():
     ap.add_argument("--terminal", default=None)
     ap.add_argument("--tickets", default=None)
     ap.add_argument("--pas", type=float, default=1.0)
+    ap.add_argument("--balayage", default=None,
+                    help="pas a essayer, separes par des virgules : "
+                         "0,1,2,5,10. Les ticks ne sont relus qu une fois.")
     ap.add_argument("--controle", action="store_true",
                     help="verifie la reconstruction et s arrete la")
     ap.add_argument("--tolerance", type=float, default=0.02,
@@ -314,10 +317,11 @@ def main():
             return 0
 
         # ------------------------------------------------- la mesure
+        # On RELIT LES TICKS UNE SEULE FOIS et on garde les grandeurs
+        # brutes. Le seuil ne s applique qu ensuite : balayer dix pas ne
+        # coute alors rien de plus que d en mesurer un.
         k = 2.0 / (EMA_N + 1.0)
-        brut = (base.tas(), base.tas())
-        lisse = (base.tas(), base.tas())
-        par_magic, sans, ecoulees = {}, base.tas(), []
+        mesures, sans = [], base.tas()
 
         for t in tickets:
             s = sym.get(t["actif"])
@@ -342,38 +346,71 @@ def main():
             if o is None:
                 base.ajoute(sans, t["pnl"])
                 continue
-            d_partiel = ankit(*o)
-            ema_courant = d_partiel * k + prec[1] * (1.0 - k)
-            ecoulees.append(ts_serveur - m)
-
-            ok = base.passe(d_partiel, prec[0], t["sens"], a.pas)
-            okl = base.passe(ema_courant, prec[1], t["sens"], a.pas)
-            if ok is None:
+            if t["sens"] not in ("BUY", "SELL"):
                 base.ajoute(sans, t["pnl"])
                 continue
-            base.ajoute(brut[0 if ok else 1], t["pnl"])
-            base.ajoute(lisse[0 if okl else 1], t["pnl"])
-            e = par_magic.setdefault(t["magic"],
-                                     {"p": base.tas(), "r": base.tas()})
-            base.ajoute(e["p" if ok else "r"], t["pnl"])
+            d_partiel = ankit(*o)
+            mesures.append({"d": d_partiel, "dp": prec[0],
+                            "e": d_partiel * k + prec[1] * (1.0 - k),
+                            "ep": prec[1], "sens": t["sens"],
+                            "pnl": t["pnl"], "magic": t["magic"],
+                            "s": ts_serveur - m})
 
-        base.verdict("PORTION ECOULEE contre bougie close -- delta BRUT",
-                     *brut,
-                     note="Le delta que l indicateur AFFICHAIT a la seconde"
-                          " de l entree.")
-        base.verdict("PORTION ECOULEE contre bougie close -- LISSE EMA%d"
-                     % EMA_N, *lisse)
-
-        if ecoulees:
-            q = [0, 0, 0, 0]
-            for x in ecoulees:
-                q[min(3, int(x) // 15)] += 1
+        if not mesures:
             print("")
-            print("  secondes ecoulees dans la minute a l entree :")
-            print("     " + "   ".join(
+            print("Aucune entree mesurable.")
+            return 1
+
+        pas_liste = [a.pas]
+        if a.balayage:
+            try:
+                pas_liste = [float(x) for x in a.balayage.split(",")]
+            except ValueError:
+                print("--balayage : liste de nombres separes par des"
+                      " virgules.")
+                return 1
+
+        for pas in pas_liste:
+            b = (base.tas(), base.tas())
+            li = (base.tas(), base.tas())
+            for x in mesures:
+                ok = base.passe(x["d"], x["dp"], x["sens"], pas)
+                okl = base.passe(x["e"], x["ep"], x["sens"], pas)
+                base.ajoute(b[0 if ok else 1], x["pnl"])
+                base.ajoute(li[0 if okl else 1], x["pnl"])
+            base.verdict("PAS %.1f -- PORTION ECOULEE, delta BRUT" % pas, *b,
+                         note="Le delta que l indicateur AFFICHAIT a la"
+                              " seconde de l entree.")
+            base.verdict("PAS %.1f -- PORTION ECOULEE, LISSE EMA%d"
+                         % (pas, EMA_N), *li)
+
+        # -- l artefact d horloge, separe pris / refuses
+        qp, qr = [0, 0, 0, 0], [0, 0, 0, 0]
+        for x in mesures:
+            ok = base.passe(x["d"], x["dp"], x["sens"], a.pas)
+            (qp if ok else qr)[min(3, int(x["s"]) // 15)] += 1
+        print("")
+        print("-" * 74)
+        print("L ARTEFACT D HORLOGE -- au pas %.1f, delta brut" % a.pas)
+        print("-" * 74)
+        for nom, q in (("autorisees", qp), ("refusees", qr)):
+            n = float(sum(q)) or 1.0
+            print("  %-11s %s" % (nom, "   ".join(
                 "%02d-%02ds %3d (%2.0f%%)"
-                % (i * 15, i * 15 + 14, c, 100.0 * c / len(ecoulees))
-                for i, c in enumerate(q)))
+                % (i * 15, i * 15 + 14, c, 100.0 * c / n)
+                for i, c in enumerate(q))))
+        print("")
+        print("  Si les autorisees se tassaient dans le dernier quart, la")
+        print("  regle mesurerait l horloge : une bougie en cours a plus de")
+        print("  temps pour depasser la precedente a la 55e seconde qu a la")
+        print("  5e. Deux repartitions semblables ecartent ce soupcon.")
+
+        par_magic = {}
+        for x in mesures:
+            ok = base.passe(x["d"], x["dp"], x["sens"], a.pas)
+            e = par_magic.setdefault(x["magic"],
+                                     {"p": base.tas(), "r": base.tas()})
+            base.ajoute(e["p" if ok else "r"], x["pnl"])
             print("  Une entree tres tot dans la minute a peu de ticks")
             print("  derriere elle : son delta partiel est bruite, et c est")
             print("  une vraie limite de la regle, pas un defaut de mesure.")
