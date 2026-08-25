@@ -231,17 +231,13 @@ def f_rr(v):
 
 
 LARGE = 118
-ENT = ("%-24s %-5s %5s %5s %6s %6s %6s %9s %8s %7s"
-       % ("", "bras", "n", "taux", "borne", "RR eq", "PF", "PnL",
-          "esp", "Sharpe"))
 
 
 def bloc_texte(titre, lignes, lib):
     L = ["", "=" * LARGE, titre, "=" * LARGE, "-" * LARGE,
-         ENT.replace("%-24s" % "", lib.ljust(24), 1)
-         if False else ("%-24s %-5s %5s %5s %6s %6s %6s %9s %8s %7s"
-                        % (lib[:24], "bras", "n", "taux", "borne", "RR eq",
-                           "PF", "PnL", "esp", "Sharpe")),
+         "%-24s %-5s %5s %5s %6s %6s %6s %9s %8s %7s"
+         % (lib[:24], "bras", "n", "taux", "borne", "RR eq", "PF", "PnL",
+            "esp", "Sharpe"),
          "-" * LARGE]
     for nom, c in lignes:
         sa, sb = stats(c["a"]), stats(c["b"])
