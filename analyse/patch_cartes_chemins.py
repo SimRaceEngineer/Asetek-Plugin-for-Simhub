@@ -10,27 +10,37 @@ Le 25/08, les trois routes du 8095 repondaient 200 :
     /cartes                    0,0 s         740 o
     /carte?f=cartes_live.html  0,2 s         740 o
 
-740 octets, c est la page "Aucune carte dans cartes\", sans style et
+740 octets, c est la page "Aucune carte dans cartes", sans style et
 sans barre. Et `/carte?f=` rendait la MEME taille : il n avait pas
 trouve le fichier non plus et etait retombe sur l index.
 
 Une seule cause explique les trois symptomes. La route travaille en
-chemins RELATIFS -- `open("price_action.py")` pour le style et la
-barre, `listdir("cartes")` pour la liste. Le panneau ne tourne pas
-depuis le dossier de la stack, donc les trois echouent ensemble, et en
-silence puisque tout est sous try/except.
+chemins RELATIFS -- `open("price_action.py")` ligne 16585 pour le style
+et la barre, `_d = "cartes"` ligne 16629 pour la liste. Le panneau ne
+tourne pas depuis le dossier de la stack, donc les trois echouent
+ensemble, et en silence puisque tout est sous try/except.
 
 C est pour ca que "avant il donnait tout" : le jour ou il donnait tout,
 le repertoire courant etait le bon.
 
-LE CORRECTIF
-    Les chemins sont ancres sur le dossier de price_action.py lui-meme,
-    via __file__. Le repertoire courant n entre plus en jeu.
+LES ANCRES ONT ETE RELUES DANS LE FICHIER DEPLOYE
+    Une premiere version de ce patch a REFUSE de s appliquer : elle
+    cherchait `_css, _bar`, or la route a ete retouchee depuis sa pose
+    et c est desormais `_css, _bloc` -- elle prend le bloc hdr..tabs
+    entier au lieu des onglets un par un, "le 18/08 une barre recopiee
+    ligne par ligne a perdu son conteneur".
+
+    Le garde-fou a fait son travail. Les quatre ancres ci-dessous
+    viennent du fichier reel, pas de ce que le patch d origine avait
+    genere.
+
+LA RACINE EST POSEE AVANT LE try
+    Le dossier des cartes s en sert plus bas. Definie a l interieur du
+    try, elle manquerait des que la lecture du style echouerait -- et
+    on aurait remplace une panne silencieuse par une exception.
 
 ET LE BOUTON CARTES LIVE
     Une route sans bouton vaut zero -- c est ecrit dans mistakes.md.
-    Le panneau des papers rempli par le compte dedie prend donc sa
-    place a cote de CARTES, sur le meme modele, meme couleur.
 
 USAGE
 -----
@@ -50,31 +60,35 @@ CIBLE_DEFAUT = r"C:\SVPS\Scalp-EA-main\price_action.py"
 SUFFIXE_BAK = ".bak_chemins"
 MARQUEUR = "_racine_cartes"
 
-R = []
+A1 = '                _css, _bloc = "", ""'
+B1 = ("                # Ancre sur le dossier de CE fichier. En relatif,\n"
+      "                # la route dependait du repertoire courant du\n"
+      "                # panneau : le 25/08 elle rendait 740 octets, sans\n"
+      "                # style, sans barre, et sans trouver la carte\n"
+      "                # demandee. Posee AVANT le try : le dossier des\n"
+      "                # cartes s en sert plus bas.\n"
+      "                _racine_cartes = _o.path.dirname("
+      "_o.path.abspath(__file__))\n"
+      '                _css, _bloc = "", ""')
 
-# 1. le style et la barre, lus dans price_action.py lui-meme
-R.append(('''                _css, _bar = "", ""
-                try:
-                    _src = open("price_action.py", "r", encoding="utf-8",
-                                errors="ignore").read()''',
-          '''                # Ancre sur le dossier de CE fichier. En relatif, la
-                # route dependait du repertoire courant du panneau : le
-                # 25/08 elle rendait 740 octets sans style ni barre.
-                _racine_cartes = _o.path.dirname(_o.path.abspath(__file__))
-                _css, _bar = "", ""
-                try:
-                    _src = open(_o.path.join(_racine_cartes,
-                                             "price_action.py"), "r",
-                                encoding="utf-8",
-                                errors="ignore").read()''', 1))
+A2 = ('                    _src = open("price_action.py", "r", '
+      'encoding="utf-8",\n'
+      '                                errors="ignore").read()')
+B2 = ("                    _src = open(_o.path.join(_racine_cartes,\n"
+      '                                             "price_action.py"), "r",\n'
+      '                                encoding="utf-8",\n'
+      '                                errors="ignore").read()')
 
-# 2. le dossier des cartes
-R.append(('''                _d = "cartes"''',
-          '''                _d = _o.path.join(_racine_cartes, "cartes")''', 1))
+A3 = '                _d = "cartes"'
+B3 = '                _d = _o.path.join(_racine_cartes, "cartes")'
 
-# 3. le bouton, a cote de CARTES
-R.append(('''<div class="tab" onclick="window.open('/cartes','_blank')" style="color:#58a6ff;font-weight:bold;">CARTES</div>''',
-          '''<div class="tab" onclick="window.open('/cartes','_blank')" style="color:#58a6ff;font-weight:bold;">CARTES</div><div class="tab" onclick="window.open('/carte?f=cartes_live.html','_blank')" style="color:#58a6ff;font-weight:bold;">CARTES LIVE</div>''', 1))
+A4 = ("<div class=\"tab\" onclick=\"window.open('/cartes','_blank')\" "
+      "style=\"color:#58a6ff;font-weight:bold;\">CARTES</div>")
+B4 = (A4 + "<div class=\"tab\" onclick=\"window.open("
+      "'/carte?f=cartes_live.html','_blank')\" "
+      "style=\"color:#58a6ff;font-weight:bold;\">CARTES LIVE</div>")
+
+R = ((A1, B1, 1), (A2, B2, 1), (A3, B3, 1), (A4, B4, 1))
 
 
 def lire(chemin):
@@ -103,26 +117,26 @@ def main():
         print("Deja corrige : les chemins sont ancres.")
         return 0
 
-    manquants = []
+    mauvais = []
     for i, (vieux, _n, att) in enumerate(R, 1):
         c = s.count(vieux)
         if c != att:
-            manquants.append((i, att, c, vieux.strip().split("\n")[0][:58]))
-    if manquants:
+            mauvais.append((i, att, c, vieux.strip().split("\n")[0][:56]))
+    if mauvais:
         print("")
         print("REFUS : la route /cartes n a pas la forme attendue.")
-        for i, att, c, tete in manquants:
+        for i, att, c, tete in mauvais:
             print("   motif %d : attendu %d fois, trouve %d" % (i, att, c))
             print("      %s..." % tete)
         print("")
-        print("Elle a ete posee par patch_route_cartes.py ; si elle a ete")
-        print("retouchee depuis, me montrer les lignes. Je ne devine pas")
-        print("dans le fichier qui sert le 8095.")
+        print("Me montrer les lignes plutot que de me laisser deviner :")
+        print("c est le fichier qui sert le 8095.")
         return 1
     print("        les %d motifs sont la, aux bons comptes." % len(R))
     print("")
     print("a faire :")
-    print("   ~ style, barre et dossier des cartes ancres sur __file__")
+    print("   + _racine_cartes, ancre sur __file__, posee avant le try")
+    print("   ~ price_action.py et le dossier cartes en chemin absolu")
     print("   + bouton CARTES LIVE a cote de CARTES")
 
     if not a.appliquer:
