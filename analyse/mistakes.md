@@ -1985,3 +1985,78 @@ réellement échoué.
 déployé porte une ligne `plainte = 0.0` absente de ma copie : une ancre
 qui exigeait `dernier_battement = time.time()` et `while True:` collés
 a refusé de s'appliquer. Réancré sur le début de boucle lui-même.
+
+
+---
+
+## 26/08/2026 — j'ai vérifié des présences, pas des productions
+
+**Ce que j'ai fait.** À 13:36 l'utilisateur me signale que le miroir ne
+tourne pas. J'ai listé les processus, vu les huit présents dont
+`miroir_papers.py --armer`, vu que `pont_miroirs.log` avait été écrit
+quatre minutes plus tôt, et conclu : « il n'y a rien à relancer avant
+l'ouverture ». Deux heures plus tard, il n'y avait toujours pas un seul
+ordre miroir, et il n'y en avait pas eu depuis 20:31 la veille.
+
+**Le raisonnement faux.** J'ai contrôlé que ça TOURNAIT au lieu de
+contrôler que ça PRODUISAIT. Le pont écrivait
+`battement : 0 position(s)` toutes les cinq minutes depuis minuit — le
+battement de son propre échec, que j'ai lu comme un signe de vie parce
+que le fichier grossissait. Le chiffre qui comptait était DANS le
+journal, pas dans sa date. Une ligne lue au lieu d'un `LastWriteTime`
+regardé, et la panne sautait aux yeux à 13:36.
+
+**La conséquence réelle.** Tout ce qui a été pris entre 20:31 la veille
+et 15:01 le lendemain n'a pas été miroité, dont 23 positions encore
+ouvertes au moment de la réparation — définitivement perdues, le miroir
+refusant à juste titre de copier une entrée dont le prix est passé.
+
+> **Un processus vivant ne prouve rien. Un journal qui grossit ne
+> prouve rien.** La seule preuve est le compteur de production que le
+> module écrit lui-même : `0 miroir(s)`, `0 position(s)`. Quand on me
+> signale qu'un flux ne produit pas, je lis ce que le journal DIT,
+> jamais quand il a été écrit.
+
+**Trois pannes empilées, toutes du même genre.**
+
+`miroir_papers.py` appelait `mt5.initialize()` **sans chemin** : MT5 lui
+donnait le terminal par défaut, qui était le terminal DÉDIÉ. Il y
+cherchait les positions parentes du compte principal, ne les trouvait
+jamais, et écrivait `position deja fermee, rien a miroiter` — un message
+qui décrit une situation parfaitement normale. `positions_get(ticket=)`
+renvoie une liste vide dans DEUX cas indiscernables : la position est
+réellement fermée, ou on interroge le mauvais compte. Le défaut dormait
+dans le fichier depuis toujours ; il n'a mordu que le jour où le
+terminal par défaut a changé.
+
+Le pont tournait en **simulation** : le bloc que j'avais ajouté au `.bat`
+la veille appelle `PONT_MIROIRS.cmd` sans argument, et ce fichier dit
+lui-même en tête que sans argument c'est la simulation. J'avais mis
+`--reel` dans la branche de secours et pas dans le chemin principal —
+et c'est le chemin principal qui s'exécute. Le pont a donc journalisé
+`[SIMULATION] ouvrir SPX500 SELL 1.28` pendant dix-neuf heures, avec un
+compte à zéro en face.
+
+Et l'utilisateur lisait `cartes\panel_papers_live.txt`, figé au 25/08
+22:30, pendant que `panels\panel_papers_live.txt` était écrit toutes les
+cinq minutes. **Deux fichiers, même nom, deux dossiers, dix-sept heures
+d'écart.**
+
+> Un fichier périmé qui porte le nom d'un fichier vivant est un piège
+> à retardement. Quand une sortie a l'air ancienne, la première chose
+> à lire est son horodatage de génération, la seconde est le chemin
+> complet du fichier ouvert.
+
+**Ce que j'ai mal fait dans la conduite, aussi.** J'ai donné la commande
+d'exécution d'un script AVANT de l'avoir déposé sur le Drive — elle a
+échoué sur un `copy` d'un fichier inexistant. J'ai présenté une ligne de
+syntaxe BATCH dans un bloc que l'utilisateur a collé dans PowerShell,
+où `start ... cmd /c` n'existe pas. Et j'ai lu `Termina-LOCALSTACKl`
+comme `LOCALSTACK1` sur une capture — un `l` minuscule pris pour un
+chiffre 1 ; seul le garde-fou « si le chemin n'existe pas, n'écris
+rien » a évité que le patch parte sur un terminal fantôme.
+
+> Un chemin lu sur une capture d'écran n'est pas un chemin vérifié.
+> Tout patch qui vise un exécutable doit d'abord tester son existence
+> et refuser d'écrire sinon — surtout ici, où `initialize(path=...)`
+> sur un chemin faux peut LANCER un terminal.
