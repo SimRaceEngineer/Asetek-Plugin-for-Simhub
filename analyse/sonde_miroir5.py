@@ -126,12 +126,18 @@ def main():
     tout &= dit("MIROIR5 = True" in s, "MIROIR5 = True")
     tout &= dit("def magic_cvd(" in s, "magic_cvd()")
     tout &= dit("def cvd_autorise(" in s, "cvd_autorise()")
-    m = re.search(r"^CVD_PAS\s*=\s*([0-9.]+)", s, re.M)
-    dit(m is not None, "CVD_PAS",
-        ("pas de %s point(s) de delta" % m.group(1)) if m else "absent")
-    m = re.search(r"^MAX_MIROIRS\s*=\s*(\d+)", s, re.M)
-    if m:
-        v = int(m.group(1))
+    # Deux expressions regulieres, DEUX noms. La premiere version les
+    # appelait toutes les deux "m" : au moment de l essai a blanc, m ne
+    # portait plus CVD_PAS mais MAX_MIROIRS, et le filtre etait teste
+    # avec un pas de 90 points au lieu de 1. Les trois actifs
+    # ressortaient "bloque" -- un resultat faux et alarmant.
+    m_pas = re.search(r"^CVD_PAS\s*=\s*([0-9.]+)", s, re.M)
+    dit(m_pas is not None, "CVD_PAS",
+        ("pas de %s point(s) de delta" % m_pas.group(1)) if m_pas
+        else "absent")
+    m_max = re.search(r"^MAX_MIROIRS\s*=\s*(\d+)", s, re.M)
+    if m_max:
+        v = int(m_max.group(1))
         tout &= dit(v >= 90, "MAX_MIROIRS = %d" % v,
                     "compte des BRANCHES ; sous 90 la 5 saute les jours"
                     " charges" if v < 90 else "trois branches par parent")
@@ -198,7 +204,7 @@ def main():
             if not mt5.initialize():
                 dit(False, "initialize", str(mt5.last_error()))
             else:
-                pas = float(m.group(1)) if m else 1.0
+                pas = float(m_pas.group(1)) if m_pas else 1.0
                 for sym in ("US30", "US500", "US100", "NAS100", "SPX500"):
                     r = mt5.copy_rates_from_pos(sym, mt5.TIMEFRAME_M1, 0, 2)
                     if r is None or len(r) < 2:
