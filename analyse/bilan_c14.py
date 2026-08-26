@@ -3,8 +3,8 @@
 r"""bilan_c14.py -- ce que le veto C14 a coute, ou rapporte, en euros
 
   python bilan_c14.py --jours 5
+  python bilan_c14.py --jours 5 --diag
   python bilan_c14.py --jour 2026-08-25
-  python bilan_c14.py --jours 21 --actif US100
 
 LA QUESTION
 -----------
@@ -37,6 +37,15 @@ economies et jamais les sorties prematurees. Ce matin cette confusion
 m a fait annoncer +7 750 EUR sur un trail la ou le chemin reel disait
 -7 408 : le signe lui-meme etait faux. On ne recommence pas.
 
+--diag
+------
+Premier essai : 1 132 tickets de blocage, zero retrouve dans
+l historique. Plutot que de deviner pourquoi, --diag montre un
+enregistrement brut de blocks.jsonl avec tous ses champs, les
+identifiants des deux cotes, leurs bornes, et la fenetre de temps
+reellement couverte par les deals. La panne se lit alors au lieu de
+se supposer.
+
 CE QU ELLE NE MODELISE PAS, ET IL FAUT LE SAVOIR
 ------------------------------------------------
   - le spread : une sortie au stop se fait au bid pour un achat, on
@@ -59,7 +68,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 RACINE_DEFAUT = r"C:\SVPS\Scalp-EA-main"
 SOUS_DOSSIER = os.path.join("docs", "buddha_clause_gate")
@@ -72,6 +81,11 @@ _dec_ok = [None]        # decalage de requete retenu, mesure une fois
 
 
 # ------------------------------------------------------------------ outils
+
+def dt(ts):
+    """Un epoch -> datetime naif UTC, sans l avertissement de depreciation."""
+    return datetime.fromtimestamp(ts, timezone.utc).replace(tzinfo=None)
+
 
 def titre(t):
     print("")
@@ -166,6 +180,23 @@ def lit_blocs(racine, jours, actif=None):
     return par_tk, nb, sans_ts, kts
 
 
+def premier_brut(racine, jours):
+    """Le premier enregistrement C14 tel qu il est ecrit, sans interpretation."""
+    for j in jours:
+        c = os.path.join(racine, SOUS_DOSSIER, j, "blocks.jsonl")
+        if not os.path.exists(c):
+            continue
+        with io.open(c, encoding="utf-8", errors="replace") as f:
+            for ligne in f:
+                try:
+                    r = json.loads(ligne.strip())
+                except Exception:
+                    continue
+                if "C14" in str(r.get("blocked_by", "")):
+                    return r
+    return None
+
+
 def suite_monotone(niveaux, sens):
     """Les niveaux dans l ordre du temps, rendus monotones : le cliquet.
 
@@ -194,8 +225,8 @@ def suite_monotone(niveaux, sens):
 
 def deals_fenetre(mt5, t0, t1):
     """Tous les deals de la fenetre, regroupes par position. Un seul appel."""
-    d0 = datetime.utcfromtimestamp(t0)
-    d1 = datetime.utcfromtimestamp(t1)
+    d0 = dt(t0)
+    d1 = dt(t1)
     try:
         mt5.history_select(d0, d1)
     except Exception:
@@ -241,8 +272,8 @@ def barres(mt5, sym, t0, t1):
             continue
         try:
             r = mt5.copy_rates_range(sym, mt5.TIMEFRAME_M1,
-                                     datetime.utcfromtimestamp(t0 - 120 + dec),
-                                     datetime.utcfromtimestamp(t1 + 120 + dec))
+                                     dt(t0 - 120 + dec),
+                                     dt(t1 + 120 + dec))
         except Exception:
             continue
         if r is None or len(r) == 0:
@@ -308,6 +339,8 @@ def main():
     ap.add_argument("--jours", type=int, default=5)
     ap.add_argument("--jour", default=None, help="un jour precis AAAA-MM-JJ")
     ap.add_argument("--actif", default=None)
+    ap.add_argument("--diag", action="store_true",
+                    help="montrer les champs et les identifiants des deux cotes")
     a = ap.parse_args()
 
     dispo = jours_dispo(a.racine)
@@ -341,13 +374,42 @@ def main():
         print("mt5.initialize a echoue : %s" % (mt5.last_error(),))
         return 2
 
-    d0 = datetime.strptime(jours[0], "%Y-%m-%d") - timedelta(days=2)
+    d0 = datetime.strptime(jours[0], "%Y-%m-%d") - timedelta(days=7)
     t0 = time.mktime(d0.timetuple())
     t1 = time.time() + 86400
     print("")
     print("lecture de l historique des deals...")
     par_pos = deals_fenetre(mt5, t0, t1)
     print("positions trouvees dans l historique : %d" % len(par_pos))
+
+
+    if a.diag:
+        titre("DIAGNOSTIC -- pourquoi la jointure ne prend pas")
+        brut = premier_brut(a.racine, jours)
+        if brut:
+            print("un enregistrement de blocks.jsonl, tel qu il est ecrit :")
+            for k in sorted(brut):
+                print("    %-18s %r" % (k, brut[k]))
+        tb = sorted(par_tk)
+        th = sorted(par_pos)
+        print("")
+        print("tickets de blocage : %d   de %s a %s"
+              % (len(tb), tb[0] if tb else "-", tb[-1] if tb else "-"))
+        print("    " + ", ".join(str(x) for x in tb[:10]))
+        print("positions historique: %d   de %s a %s"
+              % (len(th), th[0] if th else "-", th[-1] if th else "-"))
+        print("    " + ", ".join(str(x) for x in th[:10]))
+        print("communs            : %d" % len(set(tb) & set(th)))
+        if par_pos:
+            ts = [int(d.time) for dl in par_pos.values() for d in dl]
+            print("deals du %s au %s"
+                  % (time.strftime("%Y-%m-%d %H:%M", time.localtime(min(ts))),
+                     time.strftime("%Y-%m-%d %H:%M", time.localtime(max(ts)))))
+            ex = par_pos[th[0]][0]
+            print("un deal : position_id=%s ticket=%s order=%s symbol=%s"
+                  % (ex.position_id, getattr(ex, "ticket", "?"),
+                     getattr(ex, "order", "?"), ex.symbol))
+        print("")
 
     res, ouvertes, introuvables, sans_bars, sans_euro = [], 0, 0, 0, 0
     for tk, e in sorted(par_tk.items()):
