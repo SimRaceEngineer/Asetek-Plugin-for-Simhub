@@ -87,6 +87,12 @@ def dt(ts):
     return datetime.fromtimestamp(ts, timezone.utc).replace(tzinfo=None)
 
 
+def masque(n):
+    """Un numero de compte ne s ecrit jamais en clair dans une sortie."""
+    s = str(n)
+    return (s[:2] + "**" + s[-2:]) if len(s) > 4 else "****"
+
+
 def titre(t):
     print("")
     print("=" * 74)
@@ -104,10 +110,12 @@ def epoch(v):
     s = str(v).strip()
     if not s:
         return None
-    try:
-        return float(s) if s.replace(".", "", 1).isdigit() else None
-    except Exception:
-        pass
+    # 26/08 : ce test rendait la boucle de formats INATTEIGNABLE. Il
+    # renvoyait None des que la chaine n etait pas un nombre, donc pour
+    # toute date. Un lecteur de dates qui ne lisait aucune date.
+    if s.replace(".", "", 1).isdigit():
+        x = float(s)
+        return x / 1000.0 if x > 1e11 else x
     for f in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S",
               "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S",
               "%Y/%m/%d %H:%M:%S", "%H:%M:%S"):
@@ -224,20 +232,37 @@ def suite_monotone(niveaux, sens):
 # ------------------------------------------------------------------ MT5
 
 def deals_fenetre(mt5, t0, t1):
-    """Tous les deals de la fenetre, regroupes par position. Un seul appel."""
-    d0 = dt(t0)
-    d1 = dt(t1)
-    try:
-        mt5.history_select(d0, d1)
-    except Exception:
-        pass
-    lot = mt5.history_deals_get(d0, d1)
-    if lot is None:
-        return {}
-    par_pos = {}
-    for d in lot:
-        par_pos.setdefault(int(d.position_id), []).append(d)
-    return par_pos
+    """({position: [deals]}, journal par jour).
+
+    Un seul appel sur douze jours ne ramenait qu une apres-midi -- le
+    terminal ne sert que ce qu il a en cache. On demande donc jour par
+    jour, et on rend le compte de chaque jour pour que la troncature se
+    voie au lieu de passer pour une absence de trades.
+
+    Une position ouverte un jour et fermee le lendemain a ses deux deals
+    dans deux tranches differentes : ils se rejoignent dans le meme
+    dictionnaire, l ordre n a pas d importance.
+    """
+    par_pos, journal = {}, []
+    j = t0
+    while j < t1:
+        k = min(j + 86400.0, t1)
+        try:
+            mt5.history_select(dt(j), dt(k))
+        except Exception:
+            pass
+        lot = mt5.history_deals_get(dt(j), dt(k))
+        n = 0 if lot is None else len(lot)
+        garde = 0
+        for d in (lot or []):
+            pid = int(d.position_id)
+            if pid == 0:
+                continue            # operation de balance : ni position ni symbole
+            par_pos.setdefault(pid, []).append(d)
+            garde += 1
+        journal.append((dt(j).strftime("%Y-%m-%d"), n, garde))
+        j = k
+    return par_pos, journal
 
 
 def resume_position(mt5, deals):
@@ -374,13 +399,27 @@ def main():
         print("mt5.initialize a echoue : %s" % (mt5.last_error(),))
         return 2
 
+    # A quel compte est-on attache ? Si ce n est pas celui qui a subi les
+    # blocages, aucune jointure ne peut aboutir, et c est la premiere
+    # chose a verifier avant d accuser les identifiants.
+    ai = mt5.account_info()
+    ti = mt5.terminal_info()
+    if ai is not None:
+        print("compte attache : %s sur %s"
+              % (masque(ai.login), getattr(ai, "server", "?")))
+    if ti is not None:
+        print("terminal       : %s" % getattr(ti, "path", "?"))
+
     d0 = datetime.strptime(jours[0], "%Y-%m-%d") - timedelta(days=7)
     t0 = time.mktime(d0.timetuple())
     t1 = time.time() + 86400
     print("")
     print("lecture de l historique des deals...")
-    par_pos = deals_fenetre(mt5, t0, t1)
+    par_pos, journal = deals_fenetre(mt5, t0, t1)
     print("positions trouvees dans l historique : %d" % len(par_pos))
+    vides = [j for j, n, g in journal if n == 0]
+    if vides:
+        print("  jours sans aucun deal : %s" % ", ".join(vides))
 
 
     if a.diag:
