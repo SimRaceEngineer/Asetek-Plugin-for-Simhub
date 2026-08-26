@@ -18,7 +18,7 @@ Deux explications, et elles n ont rien a voir :
                 faut vendre. C est une propriete du signal, elle
                 survivra au changement de regime.
 
-    DERIVE      le marche a baissé pendant ces douze jours. N IMPORTE
+    DERIVE      le marche a baisse pendant ces douze jours. N IMPORTE
                 QUELLE vente aurait gagne. Ce n est pas une propriete
                 du signal, c est une propriete d aout 2026, et elle
                 s inversera sans prevenir.
@@ -46,7 +46,7 @@ LA DECOMPOSITION, ET POURQUOI UN TEMOIN NE SUFFIT PAS
                marche descend suffit a le rendre positif.
     SELECTION  ce que le timing ajoute. Le papier vend-il PRECISEMENT
                quand le mouvement est plus negatif que d habitude ?
-               C est la seule compétence, et la seule chose qui
+               C est la seule competence, et la seule chose qui
                survivra au retournement du regime.
 
 LE TEST DE LA SELECTION
