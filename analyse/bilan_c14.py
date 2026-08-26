@@ -71,6 +71,13 @@ import time
 from datetime import datetime, timedelta, timezone
 
 RACINE_DEFAUT = r"C:\SVPS\Scalp-EA-main"
+# 26/08 : mt5.initialize() sans chemin prend le terminal PAR DEFAUT, qui
+# sur cette machine est le terminal DEDIE -- celui du compte miroir. La
+# jointure y cherchait les positions du compte principal et n en trouvait
+# aucune : 1 132 tickets de blocage, zero retrouve. Le terminal du moteur
+# se nomme, comme le fait pont_miroirs.py.
+TERMINAL_MOTEUR = (r"C:\Program Files\TF Global Markets MetaTrader 5 "
+                   r"Termina-LOCALSTACKl\terminal64.exe")
 SOUS_DOSSIER = os.path.join("docs", "buddha_clause_gate")
 
 # Champs ou peut se cacher l horodatage d un blocage.
@@ -364,6 +371,8 @@ def main():
     ap.add_argument("--jours", type=int, default=5)
     ap.add_argument("--jour", default=None, help="un jour precis AAAA-MM-JJ")
     ap.add_argument("--actif", default=None)
+    ap.add_argument("--terminal", default=TERMINAL_MOTEUR,
+                    help="terminal MT5 a interroger ; par defaut celui du moteur")
     ap.add_argument("--diag", action="store_true",
                     help="montrer les champs et les identifiants des deux cotes")
     a = ap.parse_args()
@@ -395,7 +404,10 @@ def main():
     except Exception as e:
         print("MetaTrader5 indisponible : %s" % e)
         return 2
-    if not mt5.initialize():
+    if not os.path.exists(a.terminal):
+        print("ABANDON : terminal introuvable -- %s" % a.terminal)
+        return 2
+    if not mt5.initialize(path=a.terminal):
         print("mt5.initialize a echoue : %s" % (mt5.last_error(),))
         return 2
 
