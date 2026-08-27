@@ -44,6 +44,10 @@ gagnants qui repassent par +X avant de repartir. Ce cout-la ne se
 mesure que barre par barre. La borne sert a savoir si ca vaut la
 peine de faire le rejeu, pas a decider a sa place.
 
+La colonne MAE du cote GAGNANTS est la seule borne dont on dispose
+sur ce cout : un BE pose sous ce niveau ne peut pas tuer le gagnant
+moyen.
+
 Les seuils sont exprimes en R -- R etant la PERTE MOYENNE du magic
 lui-meme, pas un stop theorique. Les lots varient d un paper a l
 autre (lot = balance / 20 000), donc un seuil en euros ne serait pas
