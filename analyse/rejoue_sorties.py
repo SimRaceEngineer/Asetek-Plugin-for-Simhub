@@ -441,9 +441,12 @@ def main():
         res[m] = dict((p[0], 0.0) for p in P)
 
     n_ok = n_sans_deal = n_sans_barre = n_sans_eurpt = n_sans_R = 0
+    n_vus = 0
+    vus_n, vus_pnl = {}, {}     # ce qui a REELLEMENT ete rejoue
     mfe_ratio = []
     sens_buy = sens_sell = 0
     for tk, prises in besoin.items():
+        n_vus += 1
         d = par_pos.get(tk)
         if not d:
             n_sans_deal += 1
@@ -474,12 +477,12 @@ def main():
         else:
             sens_sell += 1
 
-        # controle croise du MFE : les barres et le journal disent-ils
-        # la meme chose ?
-        mb = mfe_des_barres(bars, sens, entree) * abs(eur_pt)
-        mj = max(abs(p.get("mfe") or 0.0) for p in prises)
-        if mj > 1e-6 and mb > 1e-6:
-            mfe_ratio.append(mb / mj)
+        # Controle croise du MFE, EN POINTS. Le comparer en euros
+        # revenait a confronter deux echelles de lot : les barres
+        # donnent un prix, le journal porte deja le lot du paper.
+        # C etait mon erreur du 27/08, et elle faisait echouer le
+        # controle sur une difference qui n existait pas.
+        mb_pts = mfe_des_barres(bars, sens, entree)
 
         for p in prises:
             m = p.get("magic")
@@ -496,6 +499,11 @@ def main():
                 n_sans_R += 1
                 continue
             r_pts = Re / abs(ep)
+            mj_pts = abs(p.get("mfe") or 0.0) / abs(ep)
+            if mj_pts > 1e-9 and mb_pts > 1e-9:
+                mfe_ratio.append(mb_pts / mj_pts)
+            vus_n[m] = vus_n.get(m, 0) + 1
+            vus_pnl[m] = vus_pnl.get(m, 0.0) + p["pnl"]
             dd = {}
             for nom, be, trail, arme in P:
                 if be is None and trail is None:
@@ -521,9 +529,20 @@ def main():
     dire("  conversion impossible  : %d" % n_sans_eurpt)
     dire("  prise sans R ou sans f : %d" % n_sans_R)
     perdus = n_sans_deal + n_sans_barre + n_sans_eurpt
-    part = 100.0 * perdus / max(1, len(besoin))
-    dire("  population perdue      : %d / %d  (%.1f %%)"
-         % (perdus, len(besoin), part))
+    # Le denominateur est ce qu on a EXAMINE, pas ce que le journal
+    # cite : en mode essai la boucle s arrete avant la fin, et
+    # rapporter la perte sur la population entiere la ferait paraitre
+    # dix fois plus petite qu elle n est.
+    part = 100.0 * perdus / max(1, n_vus)
+    dire("  population perdue      : %d / %d examine(s)  (%.1f %%)"
+         % (perdus, n_vus, part))
+    if a.limite:
+        dire("")
+        dire("  !! MODE ESSAI : --limite %d. %d ticket(s) examines sur"
+             % (a.limite, n_vus))
+        dire("     %d cites par le journal. Les totaux ci-dessous ne sont"
+             % len(besoin))
+        dire("     PAS ceux du mois. Relancer sans --limite pour conclure.")
     if part > 25.0:
         dire("")
         dire("  !! PLUS D UN QUART DE LA POPULATION MANQUE. Les ecarts")
@@ -544,24 +563,27 @@ def main():
     dire("     sur le haut de barre est optimiste d un spread.")
 
     # ---------------- resultats
-    lignes = [(m, pp) for m, pp in par_magic.items() if len(pp) >= a.min_n]
-    lignes.sort(key=lambda t: -len(t[1]))
+    # On affiche l effectif et le PnL des prises REJOUEES, pas ceux du
+    # journal entier : comparer un ecart partiel a une reference
+    # complete donnerait un rapport faux sans en avoir l air.
+    lignes = [(m, vus_n[m], vus_pnl[m]) for m in vus_n
+              if vus_n[m] >= a.min_n]
+    lignes.sort(key=lambda t: -t[1])
 
     def table(titre, choix):
         dire("")
         dire(barre())
         dire(titre)
         dire(barre())
-        e = "%-7s %-22s %6s %9s" % ("MAGIC", "PAPER", "n", "PnL reel")
+        e = "%-7s %-22s %6s %9s" % ("MAGIC", "PAPER", "n rej", "PnL rej")
         for nom in choix:
             e += " %9s" % nom
         dire(e)
         dire(barre("-"))
         tot = dict((n, 0.0) for n in choix)
-        for m, pp in lignes:
-            reel = sum(p["pnl"] for p in pp)
+        for m, nn, reel in lignes:
             ln = "%-7s %-22s %6d %+9.0f" % (m, (noms.get(m) or "")[:22],
-                                            len(pp), reel)
+                                            nn, reel)
             for nom in choix:
                 v = res[m][nom]
                 tot[nom] += v
@@ -573,8 +595,9 @@ def main():
             ln += " %+9.0f" % tot[nom]
         dire(ln)
         dire(barre("-"))
-        dire("  Ecart de PnL en EUR contre la sortie reelle. Le stop ne")
-        dire("  recule jamais : c est le cliquet, par construction.")
+        dire("  n rej / PnL rej : effectif et PnL des prises REJOUEES.")
+        dire("  L ecart se compare a cette colonne-la, pas au mois entier.")
+        dire("  Le stop ne recule jamais : c est le cliquet.")
 
     table("BREAK-EVEN SEUL -- le stop passe a l entree a +x.R",
           [p[0] for p in P if p[1] is not None and p[2] is None])
