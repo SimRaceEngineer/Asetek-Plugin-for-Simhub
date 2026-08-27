@@ -64,6 +64,8 @@ EXEMPTS = set()         # modules autorises a reculer un stop. Vide, et il
                         # faut un argument pour y toucher : un stop elargi
                         # augmente le risque de la position.
 VEILLE_SEC = 20         # cadence du fil qui verifie la pose
+SILENCE_SEC = 90        # au-dela, une enveloppe muette est jugee decrochee
+REPOSES_MAX = 40        # garde-fou : au-dela, on cesse et on crie
 SEUIL_RAPPORT = 200     # une synthese toutes les N ecritures de stop
 MEMOIRE_FICHIER = os.path.join("docs", "sl_cliquet", "memoire.json")
 OUBLI_SEC = 36 * 3600   # on oublie un ticket sans nouvelle depuis 36 h
@@ -81,6 +83,8 @@ _enveloppe = [None]     # l objet enveloppe courant, pour se reconnaitre
 _pose = [False]
 _fil = [None]
 _sale = [False]
+_appels = [0]           # nombre d appels recus par NOS enveloppes
+_reposes = [0]
 
 
 def _dire(niveau, msg, *a):
@@ -337,6 +341,7 @@ def _fabrique(origine):
     distinct, marque, et la chaine reste finie.
     """
     def envelope(req, *a, **k):
+        _appels[0] += 1
         try:
             refus, points, tk, neuf, best = _juge(req)
             mod, fn = _appelant()
@@ -378,12 +383,42 @@ def _arme(pourquoi):
 
 
 def _veille():
+    """Repose l enveloppe -- mais seulement si elle ne recoit PLUS RIEN.
+
+    27/08, en direct : la premiere version testait "suis-je en tete de
+    chaine". Or un gate qui nous ENVELOPPE nous ote la tete sans nous
+    couper : on est toujours appele, a travers lui. Se reposer dans ce
+    cas ajoute une couche a chaque cycle -- trois par minute au
+    demarrage du moteur -- et la chaine finit par depasser la limite de
+    recursion de Python, ce qui tuerait tout envoi d ordre.
+
+    Le bon critere n est pas la position mais la PRODUCTION : tant que
+    nos enveloppes recoivent des appels, elles font leur travail, quelle
+    que soit leur place. On ne repose que sur un silence avere.
+    """
     dernier_ecrit = 0.0
+    vus = _appels[0]
+    depuis = time.time()
     while True:
         try:
             time.sleep(VEILLE_SEC)
-            _arme("repose apres decrochage")
             maintenant = time.time()
+            en_tete = getattr(getattr(_mt5, "order_send", None),
+                              "_sl_cliquet", None) == VERSION
+            if _appels[0] != vus:
+                vus, depuis = _appels[0], maintenant      # on travaille
+            elif not en_tete and maintenant - depuis > SILENCE_SEC:
+                if _reposes[0] < REPOSES_MAX:
+                    _reposes[0] += 1
+                    _arme("repose apres %ds de silence (%d/%d)"
+                          % (SILENCE_SEC, _reposes[0], REPOSES_MAX))
+                    depuis = maintenant
+                elif _reposes[0] == REPOSES_MAX:
+                    _reposes[0] += 1
+                    _dire("warning",
+                          "  [SL-CLIQUET] %d reposes atteintes, on cesse d empiler."
+                          " Quelque chose reecrit order_send en boucle.",
+                          REPOSES_MAX)
             if _sale[0] or maintenant - dernier_ecrit > 60:
                 _oublie_les_vieux()
                 _ecrit()
@@ -406,6 +441,7 @@ def install(mt5_module, log=None):
         f = threading.Thread(target=_veille, name="sl_cliquet", daemon=True)
         f.start()
         _fil[0] = f
-    _dire("warning", "  [SL-CLIQUET] memoire : %d ticket(s) relus, veille %d s",
-          n, VEILLE_SEC)
+    _dire("warning",
+          "  [SL-CLIQUET] memoire : %d ticket(s) relus, veille %d s,"
+          " silence tolere %d s", n, VEILLE_SEC, SILENCE_SEC)
     return True
