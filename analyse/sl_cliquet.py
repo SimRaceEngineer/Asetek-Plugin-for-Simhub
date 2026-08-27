@@ -143,18 +143,54 @@ def _charge():
         return 0
 
 
+def _mieux(a, b):
+    """Des deux souvenirs d un meme ticket, celui qui protege le plus."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    sens = int(a.get("sens", b.get("sens", 1)))
+    va, vb = float(a["meilleur"]), float(b["meilleur"])
+    return a if ((va >= vb) if sens > 0 else (va <= vb)) else b
+
+
 def _ecrit():
-    """Ecriture atomique. Sa perte n est jamais fatale."""
+    """Ecriture atomique, et FUSION avec ce qui est deja sur le disque.
+
+    27/08 : cinq processus posent le cliquet -- le moteur, les deux roles
+    du pont, le miroir, price_action -- et ils partagent ce fichier.
+    Ecrire sa seule memoire ferait du dernier ecrivain le seul survivant,
+    et au redemarrage suivant chacun relirait une memoire amputee de ce
+    que les autres savaient. On relit donc avant d ecrire, et pour chaque
+    ticket on garde le souvenir le plus protecteur. Le cliquet vivant ne
+    depend pas de ce fichier -- sa memoire est en RAM -- mais un
+    redemarrage ne doit rien perdre.
+
+    Sa perte n est jamais fatale : au pire on repart du stop annonce par
+    le courtier.
+    """
     try:
         d = os.path.dirname(MEMOIRE_FICHIER)
         if d and not os.path.isdir(d):
             os.makedirs(d)
-        tmp = MEMOIRE_FICHIER + ".tmp"
+        disque = {}
+        try:
+            with io.open(MEMOIRE_FICHIER, encoding="utf-8") as f:
+                disque = (json.load(f).get("tickets") or {})
+        except Exception:
+            disque = {}
         with _verrou:
-            paquet = {"version": VERSION, "ts": time.time(),
-                      "tickets": dict((str(k), v) for k, v in _memoire.items())}
+            miens = dict((str(k), dict(v)) for k, v in _memoire.items())
+        fondu = dict(disque)
+        for k, v in miens.items():
+            try:
+                fondu[k] = _mieux(disque.get(k), v)
+            except Exception:
+                fondu[k] = v
+        tmp = MEMOIRE_FICHIER + ".tmp"
         with io.open(tmp, "w", encoding="utf-8") as f:
-            json.dump(paquet, f)
+            json.dump({"version": VERSION, "ts": time.time(),
+                       "tickets": fondu}, f)
         os.replace(tmp, MEMOIRE_FICHIER)
     except Exception:
         pass
