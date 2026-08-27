@@ -95,6 +95,16 @@ import time
 CIBLE_DEFAUT = "daily_watchdog.py"
 MARQUEUR = "[BE-COTE-PRIX-2708]"
 
+# La requete SLTP de _move_to_be n est PAS unique dans le fichier :
+# _check_auto_breakeven (R7) construit la meme. Un patch qui se contente
+# de la chercher tombe sur deux resultats et ne sait pas lequel prendre
+# -- c est ce qui est arrive le 27/08 a 16:52, et le patch a eu raison de
+# refuser plutot que de deviner. On delimite donc d abord la fonction, et
+# on ne pose les ancres 2 et 3 qu a l interieur.
+RE_FONCTION = re.compile(
+    r"^def _move_to_be\(.*?(?=^def |^class |\Z)", re.M | re.S)
+RE_DEF = re.compile(r"^def (\w+)", re.M)
+
 # --- ancre 1 : la declaration des plages, a cote des tampons ----------
 RE_TAMPONS = re.compile(r"^BE_BUFFER_PTS\s*=\s*\{.*$", re.M)
 
@@ -178,23 +188,41 @@ def main():
         return 3
     neuf = neuf[:m.end()] + n(DECL) + neuf[m.end():]
 
-    trouves = RE_AUTON.findall(neuf)
-    if len(trouves) != 1:
-        print("REFUS : ancre 2 (exemption AUTONOMOUS_MAGICS) attendue 1 fois,"
-              " trouvee %d." % len(trouves))
+    # -- ou commence et ou finit _move_to_be
+    f = RE_FONCTION.search(neuf)
+    if f is None:
+        print("REFUS : la fonction _move_to_be est introuvable au niveau"
+              " module.")
         return 3
-    m = RE_AUTON.search(neuf)
-    neuf = neuf[:m.end()] + n(EXEMPTION.format(i=m.group("i"))) + neuf[m.end():]
+    d0, d1 = f.start(), f.end()
+    print("  _move_to_be : %d octets, du caractere %d au %d."
+          % (d1 - d0, d0, d1))
 
-    trouves = RE_REQ.findall(neuf)
-    if len(trouves) != 1:
-        print("REFUS : ancre 3 (la requete SLTP de _move_to_be) attendue"
-              " 1 fois, trouvee %d." % len(trouves))
-        print("        Si elle apparait ailleurs, je ne sais pas laquelle est")
-        print("        la bonne et je prefere ne rien ecrire.")
+    # Pour information : toutes les requetes SLTP du fichier, et leur
+    # fonction. Voir ou vit l autre est plus utile que de l ignorer.
+    for r in RE_REQ.finditer(neuf):
+        noms = RE_DEF.findall(neuf[:r.start()])
+        dedans = "  <- celle-ci" if d0 <= r.start() < d1 else ""
+        print("    requete SLTP dans %s()%s"
+              % (noms[-1] if noms else "?", dedans))
+
+    # -- ancre 2, dans la fonction seulement
+    bloc = neuf[d0:d1]
+    if len(RE_AUTON.findall(bloc)) != 1:
+        print("REFUS : ancre 2 (exemption AUTONOMOUS_MAGICS) attendue 1 fois"
+              " dans _move_to_be, trouvee %d." % len(RE_AUTON.findall(bloc)))
         return 3
-    m = RE_REQ.search(neuf)
+    # -- ancre 3, dans la fonction seulement
+    if len(RE_REQ.findall(bloc)) != 1:
+        print("REFUS : ancre 3 (la requete SLTP) attendue 1 fois dans"
+              " _move_to_be, trouvee %d." % len(RE_REQ.findall(bloc)))
+        return 3
+
+    # On ecrit de la fin vers le debut : les positions restent valides.
+    m = RE_REQ.search(neuf, d0, d1)
     neuf = neuf[:m.start()] + n(GARDE.format(i=m.group("i"))) + neuf[m.start():]
+    m = RE_AUTON.search(neuf, d0, d1)
+    neuf = neuf[:m.end()] + n(EXEMPTION.format(i=m.group("i"))) + neuf[m.end():]
 
     try:
         compile(neuf, a.cible, "exec")
