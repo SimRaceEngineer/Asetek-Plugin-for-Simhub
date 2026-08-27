@@ -254,11 +254,11 @@ def rendu(journal, noms, souci_noms, min_n, chemin):
 
     # ---------------- table principale
     a(barre("-"))
-    a("%-7s %-26s | %5s %7s %7s %7s %6s | %5s %7s %7s %7s %6s"
-      % ("MAGIC", "PAPER", "n", "gain", "MFE", "rendu", "part",
+    a("%-7s %-22s | %5s %7s %7s %7s %7s %6s | %5s %7s %7s %7s %6s"
+      % ("MAGIC", "PAPER", "n", "gain", "MFE", "MAE", "rendu", "part",
          "n", "perte", "MFE+", "MAE", "creux"))
-    a("%-7s %-26s | %s | %s"
-      % ("", "", "        G A G N A N T S            ",
+    a("%-7s %-22s | %s | %s"
+      % ("", "", "        G A G N A N T S                     ",
          "        P E R D A N T S            "))
     a(barre("-"))
 
@@ -270,11 +270,12 @@ def rendu(journal, noms, souci_noms, min_n, chemin):
     lignes.sort(key=lambda t: -t[1]["n"])
 
     for magic, s in lignes:
-        a("%-7s %-26s | %5d %+7.1f %7.1f %7.1f %5.0f%% | "
+        a("%-7s %-22s | %5d %+7.1f %7.1f %7.1f %7.1f %5.0f%% | "
           "%5d %7.1f %7.1f %7.1f %5.0f%%"
-          % (magic, (noms.get(magic) or "")[:26],
-             s["ng"], s["gain"], s["mfe_g"], s["rendu"], s["part"],
-             s["nd"], s["perte"], s["mfe_d"], s["mae_d"], s["au_creux"]))
+          % (magic, (noms.get(magic) or "")[:22],
+             s["ng"], s["gain"], s["mfe_g"], s["mae_g"], s["rendu"],
+             s["part"], s["nd"], s["perte"], s["mfe_d"], s["mae_d"],
+             s["au_creux"]))
 
     # ---------------- familles et total
     a(barre("-"))
@@ -282,21 +283,26 @@ def rendu(journal, noms, souci_noms, min_n, chemin):
         gr = [x for x in journal if famille(x.get("magic")) == fam]
         s = partage(gr)
         if s and s["n"] >= min_n:
-            a("%-7s %-26s | %5d %+7.1f %7.1f %7.1f %5.0f%% | "
+            a("%-7s %-22s | %5d %+7.1f %7.1f %7.1f %7.1f %5.0f%% | "
               "%5d %7.1f %7.1f %7.1f %5.0f%%"
-              % ("", fam, s["ng"], s["gain"], s["mfe_g"], s["rendu"],
-                 s["part"], s["nd"], s["perte"], s["mfe_d"], s["mae_d"],
-                 s["au_creux"]))
+              % ("", fam, s["ng"], s["gain"], s["mfe_g"], s["mae_g"],
+                 s["rendu"], s["part"], s["nd"], s["perte"], s["mfe_d"],
+                 s["mae_d"], s["au_creux"]))
     tous = partage(journal)
     if tous:
-        a("%-7s %-26s | %5d %+7.1f %7.1f %7.1f %5.0f%% | "
+        a("%-7s %-22s | %5d %+7.1f %7.1f %7.1f %7.1f %5.0f%% | "
           "%5d %7.1f %7.1f %7.1f %5.0f%%"
           % ("", "TOUS", tous["ng"], tous["gain"], tous["mfe_g"],
-             tous["rendu"], tous["part"], tous["nd"], tous["perte"],
-             tous["mfe_d"], tous["mae_d"], tous["au_creux"]))
+             tous["mae_g"], tous["rendu"], tous["part"], tous["nd"],
+             tous["perte"], tous["mfe_d"], tous["mae_d"],
+             tous["au_creux"]))
     a(barre("-"))
     a("  gain / perte  moyennes des gagnants / des perdants")
     a("  MFE   plus haut atteint, moyenne SUR CETTE POPULATION SEULE")
+    a("  MAE   (cote gagnants) le plus bas atteint par un trade qui a")
+    a("        pourtant fini en gain. C est la seule borne dont on")
+    a("        dispose sur le COUT d un break-even : un BE pose sous")
+    a("        ce niveau ne peut pas tuer le gagnant moyen.")
     a("  rendu MFE des gagnants moins leur gain : ce qu on laisse au")
     a("        retour, sur les seuls trades qui ont fini en gain")
     a("  part  gain / MFE des gagnants : la fraction capturee")
@@ -320,13 +326,13 @@ def rendu(journal, noms, souci_noms, min_n, chemin):
     a("  savoir si le rejeu vaut la peine, pas a decider a sa place.")
     a("")
     a(barre("-"))
-    entete = "%-7s %-26s %7s" % ("MAGIC", "PAPER", "perdants")
+    entete = "%-7s %-22s %7s" % ("MAGIC", "PAPER", "perdants")
     for k in SEUILS:
         entete += "   %5s   %9s" % ("+%.2fR" % k, "perte evi")
     a(entete)
     a(barre("-"))
     for magic, s in lignes:
-        ligne = "%-7s %-26s %7d" % (magic, (noms.get(magic) or "")[:26],
+        ligne = "%-7s %-22s %7d" % (magic, (noms.get(magic) or "")[:22],
                                     s["nd"])
         for k, nb, som in s["gisement"]:
             part = (100.0 * nb / s["nd"]) if s["nd"] else 0.0
@@ -334,7 +340,7 @@ def rendu(journal, noms, souci_noms, min_n, chemin):
         a(ligne)
     a(barre("-"))
     if tous:
-        ligne = "%-7s %-26s %7d" % ("", "TOUS", tous["nd"])
+        ligne = "%-7s %-22s %7d" % ("", "TOUS", tous["nd"])
         for k, nb, som in tous["gisement"]:
             part = (100.0 * nb / tous["nd"]) if tous["nd"] else 0.0
             ligne += "   %4.0f%%   %+9.0f" % (part, som)
