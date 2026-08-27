@@ -371,6 +371,8 @@ def main():
         print("ABANDON : %s vide ou absent." % a.journal)
         return 2
     noms, souci = noms_des_papers()
+    if souci:
+        dire("  noms des papers : indisponibles (%s), magics seuls." % souci)
 
     if not os.path.exists(a.terminal):
         print("ABANDON : terminal introuvable --")
@@ -441,7 +443,6 @@ def main():
     n_ok = n_sans_deal = n_sans_barre = n_sans_eurpt = n_sans_R = 0
     mfe_ratio = []
     sens_buy = sens_sell = 0
-    touches_buy = touches_sell = 0
     for tk, prises in besoin.items():
         d = par_pos.get(tk)
         if not d:
@@ -518,6 +519,7 @@ def main():
     dire("  sans deal retrouve     : %d" % n_sans_deal)
     dire("  sans barre M1          : %d" % n_sans_barre)
     dire("  conversion impossible  : %d" % n_sans_eurpt)
+    dire("  prise sans R ou sans f : %d" % n_sans_R)
     perdus = n_sans_deal + n_sans_barre + n_sans_eurpt
     part = 100.0 * perdus / max(1, len(besoin))
     dire("  population perdue      : %d / %d  (%.1f %%)"
