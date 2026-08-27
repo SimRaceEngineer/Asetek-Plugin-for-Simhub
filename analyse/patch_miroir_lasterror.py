@@ -50,12 +50,16 @@ import sys
 import time
 
 CIBLE_DEFAUT = "miroir_papers.py"
-MARQUEUR = "last_error"
+# Une sentinelle UNIQUE. Mon premier jet prenait "last_error" comme
+# marqueur : cette chaine existe ailleurs dans un fichier de 51 Ko qui
+# parle a MT5, et le patch s est cru deja pose sans rien ecrire.
+MARQUEUR = "[LASTERROR-2708]"
 
 AVANT = ('        return None, "retcode=%s %s" '
          '% (rc, res.comment if res else "sans reponse")')
 
 APRES = '''        if res is None:
+            # [LASTERROR-2708]
             # order_send a rendu None : ni retcode ni commentaire. La
             # seule explication est dans le terminal, et le message
             # d origine la jetait.
@@ -85,7 +89,7 @@ def main():
     with io.open(a.cible, "r", encoding="utf-8", newline="") as f:
         src = f.read()
     if MARQUEUR in src:
-        print("DEJA POSE : last_error est deja demande.")
+        print("DEJA POSE : la sentinelle %s est presente." % MARQUEUR)
         return 0
 
     n = src.count(AVANT)
