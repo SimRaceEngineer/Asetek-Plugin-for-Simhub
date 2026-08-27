@@ -2060,3 +2060,63 @@ rien » a évité que le patch parte sur un terminal fantôme.
 > Tout patch qui vise un exécutable doit d'abord tester son existence
 > et refuser d'écrire sinon — surtout ici, où `initialize(path=...)`
 > sur un chemin faux peut LANCER un terminal.
+
+
+---
+
+## 27/08/2026 — une ligne qui ne lance rien, et une marque qui se reconnaît
+
+**Ce que j'ai fait.** J'ai déduit, de « C14 bloque 99,3 % des SL_MOD »,
+que le stop ne bougeait jamais, donc qu'un retour au SL d'origine était
+mécaniquement impossible. L'utilisateur, lui, le voyait toute la
+journée. Il avait raison : 99,3 %, ce n'est pas 100 % — 67 modifications
+sur 9 067 passaient rien que dans une matinée, et rien n'empêchait
+celles-là de revenir.
+
+> Un pourcentage écrasant n'est pas une impossibilité. Tant qu'il reste
+> un chemin, quelqu'un finit par l'emprunter. Quand l'utilisateur décrit
+> ce qu'il OBSERVE et que j'oppose ce que je DÉDUIS, c'est mon
+> raisonnement qu'il faut réexaminer, pas son observation.
+
+**Le lanceur qui ne lançait rien.** J'avais corrigé la veille le bloc du
+`.bat` pour que le pont parte en réel :
+
+    start "Pont Miroirs" /MIN cmd /c call "%PROJ%PONT_MIROIRS.cmd" reel
+
+Cette ligne ne lance rien. Le bloc s'exécute pourtant — `miroir_papers`
+en sort trois lignes plus haut, à la seconde près. Trois redémarrages,
+le pont absent à chaque fois, `compte.json` figé, le compte miroir muet
+toute la matinée, et **aucun message nulle part**. Je ne l'ai découvert
+qu'en cherchant pourquoi le panneau était vide.
+
+> Un lanceur doit VÉRIFIER ce qu'il a lancé, pas seulement l'appeler.
+> `start` ne rend aucun code d'erreur exploitable : la seule preuve
+> qu'un processus existe est de le chercher ensuite dans la liste.
+
+**Une marque de contrôle qui se reconnaît elle-même.** Mon patch
+vérifiait que la ligne fautive avait disparu en cherchant l'absence de
+`PONT_MIROIRS.cmd" reel`. Or le commentaire que le patch INSÈRE cite
+cette ligne pour expliquer ce qu'il corrige. Résultat : `ECHEC —
+restaurer la sauvegarde` sur un fichier parfaitement correct.
+
+C'est la deuxième fois — le 24/08 déjà, `patch_cartes_live_croise`
+exigeait une chaîne construite à l'exécution et criait à l'erreur sur un
+fichier juste.
+
+> La marque de vérification doit être introuvable dans le patch qui la
+> pose, commentaires compris. Une fausse alerte est pire qu'un échec
+> net : elle pousse à défaire un travail correct.
+
+**Et le même défaut dans mon propre garde-fou.** Le cliquet des stops
+porte un fil de veille qui le repose s'il est délogé. Je lui avais donné
+comme critère « suis-je en tête de chaîne ». Or un gate qui nous
+ENVELOPPE nous ôte la tête sans nous couper : on est toujours appelé, à
+travers lui. Le journal l'a montré en trois minutes — une repose toutes
+les vingt secondes, chacune ajoutant une couche. À ce rythme la chaîne
+dépassait la limite de récursion de Python avant la clôture, ce qui
+aurait tué tout envoi d'ordre, stops et entrées compris.
+
+> Le bon critère n'est jamais la position, c'est la PRODUCTION. « Suis-je
+> en place ? » ne vaut rien ; « est-ce que je reçois encore des appels ? »
+> vaut tout. C'est la leçon de la veille — vérifier ce qui est produit,
+> pas ce qui est présent — et je l'ai réapprise sur mon propre code.
