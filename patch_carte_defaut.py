@@ -116,6 +116,15 @@ def main():
 
     src = lis(a.cible)
 
+    # price_action.py peut porter des fins de ligne Windows. Lu avec
+    # newline="" elles sont conservees telles quelles : l ancre doit
+    # alors etre construite dans le meme dialecte, sinon elle n est
+    # trouvee nulle part et le patch refuse pour une mauvaise raison.
+    global ANCRE, NEUF
+    if "\r\n" in src:
+        ANCRE = ANCRE.replace("\n", "\r\n")
+        NEUF = NEUF.replace("\n", "\r\n")
+
     if MARQUEUR in src:
         print("DEJA POSE : le marqueur %s est present." % MARQUEUR)
         print("Rien a faire, et surtout rien a poser deux fois.")
