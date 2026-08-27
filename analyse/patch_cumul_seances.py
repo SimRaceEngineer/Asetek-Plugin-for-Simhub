@@ -167,8 +167,8 @@ EDITS_PONT = [
 ]
 
 EDITS_CARTE = [
-    ("R", 'a("  du jour sur le compte %s, une affaire par position, commissions")',
-     'a("  cumulees sur le compte %s, une affaire par position, commissions")'),
+    ("R", 'a("  du jour sur le compte %s, une affaire par position, commissions"',
+     'a("  cumulees sur le compte %s, une affaire par position, commissions"'),
     ("R", 'a("  Un jour d execution ne juge rien. Ce panneau ne sert qu a voir")',
      'a("  Quelques seances ne jugent rien. Ce panneau ne sert qu a voir")'),
     ("R", 'a("  fait sur un compte, un jour, avec quelques trades.")',
