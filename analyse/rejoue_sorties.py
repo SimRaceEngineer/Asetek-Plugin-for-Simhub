@@ -593,7 +593,7 @@ def main():
         total_g = sum(d[1] for d in gag)
         dire("")
         dire(barre())
-        dire("LA QUEUE -- ce que chaque politique fait aux 5 %% du haut")
+        dire("LA QUEUE -- ce que chaque politique fait aux 5 % du haut")
         dire(barre())
         dire("  tp_fixe.py a montre qu un plafond detruit plus qu il ne")
         dire("  rapporte : la queue porte le resultat. Un trailing SUIT au")
