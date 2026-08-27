@@ -94,15 +94,22 @@ def trouve_unique(lignes, cible):
     return vus[0] if len(vus) == 1 else -1
 
 
-def trouve_init(lignes, ancre):
-    """L index de la ligne 'if not mt5.initialize(...)', ou -1."""
-    if ancre:
-        i = trouve_unique(lignes, ancre)
-        if i >= 0:
-            return i
-    vus = [i for i, l in enumerate(lignes)
-           if "mt5.initialize(" in l and l.rstrip("\r").strip().startswith("if not")]
-    return vus[0] if len(vus) == 1 else -1
+def trouve_inits(lignes):
+    """TOUS les appels a mt5.initialize, du dernier au premier.
+
+    27/08 : la premiere version exigeait un appel UNIQUE et sautait donc
+    pont_miroirs.py, qui en a deux -- un par role, lecteur et envoyeur --
+    et price_action.py, qui appelle sans "if not". Or c est justement
+    l envoyeur du pont qui ecrit les stops sur le compte dedie. On pose
+    donc apres CHAQUE appel, et on parcourt a l envers pour que les
+    insertions ne decalent pas les indices restants.
+    """
+    vus = []
+    for i, l in enumerate(lignes):
+        s = l.rstrip("\r").strip()
+        if "mt5.initialize(" in s and not s.startswith("#"):
+            vus.append(i)
+    return list(reversed(vus))
 
 
 def fin_de_bloc(lignes, i):
@@ -140,15 +147,15 @@ def traite(fichier, mode, ancre, appliquer):
         print("  %-22s pose apres la ligne %d, import apres la ligne %d"
               % (fichier, j + 1, i + 1))
     else:
-        i = trouve_init(lignes, ancre)
-        if i < 0:
-            print("  %-22s pas de 'if not mt5.initialize(...)' unique, saute"
-                  % fichier)
+        inits = trouve_inits(lignes)
+        if not inits:
+            print("  %-22s aucun appel a mt5.initialize, saute" % fichier)
             return None
-        f = fin_de_bloc(lignes, i)
-        insere(lignes, f, BLOC_APRES_INIT, creux_de(lignes[i]))
-        print("  %-22s pose apres la ligne %d (fin du bloc initialize ligne %d)"
-              % (fichier, f + 1, i + 1))
+        for i in inits:
+            f = fin_de_bloc(lignes, i)
+            insere(lignes, f, BLOC_APRES_INIT, creux_de(lignes[i]))
+            print("  %-22s pose apres la ligne %d (initialize ligne %d)"
+                  % (fichier, f + 1, i + 1))
 
     neuf = "\n".join(lignes)
     if not appliquer:
