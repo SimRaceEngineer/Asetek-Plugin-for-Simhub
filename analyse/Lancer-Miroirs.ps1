@@ -81,6 +81,7 @@ $SERVICES = @(
      args  = @("-u", "trail_miroir6.py", "--reel")
      log   = "logs\trail6_sortie.txt"
      err   = "logs\trail6_erreur.txt"
+     log2  = "logs\trail_miroir6.log"
      pause = 3 },
 
   @{ nom = "gardien"
@@ -88,6 +89,7 @@ $SERVICES = @(
      args  = @("-u", "gardien_stops.py", "--reel")
      log   = "logs\gardien_sortie.txt"
      err   = "logs\gardien_erreur.txt"
+     log2  = "logs\gardien_stops.log"
      pause = 3 }
 )
 
@@ -103,9 +105,24 @@ function TailleLog($chemin) {
 }
 
 function AgeLog($chemin) {
+    if ($chemin -eq $null -or $chemin -eq "") { return $null }
     $p = Join-Path $PROJ $chemin
     if (-not (Test-Path $p)) { return $null }
     return [int]((Get-Date) - (Get-Item $p).LastWriteTime).TotalSeconds
+}
+
+function AgeService($s) {
+    # Un service peut ecrire a DEUX endroits : la sortie redirigee par ce
+    # script, et son propre journal. Lance a la main dans une fenetre, il
+    # n alimente que le second -- et le premier, fige, le ferait passer
+    # pour muet. 27/08 16:19 : c est exactement le faux verdict que ce
+    # script a rendu sur le gardien. On retient le plus recent des deux.
+    $a = AgeLog $s.log
+    $b = $null
+    if ($s.ContainsKey("log2")) { $b = AgeLog $s.log2 }
+    if ($a -eq $null) { return $b }
+    if ($b -eq $null) { return $a }
+    if ($a -lt $b) { return $a } else { return $b }
 }
 
 function DernieresErreurs($chemin) {
@@ -126,7 +143,7 @@ function Etat {
     $manquants = @()
     foreach ($s in $SERVICES) {
         $inst = @(Instances $s.motif)
-        $age  = AgeLog $s.log
+        $age  = AgeService $s
         if ($inst.Count -eq 0) {
             Write-Host ("{0,-14} {1,-7} {2,-9} {3,-10} {4}" -f `
                         $s.nom, "-", "-", "-", "ABSENT")
@@ -264,7 +281,7 @@ foreach ($s in $aFaire) {
         Arrete $s | Out-Null
     }
     elseif ($inst.Count -eq 1) {
-        $age = AgeLog $s.log
+        $age = AgeService $s
         if ($age -ne $null -and $age -le $SilenceMax) {
             Write-Host ("  {0,-14} deja debout et ecrit ({1} s) -- laisse tel quel" -f `
                         $s.nom, $age)
