@@ -441,6 +441,8 @@ def main():
         res[m] = dict((p[0], 0.0) for p in P)
 
     n_ok = n_sans_deal = n_sans_barre = n_sans_eurpt = n_sans_R = 0
+    n_absent = n_incomplet = 0
+    ts_absents, ts_trouves = [], []
     n_vus = 0
     vus_n, vus_pnl = {}, {}     # ce qui a REELLEMENT ete rejoue
     mfe_ratio = []
@@ -449,12 +451,19 @@ def main():
         n_vus += 1
         d = par_pos.get(tk)
         if not d:
+            # Le ticket n existe pas du tout dans l historique lu.
+            n_absent += 1
             n_sans_deal += 1
+            ts_absents.append(str(prises[0].get("ts") or ""))
             continue
         r = resume_position(mt5, d)
         if not r:
+            # Il existe, mais sans entree ou sans sortie : position
+            # encore ouverte, ou deals hors de la fenetre lue.
+            n_incomplet += 1
             n_sans_deal += 1
             continue
+        ts_trouves.append(str(prises[0].get("ts") or ""))
         sens, entree, sortie, profit, t_ouv, t_fer, sym = r
         amp = (sortie - entree) * sens
         if abs(amp) < 1e-9:
@@ -525,6 +534,25 @@ def main():
     dire(barre("-"))
     dire("  tickets rejoues        : %d" % n_ok)
     dire("  sans deal retrouve     : %d" % n_sans_deal)
+    dire("     absent de l historique : %d" % n_absent)
+    dire("     deals incomplets       : %d" % n_incomplet)
+    # D ou vient le manque ? Deux causes possibles, deux signatures
+    # differentes -- on les separe au lieu de choisir.
+    croise = len(set(besoin) & set(par_pos))
+    dire("     tickets du journal presents dans l historique : %d / %d"
+         % (croise, len(besoin)))
+    if ts_absents:
+        ts_absents.sort()
+        dire("     absents, du %s au %s"
+             % (ts_absents[0][:16] or "?", ts_absents[-1][:16] or "?"))
+    if ts_trouves:
+        ts_trouves.sort()
+        dire("     trouves, du %s au %s"
+             % (ts_trouves[0][:16] or "?", ts_trouves[-1][:16] or "?"))
+    dire("     Si les absents couvrent la MEME plage que les trouves, ce")
+    dire("     n est pas une fenetre trop courte : c est que le ticket du")
+    dire("     journal n est pas le position_id de MT5. Si au contraire")
+    dire("     ils se massent a un bout, il faut elargir --jours.")
     dire("  sans barre M1          : %d" % n_sans_barre)
     dire("  conversion impossible  : %d" % n_sans_eurpt)
     dire("  prise sans R ou sans f : %d" % n_sans_R)
@@ -590,9 +618,21 @@ def main():
                 ln += " %+9.0f" % v
             dire(ln)
         dire(barre("-"))
-        ln = "%-7s %-22s %6s %9s" % ("", "TOTAL", "", "")
+        ln = "%-7s %-22s %6d %+9.0f" % ("", "TOTAL affiches",
+                                        sum(t[1] for t in lignes),
+                                        sum(t[2] for t in lignes))
         for nom in choix:
             ln += " %+9.0f" % tot[nom]
+        dire(ln)
+        # Le tableau de la queue porte sur TOUTES les prises rejouees,
+        # celui-ci sur les seuls magics affiches. Deux totaux de portees
+        # differentes sur la meme page se comparent tout seuls, et a
+        # tort : on affiche donc les deux.
+        ln = "%-7s %-22s %6d %+9.0f" % ("", "TOUS MAGICS",
+                                        sum(vus_n.values()),
+                                        sum(vus_pnl.values()))
+        for nom in choix:
+            ln += " %+9.0f" % sum(res[m][nom] for m in vus_n)
         dire(ln)
         dire(barre("-"))
         dire("  n rej / PnL rej : effectif et PnL des prises REJOUEES.")
