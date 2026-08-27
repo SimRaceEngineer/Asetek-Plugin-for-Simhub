@@ -2191,3 +2191,67 @@ n'existait pas, et j'ai failli jeter une mesure juste.
 
 > Un contrôle est du code comme le reste. Quand il refuse, la première
 > hypothèse à tester est qu'il a tort.
+
+---
+
+## 27 août, fin d'après-midi — cinq façons de se tromper sur une mesure
+
+**Un résultat vide n'est pas une preuve.**
+`Select-String 'SL-CLIQUET'` sur tout `logs\` est revenu sans rien. J'en
+ai conclu, en toutes lettres, que le cliquet n'avait jamais été armé
+depuis le 10/08 — « il n'y avait pas de garde à réparer : il n'y en avait
+pas ». La commande suivante en a trouvé **3 194 lignes** dans le seul log
+du moteur, et la pose datée de 09:07:22.
+
+> Une sortie vide peut vouloir dire « rien à trouver » ou « la commande
+> n'a pas tourné ». Ces deux-là ne se distinguent pas à l'écran, et je
+> les ai confondues pour bâtir une conclusion de trois jours dessus.
+
+**Compter des tentatives comme des faits.**
+Le terminal MT5 écrit `modify #…` et `failed modify #… [Invalid stops]`.
+Ma regex prenait les deux. J'ai donc annoncé pendant trois jours des
+volumes de modifications de stop qui mélangeaient les écritures acceptées
+et les refusées. Le 27/08 le vrai partage est 2 019 acceptées contre
+**2 173 refusées** — il y avait plus de refus que d'écritures, et je ne
+le voyais pas.
+
+> Avant de compter des lignes, lire ce que la ligne dit d'elle-même. Le
+> mot `failed` était au début de chacune.
+
+**Une hypothèse plausible tenue pour acquise.**
+Un stop demandé à 3 points du prix : j'ai écrit qu'il tombait sous la
+distance minimale du courtier. `trade_stops_level` vaut **1**, soit 0,01
+point. Il n'y a aucune distance minimale. La vraie cause — un stop du
+mauvais côté du prix — était dans le motif `[Invalid stops]` que je
+n'avais pas cherché.
+
+> Le courtier écrit la raison de son refus. La lire coûte une commande ;
+> la deviner a coûté un tour complet.
+
+**Déduire une architecture d'un intervalle.**
+Deux écritures identiques à 30 ms d'intervalle, 100 % des cas : j'ai
+annoncé « deux instances du même programme ». L'inventaire montrait 22
+processus python, **tous uniques**. Le doublement venait d'ailleurs.
+
+> Un motif régulier suggère une cause. Il ne la démontre pas. L'inventaire
+> coûtait une commande et je l'ai écrite après la conclusion.
+
+**Et l'outil qui rendait un faux verdict.**
+`Lancer-Miroirs.ps1` existe pour ne plus confondre présence et
+production. À son premier essai il a déclaré le gardien MUET depuis
+1 312 s : il surveillait la sortie redirigée alors que ce gardien-là,
+lancé à la main, écrivait dans son propre journal.
+
+> Un verdict faux dans un outil dont le seul rôle est de rendre des
+> verdicts vaut moins que pas d'outil du tout.
+
+**Ce que la journée a fini par établir.** Le battement des stops vient
+d'une collision de conception : `miroir_papers.py:763` recopie sur la
+position miroir le stop de son paper parent, pendant que les modules du
+moteur la suivent en trailing serré. Aucun des deux n'a tort de son côté.
+Et `daily_watchdog._move_to_be` comparait le niveau visé au stop courant,
+jamais au prix — d'où 2 173 refus en une heure de séance.
+
+> Les trois défauts étaient visibles depuis le 25/08 dans des fichiers
+> que personne n'avait ouverts. Ce ne sont pas les mesures qui manquaient,
+> c'est de les avoir lues.
