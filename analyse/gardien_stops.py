@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-r"""gardien_stops.py -- un stop ne recule jamais, sur tout le compte moteur.
+r"""gardien_stops.py -- un stop ne recule jamais, hors positions miroir.
 
 CE QUI A ETE MESURE
 -------------------
@@ -10,58 +10,66 @@ Journaux du terminal MT5, compte 17**80 :
     26/08   29 590 modifications de stop   14 327 reculs   48 %
     27/08    3 879 modifications de stop      570 reculs   15 %
 
-Un recul, vu de pres, ressemble a ceci (#172794092, sell NAS100) :
+CE QUI LES CAUSAIT, ET QUI N EST PAS DE SON RESSORT
+---------------------------------------------------
+La quasi-totalite de ces reculs vient d un desaccord entre deux
+processus, sur les positions MIROIR des papers :
+
+  miroir_papers.py:763-770  recopie sur la position miroir le stop de sa
+                            position paper parente -- le bouchon pose a
+                            l ouverture, que le paper ne deplace jamais
+                            puisqu il sort a la bougie et non au stop.
+  us30_trail, daily_watchdog, sl_freeze_176 et les autres modules du
+                            moteur voient ces memes positions comme des
+                            positions ordinaires du compte et les suivent
+                            en trailing serre.
+
+D ou deux valeurs, deux seulement, qui alternent toutes les une a trois
+secondes (#172794092, sell NAS100) :
 
     15:28:16.897   31097.15 ->  29494.40
     15:28:18.975   29494.40 ->  31097.15
     15:28:21.697   31097.15 ->  29494.40
 
-Deux valeurs, deux seulement, qui alternent : le vrai stop a 44 points
-du prix, et le stop bouchon pose a l ouverture a 1602 points. La meme
-forme sur US30 avec 4007 points d ecart. Ce n est pas du bruit, c est
-un desaccord entre deux ecritures.
+Aucun des deux n a tort de son cote. C est une collision de conception,
+et elle se corrige la : sl_cliquet v2.1 refuse desormais, dans le
+processus du moteur, toute ecriture de stop sur une position miroir.
 
-POURQUOI PERSONNE NE S Y OPPOSAIT
----------------------------------
-sl_cliquet.py existe depuis le 10/08 et devait empecher exactement
-cela. Recherche de la chaine SL-CLIQUET dans la totalite de logs\ le
-27/08 : zero ligne. Or install() imprime toujours une ligne quand il
-s arme, meme sans logger -- _dire retombe sur print(). Le cliquet n a
-donc jamais ete arme, dans aucun processus. Il n y avait pas de garde
-a reparer : il n y en avait pas.
-
-POURQUOI CE FICHIER N EST PAS sl_cliquet BIS
---------------------------------------------
-sl_cliquet s installe en ENVELOPPE sur mt5.order_send. Pose sur le
-miroir le 27/08 a 09:00, il a fait echouer CHAQUE ouverture pendant
-1h27 -- last_error (-2, 'Unnamed arguments not allowed'). Une enveloppe
-sur order_send s interpose sur les ouvertures alors qu elle n a affaire
-qu aux stops. C est une mauvaise place.
-
-Ce gardien est un PROCESSUS separe, sur le modele de trail_miroir6.py
-qui tourne depuis le 27/08 sans incident. Il ne s injecte dans rien, ne
-modifie aucun fichier, et ne peut par construction casser aucune
-ouverture : il n ecrit que des TRADE_ACTION_SLTP.
-
-CE QU IL FAIT
--------------
-Il retient, pour chaque position vivante, le meilleur stop qu il ait vu
+CE QUE CE GARDIEN COUVRE, LUI
+-----------------------------
+Les VRAIES positions du compte, et seulement elles. Il retient le
+meilleur stop qu il ait vu
     achat -> le plus HAUT     vente -> le plus BAS
 et quand la valeur en place devient moins bonne, il remet la meilleure.
 Un effacement de stop est traite comme un recul infini.
 
-Il n a pas besoin de savoir QUI recule pour proteger. Mais il l ecrit :
-chaque recul est date a la milliseconde dans logs\gardien_stops.log, et
-le battement affiche les couples de valeurs qui alternent. C est avec
-cette trace, et la cadence propre a chaque processus, que l ecrivain
-sera nomme -- aucun des quatre candidats n ecrit aujourd hui la valeur
-de ses stops dans son journal.
+Il ignore les magics miroir. "Un stop ne recule jamais" est juste pour
+du vrai trading et faux pour un miroir, dont le bon stop est celui de
+son paper : y figer le stop serre du moteur reviendrait a garantir les
+sorties prematurees que la collision provoque deja au hasard.
 
-CE QU IL NE FAIT PAS
---------------------
-Il n ouvre rien, ne ferme rien, ne touche pas au TP autrement qu en le
-recopiant tel quel, et ne se rabat jamais sur un autre terminal que
-celui qu on lui donne.
+POURQUOI UN PROCESSUS ET PAS UNE ENVELOPPE
+------------------------------------------
+sl_cliquet s installe en enveloppe sur mt5.order_send. Pose sur le
+miroir le 27/08 a 09:00, il a fait echouer CHAQUE ouverture pendant
+1h27 -- last_error (-2, 'Unnamed arguments not allowed'). Dans le
+moteur, ou il tourne depuis 09:07 sans incident, cette place convient ;
+ailleurs elle est dangereuse.
+
+Ce gardien est donc un PROCESSUS separe, sur le modele de
+trail_miroir6.py. Il ne s injecte dans rien, ne modifie aucun fichier,
+n ouvre rien, ne ferme rien, ne touche au TP que pour le recopier tel
+quel, n ecrit que des TRADE_ACTION_SLTP -- il ne peut par construction
+casser aucune ouverture -- et ne se rabat jamais sur un autre terminal
+que celui qu on lui donne.
+
+REJEU
+-----
+Sur les 3 879 modifications de stop reellement enregistrees par le
+terminal le 27/08 : 580 reculs vus, 580 restaures, et dans chacun des
+294 tickets le stop final est exactement le meilleur niveau atteint
+dans la journee. 239 tickets sur 294 ne sont jamais deranges --
+#172782820 US30, 154 modifications, zero recul.
 
 USAGE
 -----
@@ -83,6 +91,14 @@ TERMINAL_MOTEUR = (r"C:\Program Files\TF Global Markets MetaTrader 5 "
                    r"Termina-LOCALSTACKl\terminal64.exe")
 
 COMPTE_ATTENDU = 178780     # on refuse d agir ailleurs
+
+# Les positions miroir sont HORS de sa garde. "Un stop ne recule jamais"
+# est juste pour du vrai trading et faux pour un miroir : son bon stop
+# est celui de son paper parent, que le paper ne deplace pas. Y figer le
+# stop serre du moteur, ce serait garantir les sorties prematurees que
+# ce meme desaccord provoque deja au hasard depuis le 25/08.
+PLAGES_MIROIR = ((220000, 249999), (4220000, 4249999),
+                 (5220000, 5249999), (6220000, 6249999))
 
 JOURNAL = os.path.join("logs", "gardien_stops.log")
 PERIODE = 0.5               # s entre deux regards -- le battement mesure
@@ -139,6 +155,10 @@ def tour(mt5, mem, reel, stat):
     reculs = restaures = 0
 
     for p in positions:
+        magic = int(getattr(p, "magic", 0) or 0)
+        if any(x <= magic <= y for x, y in PLAGES_MIROIR):
+            stat["miroirs"] += 1
+            continue                     # pas les miennes
         tk = int(p.ticket)
         vivants.add(tk)
         sens = 1 if int(p.type) == 0 else -1
@@ -216,6 +236,9 @@ def bilan(mem, stat, mode, tours):
          " %d restaure(s), %d avance(s) legitime(s)"
          % (mode, tours, len(mem), stat["reculs"], stat["restaures"],
             stat["avances"]))
+    if stat["miroirs"]:
+        dire("      %d regard(s) sur des positions miroir, laissees a leur"
+             " paper." % stat["miroirs"])
     chauds = sorted((m for m in mem.values() if m["reculs"]),
                     key=lambda m: -m["reculs"])[:4]
     for m in chauds:
@@ -238,6 +261,8 @@ def main():
     mode = "REEL" if a.reel else "OBSERVATION"
     dire("=" * 70)
     dire("gardien_stops -- un stop ne recule jamais -- mode %s" % mode)
+    dire("  hors garde : les magics miroir %s -- leur stop appartient a"
+         " leur paper." % (", ".join("%d-%d" % x for x in PLAGES_MIROIR)))
     if not a.reel:
         dire("  OBSERVATION : rien ne sera envoye. --reel pour restaurer.")
 
@@ -270,7 +295,7 @@ def main():
         return 2
 
     mem = {}
-    stat = {"reculs": 0, "restaures": 0, "avances": 0}
+    stat = {"reculs": 0, "restaures": 0, "avances": 0, "miroirs": 0}
     dernier, tours = time.time(), 0
     try:
         while True:

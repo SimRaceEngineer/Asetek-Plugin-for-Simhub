@@ -56,13 +56,24 @@ import os
 import threading
 import time
 
-VERSION = "2.0"
+VERSION = "2.1"        # 2.1 : les positions miroir sont hors gestion du moteur
 
 # ---------------------------------------------------------------- reglages
 BLOQUE = True           # False = observe et laisse passer
 EXEMPTS = set()         # modules autorises a reculer un stop. Vide, et il
                         # faut un argument pour y toucher : un stop elargi
                         # augmente le risque de la position.
+# Les positions miroir des papers. Le moteur ne doit PAS gerer leur
+# stop : elles portent celui de leur paper parent, et le suivre en
+# trailing les ferme sur une sortie que le paper n a jamais demandee.
+# Mesure du 27/08 : ce desaccord a produit 48 a 49 % de reculs les 25 et
+# 26/08, et fausse le resultat des branches depuis.
+#   220000 - 249999    miroir 1, le magic du paper lui-meme
+#  4220000 - 4249999   miroir 2      5220000 - 5249999   miroir 5
+#  6220000 - 6249999   miroir 6
+PLAGES_MIROIR = ((220000, 249999), (4220000, 4249999),
+                 (5220000, 5249999), (6220000, 6249999))
+
 VEILLE_SEC = 20         # cadence du fil qui verifie la pose
 SILENCE_SEC = 90        # au-dela, une enveloppe muette est jugee decrochee
 REPOSES_MAX = 40        # garde-fou : au-dela, on cesse et on crie
@@ -217,6 +228,32 @@ def memoire():
 
 # ------------------------------------------------------------- la decision
 
+_miroirs = {}           # ticket -> bool, lu une seule fois par ticket
+
+
+def _est_miroir(tk):
+    """Vrai si le ticket appartient a une branche miroir.
+
+    Rendre False en cas de doute : mieux vaut laisser le cliquet ordinaire
+    juger que refuser une ecriture legitime sur une vraie position.
+    """
+    v = _miroirs.get(tk)
+    if v is not None:
+        return v
+    try:
+        pos = _mt5.positions_get(ticket=tk)
+        if not pos:
+            return False
+        m = int(getattr(pos[0], "magic", 0) or 0)
+        v = any(a <= m <= b for a, b in PLAGES_MIROIR)
+    except Exception:
+        return False
+    if len(_miroirs) > 4000:
+        _miroirs.clear()
+    _miroirs[tk] = v
+    return v
+
+
 def _sens_de(tk):
     """1 achat, -1 vente, 0 inconnu. Lu sur MT5, une seule fois par ticket."""
     try:
@@ -342,6 +379,18 @@ def _fabrique(origine):
     """
     def envelope(req, *a, **k):
         _appels[0] += 1
+        try:
+            tkm = _champ(req, "position", 0) or 0
+            if tkm and _est_miroir(int(tkm)):
+                mod, fn = _appelant()
+                _note("miroir:" + mod, True, 0.0)
+                _dire("warning",
+                      "  [SL-CLIQUET] %s.%s ticket %s : position MIROIR,"
+                      " son stop appartient a son paper -- REFUSE",
+                      mod, fn, tkm)
+                return None
+        except Exception:
+            pass                        # un doute laisse passer au cliquet
         try:
             refus, points, tk, neuf, best = _juge(req)
             mod, fn = _appelant()
