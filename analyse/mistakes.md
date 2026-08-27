@@ -2120,3 +2120,74 @@ aurait tué tout envoi d'ordre, stops et entrées compris.
 > en place ? » ne vaut rien ; « est-ce que je reçois encore des appels ? »
 > vaut tout. C'est la leçon de la veille — vérifier ce qui est produit,
 > pas ce qui est présent — et je l'ai réapprise sur mon propre code.
+
+---
+
+## 27/08, après-midi — construire une quatrième branche sur une chaîne morte
+
+**Le miroir était arrêté depuis 09:17, et je l'ai découvert par accident.**
+J'ai passé l'après-midi à mesurer les sorties, puis à écrire une branche 6
+avec son gardien de trailing, ses deux patchs, ses six constantes. À
+13:29, pour composer la commande de redémarrage, j'ai demandé les
+*arguments* des processus en place. La réponse ne contenait aucun
+`miroir_papers.py`. Son journal s'arrêtait quatre heures plus tôt.
+
+J'avais vérifié le pont, le cliquet, C14, le panneau, les comptes. Pas la
+chose sur laquelle je greffais.
+
+> Avant d'ajouter une branche à une chaîne, vérifier que la chaîne vit.
+> Ce n'est pas la même question que « est-ce que mes modules à moi vont
+> bien ». C'est la deuxième fois en deux jours que le miroir meurt sans
+> que rien ne le crie, et la deuxième fois que je le découvre en cherchant
+> autre chose.
+
+**Le pont tournait en double, et personne ne pouvait le voir.**
+Quatre processus au lieu de deux : deux lecteurs, et surtout **deux
+envoyeurs en `--reel` sur le compte dédié**, chacun avec sa propre mémoire
+de ce qu'il avait déjà copié. Nés à 09:36 et 09:39 — le matin même, quand
+j'ai relancé l'envoyeur sans regarder si une paire tournait déjà.
+
+Tant qu'aucune position miroir n'existe, le symptôme est nul : les deux
+battent à vide, identiquement. À l'ouverture, chaque position aurait été
+copiée deux fois.
+
+> Une relance qui ne commence pas par un inventaire n'est pas une
+> relance, c'est un ajout. Et un doublon qui ne se voit qu'au premier
+> événement réel est une bombe à retardement silencieuse : il faut le
+> chercher quand tout est calme, parce qu'après il est trop tard.
+
+**Mon trailing posait le stop SOUS l'entrée.**
+Armé à 0,50R, distance 1,50R : au moment de l'armement le pic vaut 0,50R,
+donc le niveau vaut 0,50 − 1,50 = **−1,00R**. Un stop à moins un R sur un
+trade qui n'y était peut-être jamais allé. Comme le rejeu ne modélise pas
+le stop d'origine, rien ne le bornait. Trois colonnes sur quatre étaient
+dans ce cas, et la perte croissait avec la distance — la signature du
+défaut, que j'ai présentée deux fois comme un résultat.
+
+> Une protection qui peut rendre la position PIRE n'est pas une
+> protection. Le test à écrire en premier n'est pas « est-ce que ça
+> déclenche au bon moment » mais « est-ce que ça peut nuire ». Et quand
+> une série de résultats varie monotonement avec un paramètre, soupçonner
+> le paramètre avant de croire le résultat.
+
+**Comparer une moyenne à une espérance nette.**
+La colonne MFE du rendu est une moyenne sur toutes les prises. Je l'ai
+comparée au PnL NET par trade et j'en ai conclu qu'on rendait 88 % du
+mouvement favorable. Le PnL net est la petite différence entre un gain
+moyen de +46 et une perte moyenne de −45 : le gain moyen se compare au
+MFE, pas l'espérance. Le vrai chiffre est 42 %, et il a fallu séparer les
+deux populations pour l'obtenir. Quatre lectures automatiques ont repris
+mon erreur telle quelle, et l'une en a tiré qu'un TP à 1,2R multiplierait
+les gains par 7,7 — alors qu'il les laissait exactement où ils étaient.
+
+> Une erreur d'un modèle que trois autres modèles confirment reste une
+> erreur. Ils lisent le même tableau avec le même angle mort.
+
+**Et le garde-fou qui échouait sur sa propre définition.**
+Mon contrôle croisé du MFE comparait le MFE des barres, converti avec
+l'`eur_pt` du ticket réel, au MFE du journal, qui porte déjà le lot du
+paper. Deux échelles de lot. Il a crié à l'écart sur une différence qui
+n'existait pas, et j'ai failli jeter une mesure juste.
+
+> Un contrôle est du code comme le reste. Quand il refuse, la première
+> hypothèse à tester est qu'il a tort.
