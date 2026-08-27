@@ -17,7 +17,7 @@ NET par trade et en ont conclu que le systeme rendait 90 % du
 mouvement favorable. C est faux. Le PnL net est la petite difference
 entre un gain moyen et une perte moyenne du meme ordre : sur 240007,
 +46 de gain moyen contre -45 de perte moyenne, pour +5,91 net. Le
-gain moyen se compare au MFE, pas l espérance nette.
+gain moyen se compare au MFE, pas l esperance nette.
 
 Ce panneau ne raconte rien. Il separe.
 
