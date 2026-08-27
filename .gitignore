@@ -11,3 +11,11 @@ bin/Debug/
 # Caches Python des scripts d analyse (analyse/*.py)
 __pycache__/
 *.pyc
+
+# Sorties GENEREES par les panneaux d analyse. Elles se refabriquent en
+# une commande, et une sortie d essai -- sur donnees synthetiques --
+# deposee ici finirait par etre relue comme une mesure.
+# Les deux panel_papers*.txt du 18/08 sont deja suivis et le restent :
+# .gitignore n a aucun effet sur un fichier deja suivi.
+analyse/panels/
+analyse/cartes/*.html
