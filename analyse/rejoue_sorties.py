@@ -311,7 +311,15 @@ def rejoue(bars, sens, entree, r_pts, be, trail, arme):
         if (ex - best) * sens > 0:
             best = ex
         avance = (best - entree) * sens
-        if not arme_ok and arme is not None and avance >= arme * r_pts:
+        # Le trailing ne s arme pas avant que son PREMIER niveau soit au
+        # moins a l entree. Arme a 0.50R avec une distance de 1.50R, il
+        # posait son stop a -1.00R : ce n est pas une protection, c est
+        # une perte inventee que le trade n a jamais subie. Ce defaut
+        # expliquait a lui seul que toutes les colonnes de trailing
+        # perdent, le 27/08.
+        seuil_arme = arme if arme is None else max(arme, trail or 0.0)
+        if not arme_ok and seuil_arme is not None \
+                and avance >= seuil_arme * r_pts:
             arme_ok = True
 
         niveau = None
@@ -319,6 +327,10 @@ def rejoue(bars, sens, entree, r_pts, be, trail, arme):
             niveau = entree
         if trail is not None and arme_ok:
             t = best - sens * trail * r_pts
+            # Ceinture : meme arme au bon moment, un stop ne descend
+            # jamais sous l entree.
+            if (t - entree) * sens < 0:
+                t = entree
             if niveau is None or (t - niveau) * sens > 0:
                 niveau = t
         if niveau is not None:
@@ -641,8 +653,7 @@ def main():
 
     table("BREAK-EVEN SEUL -- le stop passe a l entree a +x.R",
           [p[0] for p in P if p[1] is not None and p[2] is None])
-    table("TRAILING SEUL -- arme a +%.2fR, suit a d.R sous le plus haut"
-          % TR_ARME,
+    table("TRAILING SEUL -- arme au plus tard a +d.R, suit a d.R sous le pic",
           [p[0] for p in P if p[1] is None and p[2] is not None])
     table("LES DEUX ENSEMBLE -- le plus protecteur des deux l emporte",
           [p[0] for p in P if p[1] is not None and p[2] is not None])
